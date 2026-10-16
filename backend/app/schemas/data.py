@@ -50,7 +50,7 @@ class Metadata(BaseModel, frozen=True):
         any future calibration run can locate and supersede them.
     """
 
-    kind: Literal["measured", "estimated"]
+    kind: Literal["measured", "reported", "estimated", "simulated"]
     resolution: str
     source_id: str
 
