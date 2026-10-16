@@ -1,0 +1,5 @@
+name,value,unit,mass_basis,status,source,uncertainty,model_version,description
+LHV_CH4,9.94,kWh/Nm3,–,illustrative,35.8 MJ/Nm3 / 3.6,TBD,v0.1,Lower Heating Value of methane at 0°C 1 atm
+BUSWELL_CARB,0.415,Nm3 CH4/kg VS,VS,illustrative,Buswell and Mueller 1952; Angelidaki and Sanders 2004 (verify),TBD,v0.1,Buswell theoretical CH4 yield coefficient for carbohydrates (C6H10O5)
+BUSWELL_PROT,0.496,Nm3 CH4/kg VS,VS,illustrative,Buswell and Mueller 1952; Angelidaki and Sanders 2004 (verify),TBD,v0.1,Buswell theoretical CH4 yield coefficient for proteins (C5H7NO2)
+BUSWELL_LIP,1.014,Nm3 CH4/kg VS,VS,illustrative,Buswell and Mueller 1952; Angelidaki and Sanders 2004 (verify),TBD,v0.1,Buswell theoretical CH4 yield coefficient for lipids (C57H104O6)

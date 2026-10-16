@@ -1,0 +1,23 @@
+name,value,unit,mass_basis,status,source,uncertainty,model_version,description
+total_mass_kg_d,1000.0,kg/day,fresh,illustrative,TBD,TBD,v0.1,Total fresh waste intake per day
+organic_fraction,0.45,fraction,fresh,illustrative,TBD,TBD,v0.1,Organic (biodegradable) fraction of total fresh waste
+suitable_fraction,0.80,fraction,organic,illustrative,TBD,ASSUMED Triangular(0.65;0.80;0.90),v0.1,Fraction of organic waste suitable for anaerobic digestion
+ts_fraction,0.27,fraction,fresh,illustrative,TBD,ASSUMED Triangular(0.20;0.27;0.35),v0.1,Total solids content of fresh feedstock (kg TS / kg fresh)
+vs_of_ts,0.88,fraction,TS,illustrative,TBD,ASSUMED Triangular(0.80;0.88;0.94),v0.1,Volatile solids as fraction of total solids (kg VS / kg TS)
+target_ts,0.10,fraction,slurry,illustrative,TBD,TBD,v0.1,Target TS concentration in digester feed slurry
+y_biogas_nm3_per_kg_vs,0.55,Nm3/kg VS,VS,illustrative,TBD,ASSUMED Triangular(0.35;0.55;0.80),v0.1,Biogas yield per kg volatile solids destroyed
+ch4_fraction,0.60,fraction,–,illustrative,TBD,ASSUMED Normal(0.60;0.03) clipped 0.50-0.70,v0.1,Volumetric CH4 fraction in raw biogas
+ch4_slip,0.015,fraction,–,illustrative,TBD,ASSUMED Uniform(0.005;0.03),v0.1,Methane slip (fugitive loss) fraction of produced CH4
+availability,0.90,fraction,–,illustrative,TBD,ASSUMED Triangular(0.80;0.90;0.96),v0.1,Plant annual availability / load factor
+eta_el,0.35,fraction,–,illustrative,TBD,ASSUMED Triangular(0.30;0.35;0.40),v0.1,CHP electrical efficiency (fraction of gross biogas energy)
+eta_th,0.45,fraction,–,illustrative,TBD,TBD,v0.1,CHP thermal recovery efficiency (fraction of gross biogas energy)
+eta_boiler,0.90,fraction,–,illustrative,TBD,TBD,v0.1,Auxiliary boiler thermal efficiency (must be > eta_th)
+digester_temp_c,37.0,°C,–,illustrative,TBD,TBD,v0.1,Mesophilic digestion target temperature (may be negative)
+ambient_temp_c,25.0,°C,–,illustrative,TBD,TBD,v0.1,Ambient incoming feed temperature (may be negative)
+hrt_days,30.0,days,–,illustrative,TBD,TBD,v0.1,Hydraulic retention time
+cp_kj_kg_k,4.0,kJ/kg·K,–,illustrative,TBD,TBD,v0.1,Specific heat capacity of feedstock slurry
+u_wall_w_m2k,0.5,W/m²·K,–,illustrative,TBD,TBD,v0.1,Overall heat-transfer coefficient for digester vessel wall
+aux_mix_kwh_m3_d,0.15,kWh/m³/day,–,illustrative,TBD,ASSUMED Lognormal(ln0.15;0.3),v0.1,Mixing parasitic energy per m³ digester volume per day
+aux_sort_kwh_t,5.0,kWh/t,fresh,illustrative,TBD,TBD,v0.1,Pre-sorting / pre-treatment energy per tonne of fresh waste
+aux_gas_kwh_nm3,0.02,kWh/Nm3,–,illustrative,TBD,TBD,v0.1,Gas handling / compression energy per Nm³ biogas
+composition,(0.6; 0.2; 0.2),fraction tuple,VS,illustrative,TBD,TBD,v0.1,Mass fractions of VS as (carbohydrates; protein; lipid) — must sum to 1
