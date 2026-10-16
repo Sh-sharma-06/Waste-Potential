@@ -214,15 +214,36 @@ class TestLPCoefficients:
         assert coeff.grid_import_cost_per_tonne >= 0
 
     def test_net_cost_per_tonne_formula(self, engine, standard_tech):
-        """net_cost = cost - gate_fee - elec_revenue + grid_import."""
+        """net_cost = cost + hauling - gate_fee - elec_revenue + grid_import."""
         coeff = engine.lp_coefficients([standard_tech])[standard_tech.tech_id]
         expected = (
             coeff.cost_per_tonne
+            + coeff.hauling_cost_per_tonne
             + coeff.grid_import_cost_per_tonne
             - coeff.gate_fee_per_tonne
             - coeff.electricity_revenue_per_tonne
         )
         assert math.isclose(coeff.net_cost_per_tonne, expected, rel_tol=1e-9)
+
+    def test_hauling_cost_zero_when_no_road_km(self, engine, standard_tech):
+        """hauling_cost_per_tonne is 0 when road_km not set."""
+        coeff = engine.lp_coefficients([standard_tech])[standard_tech.tech_id]
+        assert coeff.hauling_cost_per_tonne == 0.0
+
+    def test_hauling_cost_with_road_km(self, engine):
+        """hauling_cost_per_tonne = hauling_rate × road_km."""
+        tech = TechnologyParams(
+            "t_haul",
+            5_000_000.0, 200_000.0, 10_000.0,
+            hauling_cost_per_tonne_km=2.5,
+            cost_params={"road_km": 20.0},
+        )
+        coeff = engine.lp_coefficients([tech])["t_haul"]
+        assert math.isclose(coeff.hauling_cost_per_tonne, 2.5 * 20.0, rel_tol=1e-9)
+        # Hauling should increase net cost vs zero-distance baseline
+        tech_no_haul = TechnologyParams("t_noh", 5_000_000.0, 200_000.0, 10_000.0)
+        coeff_no = engine.lp_coefficients([tech_no_haul])["t_noh"]
+        assert coeff.net_cost_per_tonne > coeff_no.net_cost_per_tonne
 
     def test_zero_electricity_fields(self, engine, zero_elec_tech):
         coeff = engine.lp_coefficients([zero_elec_tech])[zero_elec_tech.tech_id]
@@ -312,6 +333,11 @@ class TestInputValidation:
     def test_negative_throughput_raises(self):
         with pytest.raises(ValueError, match="throughput"):
             TechnologyParams("t0", 1_000_000.0, 100_000.0, -500.0)
+
+    def test_negative_hauling_rate_raises(self):
+        with pytest.raises(ValueError, match="hauling_cost_per_tonne_km"):
+            TechnologyParams("t0", 1_000_000.0, 100_000.0, 10_000.0,
+                             hauling_cost_per_tonne_km=-1.0)
 
     def test_negative_electricity_export_price_raises(self):
         with pytest.raises(ValueError):

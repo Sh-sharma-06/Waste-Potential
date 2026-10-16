@@ -81,11 +81,17 @@ class TechnologyParams:
         exporter; zero or negative = consumer or break-even.
     gate_fee_per_tonne:
         Revenue received per tonne of waste accepted (£/tonne). Default 0.
+    hauling_cost_per_tonne_km:
+        Road hauling cost in currency per tonne-km (e.g. INR/tonne-km).
+        Multiplied by ``road_km`` (from cost_params) to add a per-tonne
+        transport cost to the LP coefficient.  Default 0.0 (no hauling cost).
     cost_params:
-        Optional overrides for discount_rate and asset_life_years. Keys:
-          "discount_rate"    (float)
-          "asset_life_years" (int)
-          "grid_import_price" (float, £/kWh)
+        Optional overrides for discount_rate, asset_life_years, grid_import_price,
+        and road_km.  Keys:
+          "discount_rate"       (float)
+          "asset_life_years"    (int)
+          "grid_import_price"   (float, £/kWh)
+          "road_km"             (float) — one-way road distance for hauling cost
     """
     tech_id: str
     capex: float
@@ -93,6 +99,7 @@ class TechnologyParams:
     throughput_tonnes_yr: float
     net_electricity_kwh_yr: float = 0.0
     gate_fee_per_tonne: float = 0.0
+    hauling_cost_per_tonne_km: float = 0.0
     cost_params: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -102,6 +109,10 @@ class TechnologyParams:
             raise ValueError(
                 f"throughput_tonnes_yr must be > 0, got {self.throughput_tonnes_yr}"
             )
+        if self.hauling_cost_per_tonne_km < 0:
+            raise ValueError(
+                f"hauling_cost_per_tonne_km must be ≥ 0, got {self.hauling_cost_per_tonne_km}"
+            )
 
 
 @dataclass
@@ -109,7 +120,10 @@ class LPCostCoeff:
     """Per-tonne LP objective coefficients for technology *j*.
 
     The optimizer uses:
-      net_cost_per_tonne = cost_per_tonne - gate_fee_per_tonne - electricity_revenue_per_tonne
+      net_cost_per_tonne = cost_per_tonne + hauling_cost_per_tonne
+                         + grid_import_cost_per_tonne
+                         - gate_fee_per_tonne
+                         - electricity_revenue_per_tonne
 
     Attributes
     ----------
@@ -125,6 +139,9 @@ class LPCostCoeff:
     grid_import_cost_per_tonne:
         Additional grid electricity purchase cost per tonne when the
         technology is a net consumer. Zero when net_electricity > 0.
+    hauling_cost_per_tonne:
+        Road transport cost per tonne (hauling_cost_per_tonne_km × road_km).
+        Zero when either factor is 0.
     cost_per_kwh:
         Total annualised cost divided by net electricity exported. None when
         net_electricity ≤ 0 (undefined — callers must check before use).
@@ -134,6 +151,7 @@ class LPCostCoeff:
     gate_fee_per_tonne: float
     electricity_revenue_per_tonne: float
     grid_import_cost_per_tonne: float
+    hauling_cost_per_tonne: float
     cost_per_kwh: Optional[float]
 
     @property
@@ -141,6 +159,7 @@ class LPCostCoeff:
         """Net cost coefficient for the LP objective (cost minus revenues)."""
         return (
             self.cost_per_tonne
+            + self.hauling_cost_per_tonne
             + self.grid_import_cost_per_tonne
             - self.gate_fee_per_tonne
             - self.electricity_revenue_per_tonne
@@ -224,21 +243,22 @@ class CostEngine:
     # Per-technology helpers
     # ------------------------------------------------------------------
 
-    def _resolve_params(self, tech: TechnologyParams) -> tuple[float, int, float]:
-        """Return (discount_rate, asset_life_years, grid_import_price) for *tech*."""
+    def _resolve_params(self, tech: TechnologyParams) -> tuple[float, int, float, float]:
+        """Return (discount_rate, asset_life_years, grid_import_price, road_km) for *tech*."""
         r = float(tech.cost_params.get("discount_rate", DEFAULT_DISCOUNT_RATE))
         n = int(tech.cost_params.get("asset_life_years", DEFAULT_ASSET_LIFE_YEARS))
         grid_price = float(
             tech.cost_params.get("grid_import_price", DEFAULT_GRID_IMPORT_PRICE)
         )
-        return r, n, grid_price
+        road_km = float(tech.cost_params.get("road_km", 0.0))
+        return r, n, grid_price, road_km
 
     def cost_per_tonne(self, tech: TechnologyParams) -> float:
         """Total annualised cost (CAPEX + OPEX) per tonne of throughput.
 
         cost_per_tonne = (annualised_capex + opex_annual) / throughput_tonnes_yr
         """
-        r, n, _ = self._resolve_params(tech)
+        r, n, _, _road = self._resolve_params(tech)
         ann_capex = self.annualized_capex(tech.capex, r, n)
         total_annual = ann_capex + tech.opex_annual
         return total_annual / tech.throughput_tonnes_yr
@@ -251,14 +271,14 @@ class CostEngine:
         """
         if tech.net_electricity_kwh_yr <= 0:
             return None
-        r, n, _ = self._resolve_params(tech)
+        r, n, _, _road = self._resolve_params(tech)
         ann_capex = self.annualized_capex(tech.capex, r, n)
         total_annual = ann_capex + tech.opex_annual
         return total_annual / tech.net_electricity_kwh_yr
 
     def lp_coefficients(
         self, technologies: list[TechnologyParams]
-    ) -> dict[int, LPCostCoeff]:
+    ) -> dict[str, LPCostCoeff]:
         """Assemble LP objective cost coefficients for all technologies.
 
         Parameters
@@ -268,17 +288,20 @@ class CostEngine:
 
         Returns
         -------
-        dict mapping tech_id → LPCostCoeff.
+        dict mapping tech_id (str) → LPCostCoeff.
         """
-        result: dict[int, LPCostCoeff] = {}
+        result: dict[str, LPCostCoeff] = {}
 
         for tech in technologies:
-            r, n, grid_import_price = self._resolve_params(tech)
+            r, n, grid_import_price, road_km = self._resolve_params(tech)
             ann_capex = self.annualized_capex(tech.capex, r, n)
             total_annual = ann_capex + tech.opex_annual
             cpt = total_annual / tech.throughput_tonnes_yr
 
             net_kwh = tech.net_electricity_kwh_yr
+
+            # Hauling cost (INR/tonne) = rate × road distance
+            hauling_cost_per_tonne = tech.hauling_cost_per_tonne_km * road_km
 
             if net_kwh > 0:
                 # Net exporter — electricity revenue applies
@@ -300,6 +323,7 @@ class CostEngine:
                 gate_fee_per_tonne=tech.gate_fee_per_tonne,
                 electricity_revenue_per_tonne=elec_rev_per_tonne,
                 grid_import_cost_per_tonne=grid_import_cost_per_tonne,
+                hauling_cost_per_tonne=hauling_cost_per_tonne,
                 cost_per_kwh=cpkwh,
             )
 

@@ -23,6 +23,10 @@ Frontend contract (strict — field names must not change):
       - mc_yield_cv     : float          coefficient of variation for yield (default 0.10)
       - region          : str | None     ISO region code for grid emissions
       - operator_overrides: dict[str,float] emission factor overrides
+      - location_id     : str            site identifier for P3 data lookup (default "default")
+      - crop_type       : str | None     crop for ML yield prediction (optional)
+      - area_ha         : float | None   cultivated area in hectares (optional)
+      - soil_index      : float | None   soil quality index 0–1 (optional, default 0.75)
 
   Response:
     list[PathwayResult]
@@ -140,6 +144,31 @@ class PathwayCompareRequest(BaseModel):
     operator_overrides: dict[str, float] = Field(
         default_factory=dict,
         description="Operator-supplied emission factor overrides (factor_key → kgCO2e/unit).",
+    )
+
+    # --- P3 data integration fields ---
+    location_id: str = Field(
+        "default",
+        description="Site identifier used to look up feedstock and location context "
+                    "from the P3 data service layer.",
+    )
+    crop_type: Optional[str] = Field(
+        None,
+        description="Crop type for ML-based yield prediction via YieldPredictor. "
+                    "When provided together with area_ha, overrides waste_tpd with the "
+                    "predicted daily biomass.",
+    )
+    area_ha: Optional[float] = Field(
+        None,
+        ge=0.0,
+        description="Cultivated area in hectares. Required when crop_type is set.",
+    )
+    soil_index: Optional[float] = Field(
+        None,
+        ge=0.0,
+        le=1.0,
+        description="Soil quality index in [0, 1]. Used by YieldPredictor when crop_type "
+                    "and area_ha are provided (default 0.75 if omitted).",
     )
 
     @model_validator(mode="after")
