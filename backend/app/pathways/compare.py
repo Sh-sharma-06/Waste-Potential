@@ -127,81 +127,16 @@ def _call_physics_inputs(
 ) -> dict[str, dict[str, Any]]:
     """Call the P1 physics engine for all 7 supported pathways; return {} on any failure.
 
-    Covers the original 5 pathways via ``adapter.physics_inputs`` and the two
-    extended pathways (``"htc"``, ``"torrefaction"``) via their own simulators
-    and ``extended.check_extended``.  Results are merged into a single dict
-    keyed by pathway name; each value has at least:
-      ``net_kwh_per_tonne``, ``direct_ghg_kg_per_tonne``, ``model_status``,
-      ``feasible``, ``reasons``, ``warnings``.
+    Delegates entirely to ``adapter.physics_inputs`` which already iterates all
+    7 pathways in ``PATHWAYS_EXTENDED`` (the original 5 plus htc and torrefaction).
 
     Any exception (ImportError, ValueError, missing key, simulation failure)
     is caught and an empty dict is returned so callers fall back to the
     request-parameter fallback path without disrupting other pathways.
     """
     try:
-        from app.core_engine.pathways.adapter import (
-            feedstock_from_stream,
-            physics_inputs,
-        )
-        from app.core_engine.pathways.extended import (
-            PATHWAYS_EXTENDED,
-            check_extended,
-        )
-        from app.core_engine.pathways.htc import simulate_htc
-        from app.core_engine.pathways.torrefaction import simulate_torrefaction
-
-        # --- original 5 pathways via existing adapter ---
-        result = physics_inputs(stream, ambient_temp_c)
-
-        # --- extended 2 pathways: htc + torrefaction ---
-        feedstock = feedstock_from_stream(stream)
-        mass_t_d: float = feedstock.total_mass_kg_d / 1_000.0
-
-        for pathway in ("htc", "torrefaction"):
-            try:
-                # Pass lignocellulosic_fraction to check_extended when present
-                ligno: Optional[float] = None
-                if hasattr(feedstock, "lignocellulosic_fraction"):
-                    lf = feedstock.lignocellulosic_fraction
-                    ligno = float(lf.value if hasattr(lf, "value") else lf)
-
-                feasibility = check_extended(pathway, feedstock, ligno)
-
-                if not feasibility.feasible:
-                    result[pathway] = {
-                        "feasible": False,
-                        "reasons": list(feasibility.reasons),
-                        "net_kwh_per_tonne": 0.0,
-                        "direct_ghg_kg_per_tonne": 0.0,
-                        "model_status": "infeasible",
-                        "warnings": list(feasibility.reasons),
-                    }
-                    continue
-
-                if pathway == "htc":
-                    sim = simulate_htc(feedstock)
-                    e_net_kwh_d: float = sim["e_net_energy_kwh_d"]
-                else:  # torrefaction
-                    sim = simulate_torrefaction(feedstock)
-                    e_net_kwh_d = sim["e_net_energy_kwh_d"]
-
-                net_kwh_per_tonne: float = (
-                    e_net_kwh_d / mass_t_d if mass_t_d > 0.0 else 0.0
-                )
-                result[pathway] = {
-                    "feasible": True,
-                    "reasons": [],
-                    "net_kwh_per_tonne": net_kwh_per_tonne,
-                    "direct_ghg_kg_per_tonne": 0.0,  # GHG not modelled for these pathways
-                    "model_status": sim.get("status", "illustrative_estimate"),
-                    "warnings": list(sim.get("warnings", []))
-                                 + ["GHG not modelled for this pathway."],
-                }
-            except Exception:  # noqa: BLE001
-                # Leave pathway absent from result → screen_pathway falls back to request params
-                pass
-
-        return result
+        from app.core_engine.pathways.adapter import physics_inputs
+        return physics_inputs(stream, ambient_temp_c)
     except Exception:  # noqa: BLE001
         return {}
 
@@ -311,6 +246,16 @@ def _resolve_revenue_with_sinks(
 # ---------------------------------------------------------------------------
 
 
+# Pathways whose primary energy product is thermal (fuel or heat, not electricity).
+# These should be priced at heat_price_inr_per_kwh when location context is available.
+_THERMAL_PRODUCT_PATHWAYS: frozenset[str] = frozenset(
+    {"pyrolysis", "htc", "torrefaction"}
+)
+
+# Composting produces compost (solid product), priced per kg of compost output.
+_COMPOST_PATHWAY: str = "composting"
+
+
 def screen_pathway(
     pathway: str,
     request: PathwayCompareRequest,
@@ -325,6 +270,9 @@ def screen_pathway(
     yield_warnings: Optional[list[str]] = None,
     # P1 physics engine results — pre-resolved by evaluate_pathways()
     physics: Optional[dict[str, Any]] = None,
+    # Primary product prices from LocationContext
+    heat_price_inr_per_kwh: Optional[float] = None,
+    compost_price_inr_per_kg: Optional[float] = None,
 ) -> PathwayResult:
     """Run coarse feasibility screening for a single *pathway*.
 
@@ -355,6 +303,13 @@ def screen_pathway(
         pathway (if present) supplies ``net_kwh_per_tonne``,
         ``direct_ghg_kg_per_tonne``, ``model_status``, and ``warnings``.
         Request values act as overrides when explicitly non-zero.
+    heat_price_inr_per_kwh:
+        Price for thermal energy products (pyrolysis, HTC, torrefaction).
+        When provided, used instead of the electricity tariff for those pathways.
+    compost_price_inr_per_kg:
+        Price for compost output (composting pathway only).
+        Revenue = net_kwh_per_tonne × waste_tpd reinterpreted as kWh thermal
+        converted to compost kg via the physics engine value when available.
 
     Returns
     -------
@@ -440,9 +395,41 @@ def screen_pathway(
     gate_fee = request.gate_fee_inr_t.get(pathway, 0.0)
 
     # ------------------------------------------------------------------
-    # Revenue: prefer greedy sink matching when sinks are available
+    # Resolve the energy/product price for this pathway
     # ------------------------------------------------------------------
-    if effective_sinks:
+    # Composting: revenue from compost sales (kg product × price/kg)
+    # Thermal pathways (pyrolysis, HTC, torrefaction): heat or fuel price
+    # All others: electricity price
+    if pathway == _COMPOST_PATHWAY and compost_price_inr_per_kg is not None:
+        # net_kwh_per_tonne for composting is 0 (no net electricity).
+        # Revenue instead comes from compost solids: ~300 kg compost/tonne feedstock.
+        compost_kg_yr = _COMPOST_TONNE_PER_TONNE * waste_tpy * _KG_PER_TONNE
+        gate_revenue_yr = gate_fee * waste_tpy
+        revenue_inr_y = compost_kg_yr * compost_price_inr_per_kg + gate_revenue_yr
+        warnings.append(
+            f"Composting revenue priced at {compost_price_inr_per_kg:.4f} INR/kg compost "
+            f"({_COMPOST_TONNE_PER_TONNE * _KG_PER_TONNE:.0f} kg/tonne feedstock assumed)."
+        )
+        annual_net_value_inr = revenue_inr_y - cost_inr_y
+        # (skip the energy-based revenue blocks below)
+    elif pathway in _THERMAL_PRODUCT_PATHWAYS and heat_price_inr_per_kwh is not None:
+        # Thermal output priced at heat tariff rather than electricity tariff
+        gate_revenue_yr = gate_fee * waste_tpy
+        if net_kwh_yr > 0:
+            thermal_revenue_yr = net_kwh_yr * heat_price_inr_per_kwh
+        else:
+            thermal_revenue_yr = 0.0
+            cost_inr_y += abs(net_kwh_yr) * heat_price_inr_per_kwh
+        revenue_inr_y = (thermal_revenue_yr if net_kwh_yr > 0 else 0.0) + gate_revenue_yr
+        warnings.append(
+            f"Thermal product revenue for '{pathway}' priced at "
+            f"{heat_price_inr_per_kwh:.4f} INR/kWh (heat/fuel tariff)."
+        )
+        annual_net_value_inr = revenue_inr_y - cost_inr_y
+    elif effective_sinks:
+        # ------------------------------------------------------------------
+        # Revenue: prefer greedy sink matching when sinks are available
+        # ------------------------------------------------------------------
         revenue_inr_y, sink_warnings = _resolve_revenue_with_sinks(
             e_net_kwh_d, effective_waste_tpd, gate_fee, effective_sinks
         )
@@ -451,6 +438,7 @@ def screen_pathway(
         if e_net_kwh_d < 0:
             e_price = electricity_price_override or request.electricity_price_inr_kwh
             cost_inr_y += abs(e_net_kwh_d) * _DAYS_PER_YEAR * e_price
+        annual_net_value_inr = revenue_inr_y - cost_inr_y
     else:
         # Legacy flat-price path (backwards-compatible)
         e_price = electricity_price_override if electricity_price_override is not None \
@@ -462,8 +450,7 @@ def screen_pathway(
             elec_value_yr = 0.0
             cost_inr_y += abs(net_kwh_yr) * e_price
         revenue_inr_y = (net_kwh_yr * e_price if net_kwh_yr > 0 else 0.0) + gate_revenue_yr
-
-    annual_net_value_inr = revenue_inr_y - cost_inr_y
+        annual_net_value_inr = revenue_inr_y - cost_inr_y
 
     # ------------------------------------------------------------------
     # Illustrative GHG (informational only)
@@ -489,11 +476,23 @@ def screen_pathway(
             "Cost estimates are zero — supply capex_inr and opex_inr_yr for accurate results."
         )
 
+    # GHG warning: only fire "no factor supplied" when the physics engine itself
+    # has modelled GHG (i.e. composting or incineration). For pathways where the
+    # engine explicitly says GHG is not modelled, emit the correct advisory instead.
+    _phys_ghg_not_modelled = any(
+        "not modelled" in w.lower() for w in phys.get("warnings", [])
+    )
     if direct_ghg_t == 0.0:
-        warnings.append(
-            f"No direct GHG factor supplied for pathway '{pathway}'. "
-            "GHG estimate excludes process emissions."
-        )
+        if _phys_ghg_not_modelled:
+            warnings.append(
+                f"GHG not modelled by physics engine for pathway '{pathway}'. "
+                "Process emissions excluded from net GHG estimate."
+            )
+        else:
+            warnings.append(
+                f"No direct GHG factor supplied for pathway '{pathway}'. "
+                "GHG estimate excludes process emissions."
+            )
 
     if phys_kwh_t != 0.0 and req_kwh_t == 0.0:
         warnings.append(
@@ -593,6 +592,25 @@ def evaluate_pathways(
     if request.electricity_price_inr_kwh > 0:
         electricity_price_override = request.electricity_price_inr_kwh
 
+    # Primary product prices (thermal and compost) from LocationContext
+    def _unwrap_price(raw: Any) -> Optional[float]:
+        """Unwrap a plain float or {value, meta} dict price field; return None when absent."""
+        if raw is None:
+            return None
+        if isinstance(raw, dict):
+            raw = raw.get("value")
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return None
+
+    heat_price_inr_per_kwh: Optional[float] = _unwrap_price(
+        ctx.get("heat_price_inr_per_kwh")
+    )
+    compost_price_inr_per_kg: Optional[float] = _unwrap_price(
+        ctx.get("compost_price_inr_per_kg")
+    )
+
     # ML yield prediction (shared across all pathways)
     effective_waste_tpd, yield_warnings = _resolve_waste_tpd(request)
 
@@ -617,6 +635,8 @@ def evaluate_pathways(
             electricity_price_override=electricity_price_override,
             yield_warnings=yield_warnings,
             physics=physics_by_pathway,
+            heat_price_inr_per_kwh=heat_price_inr_per_kwh,
+            compost_price_inr_per_kg=compost_price_inr_per_kg,
         )
         for pw in request.pathways
     ]

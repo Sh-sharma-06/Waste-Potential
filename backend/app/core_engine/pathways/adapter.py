@@ -4,9 +4,9 @@ All functions are pure (no file, network, or DB access).
 Units: mass in kg/d (wet basis), energy in kWh/d, gas in Nm³ at 0 °C.
 GHG outputs are in kg CO2-equivalent per tonne of total_mass_kg_d input.
 
-GWP assumptions (MODEL ASSUMPTION, source="TBD", status="illustrative"):
-    CH4   GWP-100 = 29.8  (IPCC AR6 GWP-100, matches P4 emission_factors.py; citation unverified)
-    N2O   GWP-100 = 273.0 (IPCC AR6 GWP-100, matches P4 emission_factors.py; citation unverified)
+GWP assumptions (MODEL ASSUMPTION, source="IPCC AR6 WGI Table 7.SM.7", status="illustrative"):
+    CH4   GWP-100 = 29.8  (IPCC AR6)
+    N2O   GWP-100 = 273   (IPCC AR6)
 """
 from __future__ import annotations
 
@@ -21,9 +21,9 @@ from .incineration import simulate_incineration
 from .gasification import simulate_gasification
 from .pyrolysis import simulate_pyrolysis
 
-# GWP-100 constants (MODEL ASSUMPTION, source="TBD", status="illustrative")
-_GWP_CH4: float = 29.8   # kg CO2-eq / kg CH4   — IPCC AR6 GWP-100, matches P4 emission_factors.py; citation unverified, source="TBD"
-_GWP_N2O: float = 273.0  # kg CO2-eq / kg N2O   — IPCC AR6 GWP-100, matches P4 emission_factors.py; citation unverified, source="TBD"
+# GWP-100 constants (MODEL ASSUMPTION, source="IPCC AR6 WGI Table 7.SM.7", status="illustrative")
+_GWP_CH4: float = 29.8   # kg CO2-eq / kg CH4   — IPCC AR6
+_GWP_N2O: float = 273.0  # kg CO2-eq / kg N2O   — IPCC AR6
 
 # Per-pathway primary product and energy/GHG metadata — MODEL ASSUMPTION,
 # a pathway's headline product may differ in practice (e.g. AD can produce CBG).
