@@ -12,12 +12,9 @@ When populating backend/app/schemas/common.py:
 """
 
 from typing import List, Literal, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
-
-class BaseSchema(BaseModel):
-    """Base schema forbidding extra/unknown fields."""
-    model_config = ConfigDict(extra="forbid")
+from app.schemas.common import BaseSchema
 
 
 class YieldRequest(BaseSchema):

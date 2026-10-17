@@ -1,14 +1,22 @@
-"""
-common.py — Shared Pydantic v2 base model for all schema modules.
+"""Shared Pydantic schemas used across all API modules.
 
-NOTE: This file is owned by Part B5 (Platform). It is defined here as a
-minimal placeholder so B1 schemas can import from it now. B5 should replace
-or extend _Base when building the full platform layer.
+All request/response models should inherit from BaseSchema so that unknown
+fields are rejected project-wide.
 """
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class _Base(BaseModel):
-    """Shared base: rejects extra fields by default."""
+class BaseSchema(BaseModel):
+    """Base schema forbidding extra/unknown fields."""
     model_config = ConfigDict(extra="forbid")
+
+
+class _Base(BaseSchema):
+    """Compatibility alias for the platform's existing base schema."""
+    pass
+
+
+class ErrorBody(BaseSchema):
+    """Standard error response body: {"detail": str}."""
+    detail: str = Field(..., description="Human-readable error message.")
