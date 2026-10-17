@@ -173,8 +173,15 @@ def estimate(
             extrapolation_flag = True
 
     # 3. Hybrid vs Fallback Prediction
-    if extrapolation_flag:
-        # Strictly return L1 kinetic physics; NEVER use ML prediction when extrapolated
+    # Check if L2 residual learning is active and validated to beat L1 physics
+    l2_active = (
+        bundle.residual_model is not None
+        and not bundle.metrics.get("l2_skipped", False)
+        and bundle.metrics.get("l2_beats_l1", True) is not False
+    )
+
+    if extrapolation_flag or not l2_active:
+        # Strictly return L1 kinetic physics when extrapolated OR when L2 did not beat L1 / was skipped
         y_biogas = y_kinetic
     else:
         # Compute ML residual

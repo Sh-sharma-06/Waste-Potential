@@ -39,6 +39,7 @@ class ModelBundle:
     training_data_hash: str
     synthetic: bool = False
     feature_names: List[str] = field(default_factory=lambda: ["temp", "hrt", "olr", "c_n"])
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 def get_default_model_dir() -> Path:
