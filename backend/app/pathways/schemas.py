@@ -6,7 +6,10 @@ Frontend contract (strict — field names must not change):
     PathwayCompareRequest
       - farm_id         : str
       - waste_tpd       : float          tonnes/day of available waste
-      - pathways        : list[str]      pathway identifiers to evaluate
+      - pathways        : list[str]      pathway identifiers to evaluate.
+                          Accepted values (all 7 supported by the physics engine):
+                            "anaerobic_digestion", "composting", "incineration",
+                            "gasification", "pyrolysis", "htc", "torrefaction"
       - capex_inr       : dict[str,float] pathway → total CAPEX in INR
       - opex_inr_yr     : dict[str,float] pathway → annual OPEX in INR
       - asset_life_yr   : dict[str,int]  pathway → asset life (years)
