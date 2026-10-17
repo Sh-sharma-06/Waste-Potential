@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 import numpy as np
 from sklearn.ensemble import GradientBoostingRegressor
+from app.schemas.ml import YieldEstimate
 
 from app.ml.registry.store import ModelBundle, NoTrainedModelError, save_bundle
 from app.ml.yield_model.domain_guard import DomainGuard
@@ -300,3 +301,100 @@ def test_widened_interval_is_wider_for_same_request(synthetic_bundle):
 
     assert width_out > width_in
 
+
+# ---------------------------------------------------------------------------
+# Additional tests for edge‑case feedstock handling as requested
+# ---------------------------------------------------------------------------
+
+import pytest
+from app.ml.yield_model.predict import (
+    estimate,
+    estimate_illustrative_l1,
+    MissingFeedstockError,
+    UnknownFeedstockError,
+    NoTrainedModelError,
+)
+from app.ml.yield_model.domain_guard import DomainGuard
+from app.ml.registry.store import ModelBundle, save_bundle
+from pathlib import Path
+import numpy as np
+from sklearn.ensemble import GradientBoostingRegressor
+
+@pytest.fixture
+def bundle_without_manure(tmp_path: Path) -> ModelBundle:
+    """Create a bundle that lacks 'manure' in its feedstocks_seen list."""
+    feedstocks = ["food", "crop", "mixed"]
+    y0_map = {"food": 0.85, "crop": 0.50, "mixed": 0.65}
+    kinetic_params = {"y0": y0_map, "mu": 0.4, "k": 0.8}
+    lo = np.array([0.0, 0.0, 0.0, 0.0, 30.0, 15.0, 2.0, 10.0])
+    hi = np.array([1.0, 1.0, 1.0, 1.0, 40.0, 45.0, 5.0, 30.0])
+    guard = DomainGuard(bounds=(lo, hi), feedstocks_seen=feedstocks)
+    X_dummy = np.vstack([lo, hi, (lo + hi) / 2])
+    y_log_res = np.array([0.05, 0.10, 0.08])
+    gbr = GradientBoostingRegressor(n_estimators=10, random_state=42)
+    gbr.fit(X_dummy, y_log_res)
+    bundle = ModelBundle(
+        model_version="test-no-manure",
+        feedstocks_seen=feedstocks,
+        kinetic_params=kinetic_params,
+        residual_model=gbr,
+        domain_guard=guard,
+        metrics={"cv_residual_std_log": 0.12},
+        training_data_hash="hash_no_manure",
+        synthetic=True,
+    )
+    # Save to a temporary directory to emulate a real bundle on disk (optional)
+    save_bundle(bundle, target_dir=tmp_path)
+    return bundle
+
+def test_missing_feedstock_raises_missing_error(synthetic_bundle):
+    """None, empty string and whitespace feedstock should raise MissingFeedstockError (also a ValueError)."""
+    bundle, _ = synthetic_bundle
+    for bad in [None, "", "   "]:
+        with pytest.raises(MissingFeedstockError) as ctx:
+            estimate(bad, {"hrt_days": 30.0, "temperature_c": 37.0}, bundle=bundle)
+        # The custom error should also be a ValueError subclass
+        assert isinstance(ctx.value, ValueError)
+
+def test_normalised_feedstock_works(synthetic_bundle):
+    """Feedstock strings with different capitalisation / surrounding whitespace are accepted."""
+    bundle, _ = synthetic_bundle
+    result = estimate("Food", {"hrt_days": 30.0, "temperature_c": 37.0, "olr": 3.5, "c_n": 20.0}, bundle=bundle)
+    assert isinstance(result, YieldEstimate)
+    result2 = estimate(" food ", {"hrt_days": 30.0, "temperature_c": 37.0, "olr": 3.5, "c_n": 20.0}, bundle=bundle)
+    assert isinstance(result2, YieldEstimate)
+    # The two results should be identical (normalisation is deterministic)
+    assert result == result2
+
+def test_unknown_feedstock_error_message_includes_all_names():
+    """Calling estimate with an unsupported feedstock should raise UnknownFeedstockError and list every known name."""
+    from app.ml.yield_model.feedstocks import FEEDSTOCK_NAMES
+    # Use a temporary empty bundle directory – the function validates feedstock before loading the bundle
+    with pytest.raises(UnknownFeedstockError) as ctx:
+        estimate("plastic", {"hrt_days": 30.0, "temperature_c": 37.0})
+    err_msg = str(ctx.value)
+    for name in FEEDSTOCK_NAMES:
+        assert name in err_msg
+
+def test_unseen_feedstock_raises_unknown_and_mentions_valid(bundle_without_manure, tmp_path):
+    """When the feedstock is valid but not present in the model bundle, raise UnknownFeedstockError with a helpful message."""
+    with pytest.raises(UnknownFeedstockError) as ctx:
+        estimate("manure", {"hrt_days": 30.0, "temperature_c": 37.0}, bundle=bundle_without_manure)
+    msg = str(ctx.value).lower()
+    assert "valid" in msg
+    for fs in bundle_without_manure.feedstocks_seen:
+        assert fs in msg
+
+def test_missing_feedstock_without_bundle_raises_missing_not_no_model(tmp_path):
+    """An empty feedstock string with an empty model directory should raise MissingFeedstockError, not NoTrainedModelError."""
+    empty_dir = tmp_path / "empty_models"
+    empty_dir.mkdir()
+    with pytest.raises(MissingFeedstockError):
+        estimate("", {"hrt_days": 30.0, "temperature_c": 37.0}, model_dir=empty_dir)
+
+def test_illustrative_l1_missing_and_unknown_feedstock_errors():
+    """estimate_illustrative_l1 should raise MissingFeedstockError for blank input and UnknownFeedstockError for unknown names."""
+    with pytest.raises(MissingFeedstockError):
+        estimate_illustrative_l1("", {"hrt_days": 30.0, "temperature_c": 37.0})
+    with pytest.raises(UnknownFeedstockError):
+        estimate_illustrative_l1("plastic", {"hrt_days": 30.0, "temperature_c": 37.0})
