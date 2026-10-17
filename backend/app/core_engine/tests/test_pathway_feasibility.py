@@ -392,7 +392,7 @@ class TestGasification(unittest.TestCase):
     _NAME = "gasification"
 
     def test_feasible_example(self):
-        # moisture=0.15 <= 0.30, lhv_wet=18*(0.85)-2.44*0.15=15.3-0.366=14.934 >= 10
+        # NOTE: limit changed 0.30→0.15; moisture=0.15 <= 0.15, lhv_wet=18*(0.85)-2.44*0.15=14.934 >= 10
         result = check_pathway(self._NAME, _fs_dry())
         self.assertTrue(result.feasible)
 
@@ -403,9 +403,10 @@ class TestGasification(unittest.TestCase):
         self.assertTrue(any("moisture" in r for r in result.reasons))
 
     def test_infeasible_low_lhv_wet(self):
-        # moisture=0.20 (under 0.30 limit), lhv_dry=5 → lhv_wet=5*0.8-2.44*0.2=4-0.488=3.512 < 10
+        # NOTE: limit changed 0.30→0.15; use moisture=0.10 (under 0.15 limit) so only lhv_wet fails
+        # lhv_wet=5*(1-0.10)-2.44*0.10=4.5-0.244=4.256 < 10
         fs = _fs_dry(
-            moisture_fraction=0.20,
+            moisture_fraction=0.10,
             lhv_dry_mj_per_kg=5.0,
             organic_fraction=0.10,
             plastic_fraction=0.45,
@@ -417,10 +418,10 @@ class TestGasification(unittest.TestCase):
         self.assertTrue(any("lhv_wet" in r for r in result.reasons))
 
     def test_boundary_moisture_exactly_at_limit_is_feasible(self):
-        # moisture=0.30 exactly, need lhv_wet >= 10
-        # lhv_dry*(0.70) - 2.44*0.30 = 10 → lhv_dry = (10+0.732)/0.70 = 15.331...
+        # NOTE: limit changed 0.30→0.15; moisture=0.15 exactly, need lhv_wet >= 10
+        # lhv_wet=16*(0.85)-2.44*0.15=13.6-0.366=13.234 >= 10 → feasible
         fs = _fs_dry(
-            moisture_fraction=0.30,
+            moisture_fraction=0.15,
             lhv_dry_mj_per_kg=16.0,
             organic_fraction=0.10,
             plastic_fraction=0.45,
@@ -437,6 +438,40 @@ class TestGasification(unittest.TestCase):
         for r in result.reasons:
             self.assertGreater(len(r), 0)
 
+    # --- boundary tests added for blueprint limits (gasification max moisture 0.15) ---
+
+    def test_boundary_moisture_exactly_0_15_is_feasible(self):
+        """Gasification: moisture exactly 0.15 must be feasible (blueprint limit)."""
+        # NOTE: new limit 0.15 (was 0.30)
+        fs = _fs_dry(
+            moisture_fraction=0.15,
+            lhv_dry_mj_per_kg=16.0,
+            organic_fraction=0.10,
+            plastic_fraction=0.45,
+            paper_fraction=0.25,
+            other_fraction=0.20,
+        )
+        result = check_pathway(self._NAME, fs)
+        self.assertTrue(result.feasible)
+        self.assertNotIn("moisture", " ".join(result.reasons))
+
+    def test_boundary_moisture_0_16_is_infeasible(self):
+        """Gasification: moisture 0.16 must be infeasible (one above blueprint limit)."""
+        # NOTE: new limit 0.15 (was 0.30); 0.16 > 0.15 → fails
+        # fractions: 0.10+0.44+0.25+0.21=1.00
+        fs = _fs_dry(
+            moisture_fraction=0.16,
+            lhv_dry_mj_per_kg=16.0,
+            organic_fraction=0.10,
+            plastic_fraction=0.44,
+            paper_fraction=0.25,
+            other_fraction=0.21,
+        )
+        result = check_pathway(self._NAME, fs)
+        self.assertFalse(result.feasible)
+        self.assertTrue(any("moisture" in r for r in result.reasons))
+        self.assertTrue(any("0.15 limit" in r for r in result.reasons))
+
 
 # ---------------------------------------------------------------------------
 # pyrolysis
@@ -446,12 +481,20 @@ class TestPyrolysis(unittest.TestCase):
     _NAME = "pyrolysis"
 
     def test_feasible_example(self):
-        # moisture=0.15 <= 0.20, plastic+paper=0.45+0.25=0.70 >= 0.40
-        result = check_pathway(self._NAME, _fs_dry())
+        # NOTE: limit changed 0.20→0.10; _fs_dry() uses moisture=0.15 which is > 0.10
+        # → use explicit moisture=0.10 so this feedstock is feasible
+        fs = _fs_dry(
+            moisture_fraction=0.10,
+            organic_fraction=0.10,
+            plastic_fraction=0.45,
+            paper_fraction=0.25,
+            other_fraction=0.20,
+        )
+        result = check_pathway(self._NAME, fs)
         self.assertTrue(result.feasible)
 
     def test_infeasible_high_moisture(self):
-        # moisture=0.25 > 0.20
+        # NOTE: limit changed 0.20→0.10; moisture=0.25 > 0.10 → still infeasible
         fs = _fs_dry(
             moisture_fraction=0.25,
             organic_fraction=0.10,
@@ -481,9 +524,9 @@ class TestPyrolysis(unittest.TestCase):
         self.assertTrue(any("plastic" in r for r in result.reasons))
 
     def test_boundary_moisture_exactly_at_limit_is_feasible(self):
-        # moisture=0.20 exactly, plastic+paper >= 0.40
+        # NOTE: limit changed 0.20→0.10; moisture=0.10 exactly, plastic+paper >= 0.40
         fs = _fs_dry(
-            moisture_fraction=0.20,
+            moisture_fraction=0.10,
             organic_fraction=0.10,
             plastic_fraction=0.45,
             paper_fraction=0.25,
@@ -524,6 +567,37 @@ class TestPyrolysis(unittest.TestCase):
         self.assertFalse(result.feasible)
         for r in result.reasons:
             self.assertGreater(len(r), 0)
+
+    # --- boundary tests added for blueprint limits (pyrolysis max moisture 0.10) ---
+
+    def test_boundary_moisture_exactly_0_10_is_feasible(self):
+        """Pyrolysis: moisture exactly 0.10 must be feasible (blueprint limit)."""
+        # NOTE: new limit 0.10 (was 0.20)
+        fs = _fs_dry(
+            moisture_fraction=0.10,
+            organic_fraction=0.10,
+            plastic_fraction=0.45,
+            paper_fraction=0.25,
+            other_fraction=0.20,
+        )
+        result = check_pathway(self._NAME, fs)
+        self.assertTrue(result.feasible)
+        self.assertNotIn("moisture", " ".join(result.reasons))
+
+    def test_boundary_moisture_0_11_is_infeasible(self):
+        """Pyrolysis: moisture 0.11 must be infeasible (one above blueprint limit)."""
+        # NOTE: new limit 0.10 (was 0.20); 0.11 > 0.10 → fails
+        fs = _fs_dry(
+            moisture_fraction=0.11,
+            organic_fraction=0.10,
+            plastic_fraction=0.45,
+            paper_fraction=0.25,
+            other_fraction=0.20,
+        )
+        result = check_pathway(self._NAME, fs)
+        self.assertFalse(result.feasible)
+        self.assertTrue(any("moisture" in r for r in result.reasons))
+        self.assertTrue(any("0.1 limit" in r for r in result.reasons))
 
 
 if __name__ == "__main__":

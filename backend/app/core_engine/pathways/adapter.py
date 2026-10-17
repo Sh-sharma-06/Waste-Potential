@@ -15,6 +15,7 @@ from typing import Any, Dict, List
 
 from .feedstock import Feedstock
 from .feasibility import PATHWAYS, check_pathway
+from .extended import PATHWAYS_EXTENDED, check_extended
 from .composting import simulate_composting
 from .incineration import simulate_incineration
 from .gasification import simulate_gasification
@@ -81,6 +82,11 @@ def feedstock_from_stream(stream: dict) -> Feedstock:
     ``{"value": x, "meta": {...}}`` wrapper dict — both are accepted.
     Missing required keys raise :exc:`ValueError` naming the missing key.
 
+    When ``lignocellulosic_fraction`` is present the five composition fractions
+    (organic, plastic, paper, other, lignocellulosic) must sum to 1 ± 1e-6.
+    The Feedstock is built with ``other_fraction = other + lignocellulosic``
+    so the existing four-fraction sum rule is preserved.
+
     Parameters
     ----------
     stream:
@@ -88,6 +94,7 @@ def feedstock_from_stream(stream: dict) -> Feedstock:
         ``total_mass_kg_d``, ``organic_fraction``, ``plastic_fraction``,
         ``paper_fraction``, ``other_fraction``, ``moisture_fraction``,
         ``ash_fraction_dry``, ``lhv_dry_mj_per_kg``, ``contamination_pct``.
+        Optionally ``lignocellulosic_fraction``.
 
     Returns
     -------
@@ -97,8 +104,8 @@ def feedstock_from_stream(stream: dict) -> Feedstock:
     Raises
     ------
     ValueError
-        If any required key is absent, or if the unwrapped values fail the
-        Feedstock validation rules (e.g. fractions out of range).
+        If any required key is absent, if the five fractions do not sum to 1,
+        or if the unwrapped values fail the Feedstock validation rules.
     """
     for key in _REQUIRED_KEYS:
         if key not in stream:
@@ -109,6 +116,24 @@ def feedstock_from_stream(stream: dict) -> Feedstock:
     kwargs: Dict[str, float] = {
         key: _unwrap(stream[key], key) for key in _REQUIRED_KEYS
     }
+
+    if "lignocellulosic_fraction" in stream:
+        ligno = _unwrap(stream["lignocellulosic_fraction"], "lignocellulosic_fraction")
+        five_sum = (
+            kwargs["organic_fraction"]
+            + kwargs["plastic_fraction"]
+            + kwargs["paper_fraction"]
+            + kwargs["other_fraction"]
+            + ligno
+        )
+        if abs(five_sum - 1.0) > 1e-6:
+            raise ValueError(
+                f"organic_fraction + plastic_fraction + paper_fraction + "
+                f"other_fraction + lignocellulosic_fraction must sum to 1.0 "
+                f"(got {five_sum:.8f})"
+            )
+        kwargs["other_fraction"] = kwargs["other_fraction"] + ligno
+
     return Feedstock(**kwargs)
 
 
@@ -148,13 +173,27 @@ def physics_inputs(
     feedstock: Feedstock = feedstock_from_stream(stream)
     mass_t_d: float = feedstock.total_mass_kg_d / 1000.0
 
+    # Optional new stream fields
+    lignocellulosic_fraction: Any = None
+    if "lignocellulosic_fraction" in stream:
+        lignocellulosic_fraction = _unwrap(
+            stream["lignocellulosic_fraction"], "lignocellulosic_fraction"
+        )
+
+    organic_moisture_fraction: Any = None
+    if "organic_moisture_fraction" in stream:
+        organic_moisture_fraction = _unwrap(
+            stream["organic_moisture_fraction"], "organic_moisture_fraction"
+        )
+
     result: Dict[str, Dict[str, Any]] = {}
 
-    for pathway in PATHWAYS:
-        feasibility = check_pathway(pathway, feedstock)
+    for pathway in PATHWAYS_EXTENDED:
+        # Use check_extended for all pathways (it delegates for the original five)
+        feasibility = check_extended(pathway, feedstock, lignocellulosic_fraction)
 
         if not feasibility.feasible:
-            result[pathway] = {
+            entry: Dict[str, Any] = {
                 "feasible": False,
                 "reasons": list(feasibility.reasons),
                 "net_kwh_per_tonne": 0.0,
@@ -162,6 +201,15 @@ def physics_inputs(
                 "model_status": "infeasible",
                 "warnings": list(feasibility.reasons),
             }
+            if pathway == "torrefaction":
+                entry["lignocellulosic_source"] = (
+                    "stream" if lignocellulosic_fraction is not None else "proxy"
+                )
+            if pathway == "anaerobic_digestion":
+                entry["ts_source"] = (
+                    "stream" if organic_moisture_fraction is not None else "default"
+                )
+            result[pathway] = entry
             continue
 
         # --- run the appropriate simulator ---
@@ -180,6 +228,8 @@ def physics_inputs(
                 organic_fraction=feedstock.organic_fraction,
                 ambient_temp_c=ambient_temp_c,
             )
+            if organic_moisture_fraction is not None:
+                p = dataclasses.replace(p, ts_fraction=1.0 - organic_moisture_fraction)
             sim = _simulate_ad(p)
             e_net_kwh_d: float = sim["e_net_kwh_d"]
             sim_warnings = list(sim.get("warnings", []))
@@ -217,6 +267,22 @@ def physics_inputs(
             model_status = sim.get("status", "illustrative_estimate")
             ghg_warnings = ["GHG not modelled"]
 
+        elif pathway == "htc":
+            from .htc import simulate_htc
+            sim = simulate_htc(feedstock)
+            e_net_kwh_d = sim.get("e_net_energy_kwh_d", 0.0)
+            sim_warnings = list(sim.get("warnings", []))
+            model_status = sim.get("status", "illustrative_estimate")
+            ghg_warnings = ["GHG not modelled"]
+
+        elif pathway == "torrefaction":
+            from .torrefaction import simulate_torrefaction
+            sim = simulate_torrefaction(feedstock)
+            e_net_kwh_d = sim.get("e_net_energy_kwh_d", 0.0)
+            sim_warnings = list(sim.get("warnings", []))
+            model_status = sim.get("status", "illustrative_estimate")
+            ghg_warnings = ["GHG not modelled"]
+
         net_kwh_per_tonne: float = (
             e_net_kwh_d / mass_t_d if mass_t_d > 0.0 else 0.0
         )
@@ -226,7 +292,7 @@ def physics_inputs(
 
         all_warnings: List[str] = sim_warnings + ghg_warnings
 
-        result[pathway] = {
+        entry = {
             "feasible": True,
             "reasons": [],
             "net_kwh_per_tonne": net_kwh_per_tonne,
@@ -234,5 +300,14 @@ def physics_inputs(
             "model_status": model_status,
             "warnings": all_warnings,
         }
+        if pathway == "torrefaction":
+            entry["lignocellulosic_source"] = (
+                "stream" if lignocellulosic_fraction is not None else "proxy"
+            )
+        if pathway == "anaerobic_digestion":
+            entry["ts_source"] = (
+                "stream" if organic_moisture_fraction is not None else "default"
+            )
+        result[pathway] = entry
 
     return result

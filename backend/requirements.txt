@@ -4,6 +4,9 @@ pydantic>=2,<3
 numpy
 scipy>=1.6
 scikit-learn
+pandas
+joblib
 
 # Test dependencies
 pytest
+httpx
