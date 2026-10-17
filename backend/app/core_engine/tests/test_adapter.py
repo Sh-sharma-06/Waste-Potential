@@ -13,6 +13,7 @@ from app.core_engine.pathways.adapter import (
     feedstock_from_stream,
     physics_inputs,
 )
+from app.core_engine.pathways.extended import PATHWAYS_EXTENDED
 from app.core_engine.pathways.feasibility import PATHWAYS
 from app.core_engine.pathways.feedstock import Feedstock
 
@@ -209,16 +210,20 @@ class TestPhysicsInputsStructure(unittest.TestCase):
         self.assertIsInstance(self.out, dict)
 
     def test_all_pathways_present(self) -> None:
-        self.assertEqual(set(self.out.keys()), set(PATHWAYS))
+        # physics_inputs now returns all 7 extended pathways (incl. htc, torrefaction)
+        self.assertEqual(set(self.out.keys()), set(PATHWAYS_EXTENDED))
 
-    def test_each_pathway_has_12_keys(self) -> None:
-        expected_keys = {
+    def test_each_pathway_has_required_keys(self) -> None:
+        required_keys = {
             "feasible", "reasons", "net_kwh_per_tonne",
             "direct_ghg_kg_per_tonne", "model_status", "warnings",
         }
-        for pw in PATHWAYS:
+        for pw in PATHWAYS_EXTENDED:
             with self.subTest(pathway=pw):
-                self.assertEqual(set(self.out[pw].keys()), expected_keys)
+                self.assertTrue(
+                    required_keys.issubset(set(self.out[pw].keys())),
+                    f"{pw} missing keys: {required_keys - set(self.out[pw].keys())}",
+                )
 
     def test_feasible_is_bool(self) -> None:
         for pw in PATHWAYS:
@@ -482,7 +487,7 @@ class TestPhysicsInputsDefaultIndiaStream(unittest.TestCase):
         self.assertTrue(self.out["composting"]["feasible"])
 
     def test_all_pathways_present(self) -> None:
-        self.assertEqual(set(self.out.keys()), set(PATHWAYS))
+        self.assertEqual(set(self.out.keys()), set(PATHWAYS_EXTENDED))
 
 
 # ---------------------------------------------------------------------------
@@ -498,13 +503,13 @@ class TestPhysicsInputsJSONSerializable(unittest.TestCase):
         except (TypeError, ValueError) as exc:
             self.fail(f"Output is not JSON-serialisable: {exc}")
         parsed = json.loads(serialised)
-        self.assertEqual(set(parsed.keys()), set(PATHWAYS))
+        self.assertEqual(set(parsed.keys()), set(PATHWAYS_EXTENDED))
 
     def test_wrapped_stream_output_is_json_serializable(self) -> None:
         out = physics_inputs(_wrapped_stream())
         serialised = json.dumps(out)
         parsed = json.loads(serialised)
-        self.assertEqual(set(parsed.keys()), set(PATHWAYS))
+        self.assertEqual(set(parsed.keys()), set(PATHWAYS_EXTENDED))
 
     def test_dry_stream_output_is_json_serializable(self) -> None:
         out = physics_inputs(_dry_stream())
@@ -527,7 +532,10 @@ class TestPhysicsInputsInfeasibleKeys(unittest.TestCase):
             "feasible", "reasons", "net_kwh_per_tonne",
             "direct_ghg_kg_per_tonne", "model_status", "warnings",
         }
-        self.assertEqual(set(gp.keys()), required)
+        self.assertTrue(
+            required.issubset(set(gp.keys())),
+            f"gasification missing keys: {required - set(gp.keys())}",
+        )
 
     def test_infeasible_net_kwh_is_zero(self) -> None:
         out = physics_inputs(_plain_stream())
@@ -581,6 +589,188 @@ class TestPhysicsInputsMissingKey(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             physics_inputs(stream)
         self.assertIn("organic_fraction", str(ctx.exception))
+
+
+# ---------------------------------------------------------------------------
+# lignocellulosic_fraction in feedstock_from_stream
+# ---------------------------------------------------------------------------
+
+def _five_fraction_stream(**overrides) -> dict:
+    """Stream with five composition fractions that sum to 1.
+    organic=0.50, plastic=0.09, paper=0.07, other=0.19, lignocellulosic=0.15 → sum=1.00.
+    """
+    base = {
+        "total_mass_kg_d": 1000.0,
+        "organic_fraction": 0.50,
+        "plastic_fraction": 0.09,
+        "paper_fraction": 0.07,
+        "other_fraction": 0.19,
+        "lignocellulosic_fraction": 0.15,
+        "moisture_fraction": 0.40,
+        "ash_fraction_dry": 0.10,
+        "lhv_dry_mj_per_kg": 14.0,
+        "contamination_pct": 5.0,
+    }
+    base.update(overrides)
+    return base
+
+
+class TestFeedstockFromStreamLignocellulosic(unittest.TestCase):
+    """feedstock_from_stream: lignocellulosic_fraction handling."""
+
+    def test_five_fraction_builds_feedstock(self) -> None:
+        """other=0.19, lignocellulosic=0.10 → other_fraction=0.29 in Feedstock."""
+        stream = _plain_stream()
+        stream["lignocellulosic_fraction"] = 0.10
+        # Adjust other_fraction so five fractions still sum to 1:
+        # organic=0.55 + plastic=0.09 + paper=0.07 + other=0.19 + ligno=0.10 = 1.00
+        stream["other_fraction"] = 0.19
+        fs = feedstock_from_stream(stream)
+        self.assertIsInstance(fs, Feedstock)
+        self.assertAlmostEqual(fs.other_fraction, 0.29, places=9)
+
+    def test_four_fraction_stream_still_works(self) -> None:
+        """Plain stream without lignocellulosic_fraction behaves exactly as before."""
+        fs = feedstock_from_stream(_plain_stream())
+        self.assertIsInstance(fs, Feedstock)
+        self.assertAlmostEqual(fs.other_fraction, 0.29)
+
+    def test_wrapped_and_plain_five_fraction_equal(self) -> None:
+        """Wrapped lignocellulosic_fraction produces the same Feedstock as plain."""
+        plain_s = _five_fraction_stream()
+        plain_fs = feedstock_from_stream(plain_s)
+        wrapped_s = {
+            k: {"value": v, "meta": {}} for k, v in plain_s.items()
+        }
+        wrapped_fs = feedstock_from_stream(wrapped_s)
+        self.assertAlmostEqual(plain_fs.other_fraction, wrapped_fs.other_fraction)
+        self.assertAlmostEqual(plain_fs.organic_fraction, wrapped_fs.organic_fraction)
+
+    def test_five_fractions_not_summing_to_one_raises(self) -> None:
+        """Five fractions that sum to 0.99 must raise ValueError stating the sum."""
+        stream = _plain_stream()
+        # organic=0.55 + plastic=0.09 + paper=0.07 + other=0.19 + ligno=0.09 = 0.99
+        stream["other_fraction"] = 0.19
+        stream["lignocellulosic_fraction"] = 0.09
+        with self.assertRaises(ValueError) as ctx:
+            feedstock_from_stream(stream)
+        self.assertIn("0.99", str(ctx.exception))
+
+    def test_five_fractions_sum_above_one_raises(self) -> None:
+        """Five fractions summing to 1.01 must raise ValueError stating the sum."""
+        stream = _plain_stream()
+        stream["other_fraction"] = 0.19
+        stream["lignocellulosic_fraction"] = 0.11
+        with self.assertRaises(ValueError) as ctx:
+            feedstock_from_stream(stream)
+        self.assertIn("sum", str(ctx.exception).lower())
+
+
+# ---------------------------------------------------------------------------
+# lignocellulosic_fraction in physics_inputs → torrefaction entry
+# ---------------------------------------------------------------------------
+
+def _torrefaction_stream(ligno: float, moisture: float = 0.40) -> dict:
+    """Stream suited for checking torrefaction with explicit lignocellulosic.
+    organic=0.40, plastic=0.05, paper=0.05, other=(0.50-ligno), ligno=ligno → sum=1.
+    moisture is separate.
+    """
+    other = round(0.50 - ligno, 9)
+    return {
+        "total_mass_kg_d": 1000.0,
+        "organic_fraction": 0.40,
+        "plastic_fraction": 0.05,
+        "paper_fraction": 0.05,
+        "other_fraction": other,
+        "lignocellulosic_fraction": ligno,
+        "moisture_fraction": moisture,
+        "ash_fraction_dry": 0.05,
+        "lhv_dry_mj_per_kg": 16.0,
+        "contamination_pct": 3.0,
+    }
+
+
+class TestPhysicsInputsLignocellulosic(unittest.TestCase):
+    """physics_inputs: lignocellulosic_fraction in stream → torrefaction entry."""
+
+    def test_key_present_no_proxy_warning(self) -> None:
+        """When lignocellulosic_fraction is supplied, no proxy warning in torrefaction."""
+        out = physics_inputs(_torrefaction_stream(ligno=0.70, moisture=0.40))
+        torr = out["torrefaction"]
+        joined = " ".join(torr["warnings"])
+        self.assertNotIn("proxy", joined)
+
+    def test_key_present_source_is_stream(self) -> None:
+        out = physics_inputs(_torrefaction_stream(ligno=0.70, moisture=0.40))
+        self.assertEqual(out["torrefaction"]["lignocellulosic_source"], "stream")
+
+    def test_key_absent_proxy_warning_present(self) -> None:
+        """Without lignocellulosic_fraction the proxy warning must appear."""
+        # _plain_stream() has no lignocellulosic_fraction
+        out = physics_inputs(_plain_stream())
+        torr = out["torrefaction"]
+        joined = " ".join(torr["warnings"] + torr["reasons"])
+        self.assertIn("proxy", joined)
+
+    def test_key_absent_source_is_proxy(self) -> None:
+        out = physics_inputs(_plain_stream())
+        self.assertEqual(out["torrefaction"]["lignocellulosic_source"], "proxy")
+
+    def test_ligno_0_55_makes_torrefaction_infeasible(self) -> None:
+        """lignocellulosic=0.55 < 0.60 threshold → infeasible with reason."""
+        out = physics_inputs(_torrefaction_stream(ligno=0.55, moisture=0.40))
+        torr = out["torrefaction"]
+        self.assertFalse(torr["feasible"])
+        self.assertTrue(len(torr["reasons"]) > 0)
+        self.assertTrue(any("lignocellulosic" in r for r in torr["reasons"]))
+
+    def test_ligno_0_70_moisture_0_40_feasible(self) -> None:
+        """lignocellulosic=0.70 >= 0.60 and moisture=0.40 <= 0.50 → feasible."""
+        out = physics_inputs(_torrefaction_stream(ligno=0.70, moisture=0.40))
+        self.assertTrue(out["torrefaction"]["feasible"])
+
+
+# ---------------------------------------------------------------------------
+# organic_moisture_fraction in physics_inputs → AD ts_source / ts_fraction
+# ---------------------------------------------------------------------------
+
+class TestPhysicsInputsOrganicMoisture(unittest.TestCase):
+    """physics_inputs: organic_moisture_fraction in stream → AD ts_fraction."""
+
+    def _ad_default_run(self) -> dict:
+        """AD result for _plain_stream() with no organic_moisture_fraction."""
+        return physics_inputs(_plain_stream())["anaerobic_digestion"]
+
+    def test_ts_source_default_when_key_absent(self) -> None:
+        ad = self._ad_default_run()
+        self.assertEqual(ad["ts_source"], "default")
+
+    def test_ts_source_stream_when_key_present(self) -> None:
+        stream = _plain_stream()
+        stream["organic_moisture_fraction"] = 0.73
+        ad = physics_inputs(stream)["anaerobic_digestion"]
+        self.assertEqual(ad["ts_source"], "stream")
+
+    def test_organic_moisture_0_73_ad_results_equal_default_ts(self) -> None:
+        """organic_moisture_fraction=0.73 → ts_fraction=0.27 = Params() default.
+        AD net_kwh_per_tonne must match the no-key run exactly."""
+        stream_with = _plain_stream()
+        stream_with["organic_moisture_fraction"] = 0.73
+        ad_with = physics_inputs(stream_with)["anaerobic_digestion"]
+        ad_without = self._ad_default_run()
+        self.assertAlmostEqual(
+            ad_with["net_kwh_per_tonne"],
+            ad_without["net_kwh_per_tonne"],
+            places=9,
+        )
+
+    def test_wrapped_organic_moisture_fraction_accepted(self) -> None:
+        """Wrapped {"value": 0.73, "meta": {}} is accepted as organic_moisture_fraction."""
+        stream = _plain_stream()
+        stream["organic_moisture_fraction"] = {"value": 0.73, "meta": {}}
+        ad = physics_inputs(stream)["anaerobic_digestion"]
+        self.assertEqual(ad["ts_source"], "stream")
+        self.assertGreater(ad["net_kwh_per_tonne"], 0.0)
 
 
 if __name__ == "__main__":
