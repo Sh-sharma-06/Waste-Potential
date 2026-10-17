@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import Settings, get_settings
+from app.api.external import router as external_router
 from app.core_engine.router import router as core_engine_router
 from app.decision.router import router as decision_router
 from app.errors import register_error_handlers
@@ -55,6 +56,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Keep the Gemini assistant under its existing API prefix.
     app.include_router(assistant_router, prefix="/api/v1")
+
+    # P3 external-data endpoints: /weather and /facilities.
+    app.include_router(external_router)
 
     return app
 
