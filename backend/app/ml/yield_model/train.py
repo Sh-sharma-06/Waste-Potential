@@ -87,7 +87,22 @@ def train_from_table(
     # 1. Deterministic Data Hashing
     data_hash = compute_table_hash(df)
 
-    # 2. Feedstock filtering and minimum data checks
+    # 2. Check source_type when training production models (synthetic=False)
+    if not synthetic:
+        if "source_type" in df.columns:
+            synth_count = int((df["source_type"].astype(str).str.lower().str.strip() == "synthetic").sum())
+            unk_count = int((df["source_type"].isna() | df["source_type"].astype(str).str.lower().str.strip().isin(["unknown", ""])).sum())
+        else:
+            synth_count = 0
+            unk_count = len(df)
+        if synth_count > 0 or unk_count > 0:
+            raise InsufficientDataError(
+                f"Cannot train production model (synthetic=False): dataset contains {synth_count} synthetic rows "
+                f"and {unk_count} unknown rows. Real training requires verified empirical data (source_type='real'). "
+                f"Fix: add a 'source_type' column with 'real' or 'synthetic' to every row."
+            )
+
+    # 3. Feedstock filtering and minimum data checks
     excluded_feedstocks: Dict[str, str] = {}
     retained_feedstocks: List[str] = []
 
@@ -432,9 +447,19 @@ def generate_model_card(
 
     lines.append("## Training Domain Bounds (DomainGuard)")
     lines.append("Inputs exceeding these feature bounds trigger the extrapolation guardrail and fall back to L1 physics:")
+    lines.append(f"- Feedstocks seen: `[{', '.join(bundle.feedstocks_seen)}]`")
     if bundle.domain_guard is not None and len(bundle.domain_guard.lo) > 0:
-        lines.append(f"- Lower Bounds: `{np.round(bundle.domain_guard.lo, 3).tolist()}`")
-        lines.append(f"- Upper Bounds: `{np.round(bundle.domain_guard.hi, 3).tolist()}`")
+        n_fs = len(bundle.feedstocks_seen)
+        lo = bundle.domain_guard.lo
+        hi = bundle.domain_guard.hi
+        if len(lo) >= n_fs + 4:
+            lines.append(f"- `temperature_c`: {lo[n_fs]:.1f} C to {hi[n_fs]:.1f} C")
+            lines.append(f"- `hrt_days`: {lo[n_fs + 1]:.1f} days to {hi[n_fs + 1]:.1f} days")
+            lines.append(f"- `olr`: {lo[n_fs + 2]:.2f} to {hi[n_fs + 2]:.2f} kg VS/(m3*d)")
+            lines.append(f"- `c_n`: {lo[n_fs + 3]:.1f} to {hi[n_fs + 3]:.1f}")
+        elif len(lo) >= n_fs + 2:
+            lines.append(f"- `temperature_c`: {lo[n_fs]:.1f} C to {hi[n_fs]:.1f} C")
+            lines.append(f"- `hrt_days`: {lo[n_fs + 1]:.1f} days to {hi[n_fs + 1]:.1f} days")
     lines.append("")
 
     lines.append("## Known Limitations & Architectural Invariants")
