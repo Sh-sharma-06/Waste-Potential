@@ -66,6 +66,9 @@ def test_expected_routes_are_mounted():
         ("GET", "/parameters"),
         ("POST", "/simulations/{run_id}/uncertainty"),
         ("GET", "/validation/summary"),
+	("POST", "/api/v1/assistant/parse"),
+	("POST", "/api/v1/assistant/advise"),
+	("POST", "/api/v1/assistant/audit"),
     }
 
 

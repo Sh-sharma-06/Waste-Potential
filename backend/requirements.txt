@@ -1,3 +1,4 @@
+
 # Runtime dependencies used by existing code
 fastapi>=0.100
 pydantic>=2,<3
@@ -6,6 +7,13 @@ scipy>=1.6
 scikit-learn
 pandas
 joblib
+
+# Gemini AI and environment configuration
+google-genai
+python-dotenv
+
+# ASGI server
+uvicorn[standard]
 
 # Test dependencies
 pytest
