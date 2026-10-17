@@ -1,0 +1,33 @@
+{
+  "simulator": {
+    "title": "Simulation",
+    "subtitle": "Anaerobic Digestion · Waste-to-Energy",
+    "form": {
+      "waste_mass_label": "Waste mass (kg/day)",
+      "organic_fraction_label": "Organic fraction (0–1)",
+      "suitable_fraction_label": "Suitable fraction (0–1)",
+      "location_label": "Location ID (optional)",
+      "run_button": "RUN SIMULATION",
+      "running_button": "RUNNING…",
+      "reset_button": "RESET"
+    },
+    "badge": {
+      "illustrative_estimate": "Illustrative Estimate",
+      "extrapolation": "Extrapolation"
+    },
+    "results": {
+      "heading": "Results",
+      "net_energy": "Net electricity",
+      "biogas": "Biogas",
+      "digester_volume": "Digester volume",
+      "run_id": "Run ID",
+      "model_version": "Model version",
+      "unit_kwh_d": "kWh/d",
+      "unit_nm3_d": "Nm³/d",
+      "unit_m3": "m³"
+    },
+    "errors": {
+      "api_error": "Simulation failed"
+    }
+  }
+}

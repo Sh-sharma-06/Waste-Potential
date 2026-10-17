@@ -1,0 +1,301 @@
+/*
+ * SimulatorPage.module.css
+ *
+ * Matches the SelectionPage / CoverPage visual language:
+ * dark blue glassmorphism, Rubik font, glow effects.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300..900;1,300..900&display=swap");
+
+/* ── Page shell ───────────────────────────────────────────────────────────── */
+
+.page {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #000;
+  font-family: "Rubik", sans-serif;
+}
+
+.video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: hue-rotate(180deg) saturate(1.15);
+}
+
+.shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0, 10, 28, 0.55), rgba(0, 8, 22, 0.8));
+}
+
+.content {
+  position: relative;
+  z-index: 2;
+  min-height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 40px 4vw 48px;
+  gap: 32px;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+
+.header {
+  text-align: center;
+}
+
+.title {
+  margin: 0;
+  font-weight: 800;
+  font-size: clamp(1.6rem, 4vw, 3rem);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, #e6f4ff, #4fc3ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 18px rgba(56, 170, 255, 0.5));
+}
+
+.subtitle {
+  margin: 10px 0 0;
+  font-weight: 300;
+  font-size: clamp(0.85rem, 1.4vw, 1.05rem);
+  letter-spacing: 0.06em;
+  color: #d6eeff;
+  opacity: 0.85;
+}
+
+/* ── Two-column layout ────────────────────────────────────────────────────── */
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2vw;
+  align-items: start;
+  flex: 1;
+}
+
+/* ── Shared card styles ───────────────────────────────────────────────────── */
+
+.formCard,
+.resultsCard {
+  box-sizing: border-box;
+  padding: 36px 30px;
+  border-radius: 24px;
+  border: 1.5px solid rgba(56, 170, 255, 0.35);
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 40px rgba(0, 20, 60, 0.45),
+    inset 0 0 28px rgba(56, 170, 255, 0.05);
+}
+
+/* ── Form fields ──────────────────────────────────────────────────────────── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.fieldLabel {
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(214, 238, 255, 0.7);
+}
+
+.fieldInput {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(56, 170, 255, 0.35);
+  background: rgba(255, 255, 255, 0.05);
+  color: #e6f4ff;
+  font: 400 1rem "Rubik", sans-serif;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.fieldInput:focus {
+  border-color: #4fc3ff;
+  box-shadow: 0 0 18px rgba(56, 170, 255, 0.3);
+}
+
+/* number spin arrows: minimal */
+.fieldInput[type="number"]::-webkit-inner-spin-button,
+.fieldInput[type="number"]::-webkit-outer-spin-button {
+  opacity: 0.4;
+}
+
+/* ── Action buttons ───────────────────────────────────────────────────────── */
+
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.btnPrimary {
+  flex: 1;
+  font: 500 1rem "Rubik", sans-serif;
+  letter-spacing: 0.12em;
+  color: #00101f;
+  cursor: pointer;
+  padding: 13px 24px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #1e90ff, #4fc3ff);
+  transition: box-shadow 0.3s, opacity 0.2s;
+}
+
+.btnPrimary:hover:not(:disabled) {
+  box-shadow: 0 0 22px rgba(56, 170, 255, 0.7);
+}
+
+.btnPrimary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btnSecondary {
+  font: 500 0.9rem "Rubik", sans-serif;
+  letter-spacing: 0.1em;
+  color: #7dd3ff;
+  cursor: pointer;
+  padding: 12px 22px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(56, 170, 255, 0.5);
+  background: rgba(255, 255, 255, 0.05);
+  transition: background 0.3s, box-shadow 0.3s;
+}
+
+.btnSecondary:hover {
+  background: rgba(56, 170, 255, 0.12);
+  box-shadow: 0 0 14px rgba(56, 170, 255, 0.3);
+}
+
+/* ── Results card ─────────────────────────────────────────────────────────── */
+
+.badgeRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+
+.resultsHeading {
+  margin: 0 0 20px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #e6f4ff;
+}
+
+/* ── Metrics definition list ──────────────────────────────────────────────── */
+
+.metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 20px;
+}
+
+.metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(56, 170, 255, 0.12);
+}
+
+.metric:last-child {
+  border-bottom: none;
+}
+
+.metricLabel {
+  font-size: 0.85rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: rgba(214, 238, 255, 0.65);
+}
+
+.metricValue {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #7dd3ff;
+  margin: 0;
+}
+
+.unit {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: rgba(125, 211, 255, 0.7);
+  margin-left: 3px;
+}
+
+/* ── Warnings list ────────────────────────────────────────────────────────── */
+
+.warnings {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(251, 191, 36, 0.07);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.warnings li {
+  font-size: 0.82rem;
+  color: #fde68a;
+  padding: 3px 0;
+}
+
+/* ── Error message ────────────────────────────────────────────────────────── */
+
+.errorMsg {
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+  font-size: 0.85rem;
+  margin: 0 0 16px;
+}
+
+/* ── Run metadata footer ──────────────────────────────────────────────────── */
+
+.runMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: 0.75rem;
+  color: rgba(214, 238, 255, 0.45);
+}
+
+.runMeta code {
+  font-family: "Courier New", monospace;
+  font-size: 0.7rem;
+  color: rgba(125, 211, 255, 0.55);
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 860px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video {
+    display: none;
+  }
+}

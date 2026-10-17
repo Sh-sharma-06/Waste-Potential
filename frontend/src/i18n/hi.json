@@ -1,0 +1,33 @@
+{
+  "simulator": {
+    "title": "सिमुलेशन",
+    "subtitle": "अवायवीय पाचन · अपशिष्ट-से-ऊर्जा",
+    "form": {
+      "waste_mass_label": "अपशिष्ट द्रव्यमान (किग्रा/दिन)",
+      "organic_fraction_label": "जैविक अंश (0–1)",
+      "suitable_fraction_label": "उपयुक्त अंश (0–1)",
+      "location_label": "स्थान ID (वैकल्पिक)",
+      "run_button": "सिमुलेशन चलाएँ",
+      "running_button": "चल रहा है…",
+      "reset_button": "रीसेट"
+    },
+    "badge": {
+      "illustrative_estimate": "दृष्टांत अनुमान",
+      "extrapolation": "एक्सट्रपलेशन"
+    },
+    "results": {
+      "heading": "परिणाम",
+      "net_energy": "शुद्ध बिजली",
+      "biogas": "बायोगैस",
+      "digester_volume": "पाचक आयतन",
+      "run_id": "रन ID",
+      "model_version": "मॉडल संस्करण",
+      "unit_kwh_d": "kWh/d",
+      "unit_nm3_d": "Nm³/d",
+      "unit_m3": "m³"
+    },
+    "errors": {
+      "api_error": "सिमुलेशन विफल"
+    }
+  }
+}

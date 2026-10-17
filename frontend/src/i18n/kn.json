@@ -1,0 +1,33 @@
+{
+  "simulator": {
+    "title": "ಸಿಮ್ಯುಲೇಶನ್",
+    "subtitle": "ಅನೆರೊಬಿಕ್ ಜೀರ್ಣಕ್ರಿಯೆ · ತ್ಯಾಜ್ಯ-ಶಕ್ತಿ",
+    "form": {
+      "waste_mass_label": "ತ್ಯಾಜ್ಯ ದ್ರವ್ಯರಾಶಿ (kg/ದಿನ)",
+      "organic_fraction_label": "ಸಾವಯವ ಭಾಗ (0–1)",
+      "suitable_fraction_label": "ಸೂಕ್ತ ಭಾಗ (0–1)",
+      "location_label": "ಸ್ಥಳ ID (ಐಚ್ಛಿಕ)",
+      "run_button": "ಸಿಮ್ಯುಲೇಶನ್ ಚಲಾಯಿಸಿ",
+      "running_button": "ಚಲಿಸುತ್ತಿದೆ…",
+      "reset_button": "ಮರುಹೊಂದಿಸಿ"
+    },
+    "badge": {
+      "illustrative_estimate": "ದೃಷ್ಟಾಂತ ಅಂದಾಜು",
+      "extrapolation": "ಎಕ್ಸ್‌ಟ್ರಾಪೊಲೇಶನ್"
+    },
+    "results": {
+      "heading": "ಫಲಿತಾಂಶಗಳು",
+      "net_energy": "ನಿವ್ವಳ ವಿದ್ಯುತ್",
+      "biogas": "ಬಯೋಗ್ಯಾಸ್",
+      "digester_volume": "ಡೈಜೆಸ್ಟರ್ ಗಾತ್ರ",
+      "run_id": "ರನ್ ID",
+      "model_version": "ಮಾದರಿ ಆವೃತ್ತಿ",
+      "unit_kwh_d": "kWh/d",
+      "unit_nm3_d": "Nm³/d",
+      "unit_m3": "m³"
+    },
+    "errors": {
+      "api_error": "ಸಿಮ್ಯುಲೇಶನ್ ವಿಫಲವಾಯಿತು"
+    }
+  }
+}
