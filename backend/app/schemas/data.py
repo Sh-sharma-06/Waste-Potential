@@ -162,11 +162,14 @@ class Feedstock(BaseModel, frozen=True):
     )
     organic_moisture_fraction: FeedstockField = Field(
         default_factory=lambda: FeedstockField(
-            value=0.70,
-            meta=Metadata(kind="estimated", resolution="n/a", source_id="default_v1"),
+            value=0.73,
+            # Unsourced placeholder — no measured/reported data available at P1 scope.
+            # Corresponds to ts_fraction = 1.0 − 0.73 = 0.27, which matches Params() default.
+            meta=Metadata(kind="estimated", resolution="n/a", source_id="placeholder_general"),
         ),
         description="Moisture fraction of the organic component (0–1). "
-                    "Used by the AD digester total-solids calculation.",
+                    "Unsourced placeholder (kind='estimated', source_id='placeholder_general'). "
+                    "Used by the AD digester total-solids calculation: ts_fraction = 1 − value.",
     )
     moisture_fraction: FeedstockField = Field(
         ..., description="As-received moisture content (0–1)."

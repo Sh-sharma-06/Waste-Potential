@@ -31,7 +31,8 @@ Default catalogue (India MSW, peri-urban, 2024 baseline)
   paper_fraction             0.07         NEERI 2020
   other_fraction             0.19         NEERI 2020 (balancing term, reduced for lignocellulosic)
   lignocellulosic_fraction   0.10         Crop residue / straw estimate — Torrefaction pathway input
-  organic_moisture_fraction  0.70         Moisture fraction of organic component — AD digester TS
+  organic_moisture_fraction  0.73         Moisture fraction of organic component — AD digester TS
+                                           (unsourced placeholder; ts_fraction = 1 − 0.73 = 0.27)
 
   electricity_tariff_inr_kwh  7.50  INR/kWh  CERC 2024 avg. agricultural tariff
   compost_price_inr_kg        4.00  INR/kg   India compost spot price 2024
@@ -78,7 +79,10 @@ _DEFAULT_PLASTIC_FRACTION: float = 0.09
 _DEFAULT_PAPER_FRACTION: float = 0.07
 _DEFAULT_OTHER_FRACTION: float = 0.19           # 0.55+0.09+0.07+0.19+0.10 = 1.00 ✓
 _DEFAULT_LIGNOCELLULOSIC_FRACTION: float = 0.10  # straw/wood/crop residues — Torrefaction input
-_DEFAULT_ORGANIC_MOISTURE_FRACTION: float = 0.70 # moisture of organic fraction — AD digester TS
+# Unsourced placeholder — no measured/reported data available at P1 scope.
+# Corresponds to ts_fraction = 1.0 − 0.73 = 0.27 (Params() default).
+# kind="estimated", source_id="placeholder_general" per P1 metadata vocabulary.
+_DEFAULT_ORGANIC_MOISTURE_FRACTION: float = 0.73
 
 _DEFAULT_ELECTRICITY_TARIFF_INR_KWH: float = 7.50
 _DEFAULT_COMPOST_PRICE_INR_KG: float = 4.00
@@ -155,7 +159,8 @@ def get_stream(location_id: str) -> dict:
         "paper_fraction":             _field(_DEFAULT_PAPER_FRACTION),
         "other_fraction":             _field(_DEFAULT_OTHER_FRACTION),
         "lignocellulosic_fraction":   _field(_DEFAULT_LIGNOCELLULOSIC_FRACTION),
-        "organic_moisture_fraction":  _field(_DEFAULT_ORGANIC_MOISTURE_FRACTION),
+        "organic_moisture_fraction":  _field(_DEFAULT_ORGANIC_MOISTURE_FRACTION,
+                                             source_id="placeholder_general"),
         "moisture_fraction":          _field(_DEFAULT_MOISTURE_FRACTION),
         "ash_fraction_dry":           _field(_DEFAULT_ASH_FRACTION_DRY),
         "lhv_dry_mj_per_kg":          _field(_DEFAULT_LHV_DRY_MJ_KG),

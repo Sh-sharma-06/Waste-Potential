@@ -369,13 +369,20 @@ class TestPhysicsInputsGHG(unittest.TestCase):
         self.assertEqual(out["anaerobic_digestion"]["direct_ghg_kg_per_tonne"], 0.0)
 
     def test_composting_ghg_formula(self) -> None:
-        """Manual GWP check: composting GHG = (CH4*29.8 + N2O*273.0) / tonne."""
-        # NOTE: updated from AR5 (CH4=28, N2O=265) to AR6 (CH4=29.8, N2O=273.0)
+        """Manual GWP check: composting GHG = (CH4*GWP_CH4 + N2O*GWP_N2O) / tonne.
+
+        GWP constants are read from the adapter module so the test stays valid
+        when the GWP assumption is updated (AR5 → AR6, etc.).
+        """
+        import app.core_engine.pathways.adapter as _adapter
         from app.core_engine.pathways.composting import CompostingParams, simulate_composting
         fs = feedstock_from_stream(_plain_stream())
         sim = simulate_composting(fs, CompostingParams())
         M_t = fs.total_mass_kg_d / 1000.0
-        expected = (sim["ch4_kg_d"] * 29.8 + sim["n2o_kg_d"] * 273.0) / M_t  # NOTE: AR6 values
+        expected = (
+            sim["ch4_kg_d"] * _adapter._GWP_CH4
+            + sim["n2o_kg_d"] * _adapter._GWP_N2O
+        ) / M_t
         out = physics_inputs(_plain_stream())
         self.assertAlmostEqual(
             out["composting"]["direct_ghg_kg_per_tonne"],
