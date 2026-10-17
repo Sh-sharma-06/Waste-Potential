@@ -7,8 +7,10 @@ Routes:
   POST /simulations            — app.platform.router: run and store a simulation
   GET  /runs                   — app.platform.router: list stored runs
   GET  /runs/{run_id}          — app.platform.router: get one stored run
-
-Not yet mounted: core_engine (P1) routes, pending its router implementation.
+  GET  /parameters             — app.core_engine.router: parameter registry
+  POST /simulations/{run_id}/uncertainty
+                               — app.core_engine.router: Monte Carlo on a stored run
+  GET  /validation/summary     — app.core_engine.router: validation summary
 
 Run locally with an ASGI server, e.g. ``uvicorn app.main:app`` from backend/.
 """
@@ -18,6 +20,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from app.config import Settings, get_settings
+from app.core_engine.router import router as core_engine_router
 from app.decision.router import router as decision_router
 from app.errors import register_error_handlers
 from app.pathways.router import router as pathways_router
@@ -44,6 +47,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(pathways_router)
     app.include_router(decision_router)
     app.include_router(platform_router)
+    # P1 routes; reads runs from the platform store via app.platform.runs.get_run.
+    app.include_router(core_engine_router)
 
     return app
 
