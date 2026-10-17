@@ -47,6 +47,8 @@ class AuditReport:
     dropped_rows: Dict[int, List[str]] = field(default_factory=dict)
     category_counts: Dict[str, int] = field(default_factory=dict)
     missing_optional_features: Dict[str, int] = field(default_factory=dict)
+    invalid_composition_nulled: List[int] = field(default_factory=list)
+    source_type_counts: Dict[str, int] = field(default_factory=lambda: {"real": 0, "synthetic": 0, "unknown": 0})
 
     def summary(self) -> str:
         """Formats the audit report into a human-readable text summary."""
@@ -57,6 +59,10 @@ class AuditReport:
             f"Total input rows   : {self.total_input_rows}",
             f"Clean valid rows   : {self.clean_rows}",
             f"Dropped rows       : {self.dropped_count}",
+            f"Source Types       : real={self.source_type_counts.get('real', 0)}, "
+            f"synthetic={self.source_type_counts.get('synthetic', 0)}, "
+            f"unknown={self.source_type_counts.get('unknown', 0)}",
+            f"Nulled Compositions: {len(self.invalid_composition_nulled)} rows",
             "Issues by Category :",
         ]
         for cat, cnt in sorted(self.category_counts.items()):
@@ -117,9 +123,50 @@ def audit_bmp_dataframe(
     valid_indices = []
     converted_biogas = []
     converted_ch4 = []
+    clean_source_types = []
+    clean_carbs = []
+    clean_proteins = []
+    clean_lipids = []
 
     for idx, row in df.iterrows():
         i = int(idx)
+
+        # Check source_type (optional: real | synthetic | unknown)
+        st_raw = row.get("source_type")
+        if pd.isna(st_raw) or str(st_raw).strip() == "":
+            st_clean = "unknown"
+        else:
+            st_str = str(st_raw).lower().strip()
+            st_clean = st_str if st_str in ("real", "synthetic") else "unknown"
+        report.source_type_counts[st_clean] += 1
+
+        # Check composition (carb_share, protein_share, lipid_share)
+        c_raw = row.get("carb_share")
+        p_raw = row.get("protein_share")
+        l_raw = row.get("lipid_share")
+        has_c = pd.notna(c_raw)
+        has_p = pd.notna(p_raw)
+        has_l = pd.notna(l_raw)
+
+        if has_c and has_p and has_l:
+            try:
+                cf, pf, lf = float(c_raw), float(p_raw), float(l_raw)
+                if (0.0 <= cf <= 1.0) and (0.0 <= pf <= 1.0) and (0.0 <= lf <= 1.0) and abs(cf + pf + lf - 1.0) <= 0.02:
+                    row_c, row_p, row_l = cf, pf, lf
+                else:
+                    # Sum or bounds invalid: keep row, set shares to NaN, report in audit
+                    report.invalid_composition_nulled.append(i)
+                    category_counts["invalid_composition_nulled"] += 1
+                    row_c, row_p, row_l = np.nan, np.nan, np.nan
+            except (ValueError, TypeError):
+                report.invalid_composition_nulled.append(i)
+                category_counts["invalid_composition_nulled"] += 1
+                row_c, row_p, row_l = np.nan, np.nan, np.nan
+        else:
+            row_c = float(c_raw) if has_c else np.nan
+            row_p = float(p_raw) if has_p else np.nan
+            row_l = float(l_raw) if has_l else np.nan
+
         # Check study_id
         val_study = row.get("study_id")
         if pd.isna(val_study) or str(val_study).strip() == "":
@@ -247,6 +294,10 @@ def audit_bmp_dataframe(
                     valid_indices.append(idx)
                     converted_biogas.append(conv.y_biogas_nm3_per_kg_vs)
                     converted_ch4.append(conv.y_ch4_nm3_per_kg_vs)
+                    clean_source_types.append(st_clean)
+                    clean_carbs.append(row_c)
+                    clean_proteins.append(row_p)
+                    clean_lipids.append(row_l)
             except Exception as e:
                 dropped_reasons[i].append(f"conversion_failed_{str(e)}")
                 category_counts["conversion_failed"] += 1
@@ -256,6 +307,13 @@ def audit_bmp_dataframe(
     clean_df["y_biogas_nm3_per_kg_vs"] = converted_biogas
     clean_df["y_ch4_nm3_per_kg_vs"] = converted_ch4
     clean_df["basis"] = "per kg VS"
+    clean_df["source_type"] = clean_source_types
+
+    # Only include composition columns if they were present in input or populated
+    if ("carb_share" in df.columns) or any(pd.notna(clean_carbs)):
+        clean_df["carb_share"] = clean_carbs
+        clean_df["protein_share"] = clean_proteins
+        clean_df["lipid_share"] = clean_lipids
 
     # Report details
     report.clean_rows = len(clean_df)

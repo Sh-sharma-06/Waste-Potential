@@ -118,24 +118,90 @@ def _derive_outputs(pathway: str, waste_tpd: float) -> dict[str, float]:
 
 
 # ---------------------------------------------------------------------------
-# P1 physics engine helper
+# P1 physics engine helper — all 7 pathways
 # ---------------------------------------------------------------------------
 
 def _call_physics_inputs(
     stream: dict,
     ambient_temp_c: float,
 ) -> dict[str, dict[str, Any]]:
-    """Call ``physics_inputs`` from the core engine adapter; return empty dict on any failure.
+    """Call the P1 physics engine for all 7 supported pathways; return {} on any failure.
 
-    Returns a dict keyed by pathway name.  Each value has at least:
-      ``net_kwh_per_tonne``, ``direct_ghg_kg_per_tonne``, ``model_status``.
+    Covers the original 5 pathways via ``adapter.physics_inputs`` and the two
+    extended pathways (``"htc"``, ``"torrefaction"``) via their own simulators
+    and ``extended.check_extended``.  Results are merged into a single dict
+    keyed by pathway name; each value has at least:
+      ``net_kwh_per_tonne``, ``direct_ghg_kg_per_tonne``, ``model_status``,
+      ``feasible``, ``reasons``, ``warnings``.
 
     Any exception (ImportError, ValueError, missing key, simulation failure)
-    is caught and an empty dict is returned so callers fall back gracefully.
+    is caught and an empty dict is returned so callers fall back to the
+    request-parameter fallback path without disrupting other pathways.
     """
     try:
-        from app.core_engine.pathways.adapter import physics_inputs
-        return physics_inputs(stream, ambient_temp_c)
+        from app.core_engine.pathways.adapter import (
+            feedstock_from_stream,
+            physics_inputs,
+        )
+        from app.core_engine.pathways.extended import (
+            PATHWAYS_EXTENDED,
+            check_extended,
+        )
+        from app.core_engine.pathways.htc import simulate_htc
+        from app.core_engine.pathways.torrefaction import simulate_torrefaction
+
+        # --- original 5 pathways via existing adapter ---
+        result = physics_inputs(stream, ambient_temp_c)
+
+        # --- extended 2 pathways: htc + torrefaction ---
+        feedstock = feedstock_from_stream(stream)
+        mass_t_d: float = feedstock.total_mass_kg_d / 1_000.0
+
+        for pathway in ("htc", "torrefaction"):
+            try:
+                # Pass lignocellulosic_fraction to check_extended when present
+                ligno: Optional[float] = None
+                if hasattr(feedstock, "lignocellulosic_fraction"):
+                    lf = feedstock.lignocellulosic_fraction
+                    ligno = float(lf.value if hasattr(lf, "value") else lf)
+
+                feasibility = check_extended(pathway, feedstock, ligno)
+
+                if not feasibility.feasible:
+                    result[pathway] = {
+                        "feasible": False,
+                        "reasons": list(feasibility.reasons),
+                        "net_kwh_per_tonne": 0.0,
+                        "direct_ghg_kg_per_tonne": 0.0,
+                        "model_status": "infeasible",
+                        "warnings": list(feasibility.reasons),
+                    }
+                    continue
+
+                if pathway == "htc":
+                    sim = simulate_htc(feedstock)
+                    e_net_kwh_d: float = sim["e_net_energy_kwh_d"]
+                else:  # torrefaction
+                    sim = simulate_torrefaction(feedstock)
+                    e_net_kwh_d = sim["e_net_energy_kwh_d"]
+
+                net_kwh_per_tonne: float = (
+                    e_net_kwh_d / mass_t_d if mass_t_d > 0.0 else 0.0
+                )
+                result[pathway] = {
+                    "feasible": True,
+                    "reasons": [],
+                    "net_kwh_per_tonne": net_kwh_per_tonne,
+                    "direct_ghg_kg_per_tonne": 0.0,  # GHG not modelled for these pathways
+                    "model_status": sim.get("status", "illustrative_estimate"),
+                    "warnings": list(sim.get("warnings", []))
+                                 + ["GHG not modelled for this pathway."],
+                }
+            except Exception:  # noqa: BLE001
+                # Leave pathway absent from result → screen_pathway falls back to request params
+                pass
+
+        return result
     except Exception:  # noqa: BLE001
         return {}
 

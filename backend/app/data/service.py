@@ -29,7 +29,9 @@ Default catalogue (India MSW, peri-urban, 2024 baseline)
   organic_fraction           0.55         NEERI 2020 (dominant fraction)
   plastic_fraction           0.09         NEERI 2020
   paper_fraction             0.07         NEERI 2020
-  other_fraction             0.29         NEERI 2020 (balancing term)
+  other_fraction             0.19         NEERI 2020 (balancing term, reduced for lignocellulosic)
+  lignocellulosic_fraction   0.10         Crop residue / straw estimate — Torrefaction pathway input
+  organic_moisture_fraction  0.70         Moisture fraction of organic component — AD digester TS
 
   electricity_tariff_inr_kwh  7.50  INR/kWh  CERC 2024 avg. agricultural tariff
   compost_price_inr_kg        4.00  INR/kg   India compost spot price 2024
@@ -74,7 +76,9 @@ _DEFAULT_ASH_FRACTION_DRY: float = 0.18
 _DEFAULT_ORGANIC_FRACTION: float = 0.55
 _DEFAULT_PLASTIC_FRACTION: float = 0.09
 _DEFAULT_PAPER_FRACTION: float = 0.07
-_DEFAULT_OTHER_FRACTION: float = 0.29      # 0.55+0.09+0.07+0.29 = 1.00 ✓
+_DEFAULT_OTHER_FRACTION: float = 0.19           # 0.55+0.09+0.07+0.19+0.10 = 1.00 ✓
+_DEFAULT_LIGNOCELLULOSIC_FRACTION: float = 0.10  # straw/wood/crop residues — Torrefaction input
+_DEFAULT_ORGANIC_MOISTURE_FRACTION: float = 0.70 # moisture of organic fraction — AD digester TS
 
 _DEFAULT_ELECTRICITY_TARIFF_INR_KWH: float = 7.50
 _DEFAULT_COMPOST_PRICE_INR_KG: float = 4.00
@@ -144,15 +148,18 @@ def get_stream(location_id: str) -> dict:
     _default = _meta()  # shorthand
 
     return {
-        "total_mass_kg_d": _field(1_000.0),   # 1 tonne/day placeholder
-        "organic_fraction": _field(_DEFAULT_ORGANIC_FRACTION),
-        "plastic_fraction": _field(_DEFAULT_PLASTIC_FRACTION),
-        "paper_fraction":   _field(_DEFAULT_PAPER_FRACTION),
-        "other_fraction":   _field(_DEFAULT_OTHER_FRACTION),
-        "moisture_fraction":  _field(_DEFAULT_MOISTURE_FRACTION),
-        "ash_fraction_dry":   _field(_DEFAULT_ASH_FRACTION_DRY),
-        "lhv_dry_mj_per_kg":  _field(_DEFAULT_LHV_DRY_MJ_KG),
-        "contamination_pct":  _field(_DEFAULT_CONTAMINATION_PCT),
+        "total_mass_kg_d":            _field(1_000.0),   # 1 tonne/day placeholder
+        "category":                   "",
+        "organic_fraction":           _field(_DEFAULT_ORGANIC_FRACTION),
+        "plastic_fraction":           _field(_DEFAULT_PLASTIC_FRACTION),
+        "paper_fraction":             _field(_DEFAULT_PAPER_FRACTION),
+        "other_fraction":             _field(_DEFAULT_OTHER_FRACTION),
+        "lignocellulosic_fraction":   _field(_DEFAULT_LIGNOCELLULOSIC_FRACTION),
+        "organic_moisture_fraction":  _field(_DEFAULT_ORGANIC_MOISTURE_FRACTION),
+        "moisture_fraction":          _field(_DEFAULT_MOISTURE_FRACTION),
+        "ash_fraction_dry":           _field(_DEFAULT_ASH_FRACTION_DRY),
+        "lhv_dry_mj_per_kg":          _field(_DEFAULT_LHV_DRY_MJ_KG),
+        "contamination_pct":          _field(_DEFAULT_CONTAMINATION_PCT),
     }
 
 

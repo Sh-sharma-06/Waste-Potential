@@ -60,6 +60,7 @@ def test_too_few_studies_raises_insufficient_data_error(tmp_path: Path):
     with pytest.raises(InsufficientDataError) as ctx:
         train_from_table(
             df_small,
+            synthetic=True,
             output_bundle_dir=tmp_path / "bundles",
             output_model_cards_dir=tmp_path / "cards"
         )
@@ -184,6 +185,56 @@ def test_l2_beats_l1_false_returns_l1_as_primary(tmp_path: Path):
     # In-domain, but primary prediction MUST equal kinetic L1
     assert res.extrapolation_flag is False
     assert math.isclose(res.y_biogas_nm3_per_kg_vs, res.y_kinetic_nm3_per_kg_vs, rel_tol=1e-7)
+    assert res.interval_low >= 0.0
+    assert res.interval_low <= res.y_biogas_nm3_per_kg_vs <= res.interval_high
+    # Ensure interval respects Buswell ceiling
+    from app.ml.yield_model.predict import DEFAULT_BUSWELL_CH4_BOUND, DEFAULT_CH4_FRACTION
+    ceiling = DEFAULT_BUSWELL_CH4_BOUND / DEFAULT_CH4_FRACTION
+    assert res.interval_high <= ceiling + 1e-9
+
+
+def test_synthetic_false_refuses_synthetic_or_unknown_table(tmp_path: Path):
+    """train_from_table(synthetic=False) refuses tables with synthetic or unknown rows."""
+    df = _generate_synthetic_clean_table(n_studies=6, rows_per_study=15)
+    # df has no source_type column (treated as unknown)
+    with pytest.raises(InsufficientDataError) as ctx:
+        train_from_table(
+            df,
+            synthetic=False,
+            output_bundle_dir=tmp_path / "models",
+            output_model_cards_dir=tmp_path / "cards"
+        )
+    err = str(ctx.value)
+    assert "Cannot train production model (synthetic=False)" in err
+    assert "Fix: add a 'source_type' column" in err
+
+    # Explicitly labeled synthetic rows also refused
+    df["source_type"] = "synthetic"
+    with pytest.raises(InsufficientDataError) as ctx2:
+        train_from_table(
+            df,
+            synthetic=False,
+            output_bundle_dir=tmp_path / "models",
+            output_model_cards_dir=tmp_path / "cards"
+        )
+    assert "90 synthetic rows" in str(ctx2.value)
+
+
+def test_synthetic_false_succeeds_with_all_real_data(tmp_path: Path):
+    """train_from_table(synthetic=False) succeeds when all rows are verified source_type='real'."""
+    df = _generate_synthetic_clean_table(n_studies=6, rows_per_study=15)
+    df["source_type"] = "real"
+
+    bundle, bundle_path, card_path = train_from_table(
+        df,
+        model_version="real-eval-v1.0",
+        synthetic=False,
+        output_bundle_dir=tmp_path / "models",
+        output_model_cards_dir=tmp_path / "cards"
+    )
+
+    assert bundle.synthetic is False
+    assert "SYNTHETIC" not in bundle.model_version
 
 
 def test_deterministic_table_hash():

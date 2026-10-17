@@ -130,6 +130,62 @@ class TestDataset(unittest.TestCase):
             if os.path.exists(temp_csv):
                 os.remove(temp_csv)
 
+    def test_source_type_missing_treated_as_unknown(self):
+        """Missing source_type is treated as 'unknown' and tracked in audit report."""
+        clean_df, report = load_bmp_dataset(self.fixture_path)
+        # Fixture table has no source_type column
+        self.assertIn("source_type", clean_df.columns)
+        self.assertTrue((clean_df["source_type"] == "unknown").all())
+        self.assertEqual(report.source_type_counts.get("unknown"), 15)
+
+    def test_valid_composition_retained(self):
+        """Valid composition summing to 1.00 +/- 0.02 is retained in clean DataFrame."""
+        raw_csv = (
+            "study_id,feedstock,yield_value,yield_basis,temperature_c,hrt_days,carb_share,protein_share,lipid_share\n"
+            "study_c1,food,0.50,per_vs,37.0,30.0,0.60,0.20,0.20\n"
+            "study_c2,food,0.50,per_vs,37.0,30.0,0.59,0.20,0.20\n"  # sum = 0.99 within +/-0.02
+        )
+        temp_csv = os.path.join(os.path.dirname(__file__), "fixtures", "temp_valid_comp.csv")
+        try:
+            with open(temp_csv, "w") as f:
+                f.write(raw_csv)
+            clean_df, report = load_bmp_dataset(temp_csv)
+            self.assertEqual(report.clean_rows, 2)
+            self.assertEqual(len(report.invalid_composition_nulled), 0)
+            self.assertAlmostEqual(clean_df.iloc[0]["carb_share"], 0.60)
+            self.assertAlmostEqual(clean_df.iloc[0]["protein_share"], 0.20)
+            self.assertAlmostEqual(clean_df.iloc[0]["lipid_share"], 0.20)
+        finally:
+            if os.path.exists(temp_csv):
+                os.remove(temp_csv)
+
+    def test_invalid_composition_nulled_not_dropped(self):
+        """Invalid composition sums (< 0.98 or > 1.02) are nulled out to NaN, row is NOT dropped."""
+        raw_csv = (
+            "study_id,feedstock,yield_value,yield_basis,temperature_c,hrt_days,carb_share,protein_share,lipid_share\n"
+            "study_c3,food,0.50,per_vs,37.0,30.0,0.80,0.30,0.20\n"  # sum = 1.30 > 1.02
+            "study_c4,food,0.50,per_vs,37.0,30.0,0.30,0.20,0.10\n"  # sum = 0.60 < 0.98
+        )
+        temp_csv = os.path.join(os.path.dirname(__file__), "fixtures", "temp_invalid_comp.csv")
+        try:
+            with open(temp_csv, "w") as f:
+                f.write(raw_csv)
+            clean_df, report = load_bmp_dataset(temp_csv)
+            # Rows are KEPT
+            self.assertEqual(report.clean_rows, 2)
+            self.assertEqual(report.dropped_count, 0)
+            # Nulled rows recorded in audit
+            self.assertEqual(len(report.invalid_composition_nulled), 2)
+            self.assertIn(0, report.invalid_composition_nulled)
+            self.assertIn(1, report.invalid_composition_nulled)
+            # Shares are set to NaN in clean DataFrame
+            self.assertTrue(pd.isna(clean_df.iloc[0]["carb_share"]))
+            self.assertTrue(pd.isna(clean_df.iloc[0]["protein_share"]))
+            self.assertTrue(pd.isna(clean_df.iloc[0]["lipid_share"]))
+        finally:
+            if os.path.exists(temp_csv):
+                os.remove(temp_csv)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -36,10 +36,10 @@ _COMP_MAX_CONTAMINATION_PCT: float = 15.0  # MODEL ASSUMPTION, not a universal l
 
 _INC_MIN_LHV_WET_MJ_KG: float = 7.0    # MODEL ASSUMPTION, not a universal limit
 
-_GAS_MAX_MOISTURE: float = 0.30         # MODEL ASSUMPTION, not a universal limit
+_GAS_MAX_MOISTURE: float = 0.15         # MODEL ASSUMPTION, not a universal limit
 _GAS_MIN_LHV_WET_MJ_KG: float = 10.0   # MODEL ASSUMPTION, not a universal limit
 
-_PYR_MAX_MOISTURE: float = 0.20         # MODEL ASSUMPTION, not a universal limit
+_PYR_MAX_MOISTURE: float = 0.10         # MODEL ASSUMPTION, not a universal limit
 _PYR_MIN_PLASTIC_PAPER: float = 0.40    # MODEL ASSUMPTION, not a universal limit
 
 # ---------------------------------------------------------------------------

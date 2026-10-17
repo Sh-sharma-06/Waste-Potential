@@ -113,7 +113,11 @@ class TestGetStream:
         stream = get_stream("default")
         total = sum(
             stream[k]["value"]
-            for k in ("organic_fraction", "plastic_fraction", "paper_fraction", "other_fraction")
+            for k in (
+                "organic_fraction", "plastic_fraction",
+                "paper_fraction", "other_fraction",
+                "lignocellulosic_fraction",
+            )
         )
         assert math.isclose(total, 1.0, abs_tol=1e-6)
 

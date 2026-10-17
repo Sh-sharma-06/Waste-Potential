@@ -1,44 +1,62 @@
-"""Main FastAPI application for Waste-Potential."""
 
-from app.platform.assistant.router import router as assistant_router
+"""Waste-Potential FastAPI application."""
+
+from __future__ import annotations
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core_engine.router import router as science_router
+from app.config import Settings, get_settings
+from app.core_engine.router import router as core_engine_router
 from app.decision.router import router as decision_router
+from app.errors import register_error_handlers
 from app.pathways.router import router as pathways_router
-
-app = FastAPI(
-    title="Waste-Potential API",
-    description="Waste treatment simulation, decision support, and AI assistance.",
-    version="1.0.0",
-)
-
-# Local frontend development only. Restrict origins further for deployment.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-    ],
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
-)
-
-# Preserve the existing scientific and decision-making implementations.
-app.include_router(science_router, prefix="/api/v1")
-app.include_router(decision_router, prefix="/api/v1")
-app.include_router(pathways_router, prefix="/api/v1")
-app.include_router(assistant_router, prefix="/api/v1")
-
-@app.get("/health", tags=["Health"])
-def health_check():
-    return {"status": "ok", "service": "waste-potential-api"}
+from app.platform.assistant.router import router as assistant_router
+from app.platform.router import router as platform_router
+from app.schemas.common import BaseSchema
 
 
-@app.get("/api/v1/health", tags=["Health"])
-def api_health_check():
-    return {"status": "ok", "service": "waste-potential-api"}
+class HealthResponse(BaseSchema):
+    status: str
+    environment: str
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or get_settings()
+    app = FastAPI(title=settings.app_name)
+
+    register_error_handlers(app)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3001",
+        ],
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization"],
+    )
+
+    @app.get("/health", response_model=HealthResponse, tags=["Platform"])
+    def health() -> HealthResponse:
+        return HealthResponse(
+            status="ok",
+            environment=settings.environment,
+        )
+
+    # Preserve the existing platform and scientific-engine routers.
+    app.include_router(pathways_router)
+    app.include_router(decision_router)
+    app.include_router(platform_router)
+    app.include_router(core_engine_router)
+
+    # Keep the Gemini assistant under its existing API prefix.
+    app.include_router(assistant_router, prefix="/api/v1")
+
+    return app
+
+
+app = create_app()

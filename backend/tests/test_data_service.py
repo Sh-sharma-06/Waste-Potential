@@ -100,13 +100,14 @@ class TestGetStream:
             )
 
     def test_composition_fractions_sum_to_one(self):
-        """organic + plastic + paper + other must equal 1.0 exactly (defaults)."""
+        """organic + plastic + paper + other + lignocellulosic must equal 1.0 (defaults)."""
         data = get_stream("loc-001")
         total = (
             data["organic_fraction"]["value"]
             + data["plastic_fraction"]["value"]
             + data["paper_fraction"]["value"]
             + data["other_fraction"]["value"]
+            + data["lignocellulosic_fraction"]["value"]
         )
         assert math.isclose(total, 1.0, abs_tol=1e-6), (
             f"Composition fractions sum to {total:.8f}, expected 1.0"

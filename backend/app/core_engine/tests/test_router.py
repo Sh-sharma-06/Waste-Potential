@@ -20,7 +20,7 @@ except ImportError:
     _SKIP = True
 
 if not _SKIP:
-    from app.core_engine.router import router, _IN_MEMORY_RUNS
+    from app.core_engine.router import router, _IN_MEMORY_RUNS, get_run_reader, _InMemoryRunReader
     from app.core_engine.params import Params
 
 
@@ -116,9 +116,18 @@ class TestRunUncertainty(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.client = TestClient(_make_app())
+        cls.app = _make_app()
+        cls.client = TestClient(cls.app)
 
     def setUp(self) -> None:
+        _IN_MEMORY_RUNS.clear()
+        # Override get_run_reader so the endpoint always uses _InMemoryRunReader,
+        # regardless of whether app.platform.runs is importable in this environment.
+        self.app.dependency_overrides[get_run_reader] = lambda: _InMemoryRunReader()
+
+    def tearDown(self) -> None:
+        # Remove the override so other test classes are not affected.
+        self.app.dependency_overrides.pop(get_run_reader, None)
         _IN_MEMORY_RUNS.clear()
 
     def test_happy_path(self):

@@ -5,6 +5,8 @@ pydantic>=2,<3
 numpy
 scipy>=1.6
 scikit-learn
+pandas
+joblib
 
 # Gemini AI and environment configuration
 google-genai
@@ -15,3 +17,4 @@ uvicorn[standard]
 
 # Test dependencies
 pytest
+httpx
