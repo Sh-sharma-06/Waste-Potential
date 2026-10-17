@@ -16,15 +16,18 @@ get(name)        str → ParameterEntry — registry lookup by Params field name
 defaults_used(p) Params → list[str] — field names still at their illustrative defaults.
 stage_risks()    () → list[dict] — static catalogue of AD stage risk factors.
 rule_warnings(r) dict → list[RuleWarning] — structured warnings from simulate() output.
-router           FastAPI APIRouter — REST endpoints for parameters, simulation, validation.
+router           router MODULE (app.core_engine.router) — contains the APIRouter as
+                 router.router; REST endpoints for parameters, simulation, validation.
+                 Loaded lazily via __getattr__ to avoid circular imports.
 """
+
+import importlib
 
 from app.core_engine.params import Params
 from app.core_engine.engine import simulate
 from app.core_engine.montecarlo import run_mc, Dist, default_dists
 from app.core_engine.registry import get, defaults_used
 from app.core_engine.risk_rules import stage_risks, rule_warnings
-from app.core_engine import router
 
 __all__ = [
     "Params",
@@ -38,3 +41,9 @@ __all__ = [
     "rule_warnings",
     "router",
 ]
+
+
+def __getattr__(name: str):
+    if name == "router":
+        return importlib.import_module("app.core_engine.router")
+    raise AttributeError(f"module 'app.core_engine' has no attribute {name!r}")
