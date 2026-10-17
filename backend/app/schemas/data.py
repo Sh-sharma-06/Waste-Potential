@@ -95,8 +95,9 @@ class Feedstock(BaseModel, frozen=True):
     """Characterisation of a waste feedstock arriving at a treatment facility.
 
     All mass-fraction fields (``organic_fraction``, ``plastic_fraction``,
-    ``paper_fraction``, ``other_fraction``) must sum to 1.0 within a tolerance
-    of 1 × 10⁻⁶.  The validator checks the ``.value`` attribute of each.
+    ``paper_fraction``, ``other_fraction``, ``lignocellulosic_fraction``) must
+    sum to 1.0 within a tolerance of 1 × 10⁻⁶.  The validator checks the
+    ``.value`` attribute of each.
 
     Attributes
     ----------
@@ -110,6 +111,11 @@ class Feedstock(BaseModel, frozen=True):
         Mass fraction of paper / cardboard (0–1).
     other_fraction:
         Mass fraction of all other materials (0–1).
+    lignocellulosic_fraction:
+        Mass fraction of lignocellulosic biomass (straw, wood chips, crop
+        residues; 0–1).  Required by the Torrefaction pathway physics engine.
+        Defaults to 0.0 so existing stream dicts that omit the field remain
+        valid.
     moisture_fraction:
         As-received moisture content (0–1).
     ash_fraction_dry:
@@ -135,6 +141,14 @@ class Feedstock(BaseModel, frozen=True):
     other_fraction: FeedstockField = Field(
         ..., description="All other materials mass fraction (0–1)."
     )
+    lignocellulosic_fraction: FeedstockField = Field(
+        default_factory=lambda: FeedstockField(
+            value=0.0,
+            meta=Metadata(kind="estimated", resolution="n/a", source_id="default_v1"),
+        ),
+        description="Lignocellulosic biomass mass fraction (0–1). "
+                    "Used by the Torrefaction pathway physics engine.",
+    )
     moisture_fraction: FeedstockField = Field(
         ..., description="As-received moisture content (0–1)."
     )
@@ -150,12 +164,13 @@ class Feedstock(BaseModel, frozen=True):
 
     @model_validator(mode="after")
     def _fractions_sum_to_one(self) -> "Feedstock":
-        """Ensure organic + plastic + paper + other == 1.0 ±1e-6."""
+        """Ensure organic + plastic + paper + other + lignocellulosic == 1.0 ±1e-6."""
         total = (
             self.organic_fraction.value
             + self.plastic_fraction.value
             + self.paper_fraction.value
             + self.other_fraction.value
+            + self.lignocellulosic_fraction.value
         )
         if not math.isclose(total, 1.0, abs_tol=1e-6):
             raise ValueError(
@@ -163,7 +178,8 @@ class Feedstock(BaseModel, frozen=True):
                 f"got organic={self.organic_fraction.value}, "
                 f"plastic={self.plastic_fraction.value}, "
                 f"paper={self.paper_fraction.value}, "
-                f"other={self.other_fraction.value} "
+                f"other={self.other_fraction.value}, "
+                f"lignocellulosic={self.lignocellulosic_fraction.value} "
                 f"(sum={total:.8f})."
             )
         return self
