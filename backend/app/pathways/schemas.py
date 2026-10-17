@@ -210,6 +210,11 @@ class PathwayResult(BaseModel):
     e_net_kwh_d: float = Field(
         0.0, description="Net kWh/day exported (negative = net electricity consumer)."
     )
+    model_status: Optional[str] = Field(
+        None,
+        description="Optional status tag from the ML model or simulation engine, "
+                    "e.g. 'converged', 'fallback', 'extrapolated'.",
+    )
     status: str = Field(
         ...,
         description="One of: 'feasible', 'rejected', 'uncertain'.",

@@ -30,6 +30,26 @@ When a request carries P3 optional fields the screening pipeline:
      ``road_km`` key matching the pathway, that distance is used instead of the
      request's ``distance_km``.
 
+P1 physics engine integration
+------------------------------
+``evaluate_pathways()`` calls ``physics_inputs(stream, ambient_temp_c)`` from
+``app.core_engine.pathways.adapter`` once per request to obtain physics-derived
+values for each pathway:
+
+  - ``net_kwh_per_tonne``       — from the core simulation (AD, composting, etc.)
+  - ``direct_ghg_kg_per_tonne`` — from GHG accounting in the core engine
+  - ``model_status``            — engine convergence / confidence tag
+
+Precedence rules (per pathway, per metric):
+  1. Explicit non-zero value in the request  → wins (caller override)
+  2. Physics engine value (when available)   → primary source
+  3. Zero / absent                           → existing fallback (backward-compat)
+
+If ``physics_inputs()`` raises for any reason (missing keys, import error,
+simulation failure) the entire call is silently caught and the module falls
+back to pure-request-parameter behaviour so all existing tests continue to
+pass unchanged.
+
 When the optional fields are absent the module falls back to the original
 flat-price revenue calculation so all existing unit tests continue to pass.
 
@@ -47,7 +67,7 @@ CRF import:
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from app.data.demand import match_demand_greedy
 from app.data.service import get_location_context, get_stream
@@ -95,6 +115,29 @@ def _derive_outputs(pathway: str, waste_tpd: float) -> dict[str, float]:
     if "inciner" in p or "wte" in p:
         return {"heat_mj_d": round(waste_tpd * 10_000.0, 2)}
     return {}
+
+
+# ---------------------------------------------------------------------------
+# P1 physics engine helper
+# ---------------------------------------------------------------------------
+
+def _call_physics_inputs(
+    stream: dict,
+    ambient_temp_c: float,
+) -> dict[str, dict[str, Any]]:
+    """Call ``physics_inputs`` from the core engine adapter; return empty dict on any failure.
+
+    Returns a dict keyed by pathway name.  Each value has at least:
+      ``net_kwh_per_tonne``, ``direct_ghg_kg_per_tonne``, ``model_status``.
+
+    Any exception (ImportError, ValueError, missing key, simulation failure)
+    is caught and an empty dict is returned so callers fall back gracefully.
+    """
+    try:
+        from app.core_engine.pathways.adapter import physics_inputs
+        return physics_inputs(stream, ambient_temp_c)
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +257,8 @@ def screen_pathway(
     sinks: Optional[list[dict]] = None,
     electricity_price_override: Optional[float] = None,
     yield_warnings: Optional[list[str]] = None,
+    # P1 physics engine results — pre-resolved by evaluate_pathways()
+    physics: Optional[dict[str, Any]] = None,
 ) -> PathwayResult:
     """Run coarse feasibility screening for a single *pathway*.
 
@@ -239,6 +284,11 @@ def screen_pathway(
         ``request.electricity_price_inr_kwh`` when sinks are NOT available.
     yield_warnings:
         Pre-computed YieldPredictor warnings to carry into the result.
+    physics:
+        Per-pathway dict from ``_call_physics_inputs()``.  The entry for this
+        pathway (if present) supplies ``net_kwh_per_tonne``,
+        ``direct_ghg_kg_per_tonne``, ``model_status``, and ``warnings``.
+        Request values act as overrides when explicitly non-zero.
 
     Returns
     -------
@@ -297,8 +347,27 @@ def screen_pathway(
     ann_capex = capex * crf(dr, life_yr) if capex > 0 else 0.0
     cost_inr_y = ann_capex + opex_yr
 
+    # ------------------------------------------------------------------
+    # Physics engine values (primary) vs request values (override)
+    # ------------------------------------------------------------------
+    phys: dict[str, Any] = (physics or {}).get(pathway, {})
+    phys_kwh_t: float = float(phys.get("net_kwh_per_tonne", 0.0))
+    phys_ghg_t: float = float(phys.get("direct_ghg_kg_per_tonne", 0.0))
+    physics_model_status: Optional[str] = phys.get("model_status")
+
+    # Propagate physics engine warnings (before any request-level warnings)
+    for w in phys.get("warnings", []):
+        if w not in warnings:
+            warnings.append(w)
+
+    # Resolve net_kwh_per_tonne: request non-zero value wins; else physics; else 0
+    req_kwh_t: float = request.net_kwh_per_tonne.get(pathway, 0.0)
+    net_kwh_t: float = req_kwh_t if req_kwh_t != 0.0 else phys_kwh_t
+
+    # Resolve direct_ghg_kg_per_tonne: request non-zero wins; else physics; else 0
+    req_ghg_t: float = request.direct_ghg_kg_per_tonne.get(pathway, 0.0)
+
     # Net electricity (kWh/day) — used for both revenue and GHG credit
-    net_kwh_t = request.net_kwh_per_tonne.get(pathway, 0.0)
     e_net_kwh_d = net_kwh_t * effective_waste_tpd   # kWh/day (signed)
     net_kwh_yr = net_kwh_t * waste_tpy
 
@@ -333,7 +402,8 @@ def screen_pathway(
     # ------------------------------------------------------------------
     # Illustrative GHG (informational only)
     # ------------------------------------------------------------------
-    direct_ghg_t = request.direct_ghg_kg_per_tonne.get(pathway, 0.0)
+    # Use request value when explicitly non-zero; fall back to physics engine value
+    direct_ghg_t = req_ghg_t if req_ghg_t != 0.0 else phys_ghg_t
     direct_ghg_yr = direct_ghg_t * waste_tpy
     transport_ghg_yr = distance_km * waste_tpy * transport_factor
     elec_credit_yr = max(0.0, net_kwh_yr) * grid_factor
@@ -359,6 +429,17 @@ def screen_pathway(
             "GHG estimate excludes process emissions."
         )
 
+    if phys_kwh_t != 0.0 and req_kwh_t == 0.0:
+        warnings.append(
+            f"net_kwh_per_tonne for '{pathway}' sourced from physics engine "
+            f"({phys_kwh_t:.4f} kWh/t)."
+        )
+    if phys_ghg_t != 0.0 and req_ghg_t == 0.0:
+        warnings.append(
+            f"direct_ghg_kg_per_tonne for '{pathway}' sourced from physics engine "
+            f"({phys_ghg_t:.4f} kgCO2e/t)."
+        )
+
     warnings.append(
         "Output quantities are indicative only — based on generic conversion "
         "factors. Use the ML yield model for site-specific estimates."
@@ -378,6 +459,7 @@ def screen_pathway(
         cost_inr_y=round(cost_inr_y, 2),
         annual_net_value_inr=round(annual_net_value_inr, 2),
         e_net_kwh_d=round(e_net_kwh_d, 4),
+        model_status=physics_model_status,
         status=status,
         warnings=warnings,
     )
@@ -433,8 +515,7 @@ def evaluate_pathways(
     # ------------------------------------------------------------------
     # P3 data lookups (once per evaluate_pathways call)
     # ------------------------------------------------------------------
-    # Feedstock characterisation (not yet threaded into mass balance — Phase 5b)
-    _stream = get_stream(request.location_id)  # noqa: F841 — reserved for Phase 5b
+    stream = get_stream(request.location_id)
 
     ctx = get_location_context(request.location_id)
     facilities: list[dict] = ctx.get("facilities", [])
@@ -449,6 +530,15 @@ def evaluate_pathways(
     # ML yield prediction (shared across all pathways)
     effective_waste_tpd, yield_warnings = _resolve_waste_tpd(request)
 
+    # ------------------------------------------------------------------
+    # P1 physics engine (once per evaluate_pathways call; fails safely)
+    # ------------------------------------------------------------------
+    raw_temp = ctx.get("ambient_temp_c", 25.0)
+    ambient_temp_c: float = float(
+        raw_temp.get("value", 25.0) if isinstance(raw_temp, dict) else raw_temp
+    )
+    physics_by_pathway = _call_physics_inputs(stream, ambient_temp_c)
+
     return [
         screen_pathway(
             pw,
@@ -460,6 +550,7 @@ def evaluate_pathways(
             sinks=sinks,
             electricity_price_override=electricity_price_override,
             yield_warnings=yield_warnings,
+            physics=physics_by_pathway,
         )
         for pw in request.pathways
     ]
