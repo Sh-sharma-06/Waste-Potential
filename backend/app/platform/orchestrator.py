@@ -47,14 +47,26 @@ REQUEST_FIELD_MAP: dict[str, str] = {
 }
 
 # P3 stream field → Params field. Only same-named, same-basis fields are
-# mapped; whole-stream moisture is deliberately NOT mapped to ts_fraction.
+# mapped; whole-stream moisture_fraction is deliberately NOT mapped.
 STREAM_FIELD_MAP: dict[str, str] = {
     "total_mass_kg_d": "total_mass_kg_d",
     "organic_fraction": "organic_fraction",
 }
 
-# P3 values that are known placeholders, not site data.
+# Derived at stream priority: ts_fraction = 1 − organic_moisture_fraction
+# (moisture of the organic component; same relation as P1's pathways adapter).
+ORGANIC_MOISTURE_FIELD = "organic_moisture_fraction"
+TS_FRACTION_FIELD = "ts_fraction"
+
+# P3 values that are known placeholders, not site data. Besides this fixed
+# set, any field whose P3 meta.source_id is in PLACEHOLDER_SOURCE_IDS counts.
 PLACEHOLDER_STREAM_FIELDS = frozenset({"total_mass_kg_d"})
+PLACEHOLDER_SOURCE_IDS = frozenset({"placeholder_general"})
+
+# Statuses that already say "not empirical"; a run that uses placeholder
+# stream data is never reported with any other status.
+NON_EMPIRICAL_STATUSES = frozenset({"illustrative_estimate", "extrapolation"})
+PLACEHOLDER_STATUS = "illustrative_estimate"
 
 MASS_FIELD = "total_mass_kg_d"
 # Matches SimRequest.waste_mass_kg_day's le=1e6 bound (kept in sync by a test).
@@ -84,6 +96,29 @@ def _check_supported(req: SimRequest) -> None:
         )
 
 
+def _require_unit_fraction(name: str, value: Any) -> float:
+    """Return *value* as a float if it is a finite number in [0, 1]."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise SimulationInputError(f"{name} must be a number, got {value!r}")
+    _require_finite(name, value)
+    if not 0.0 <= value <= 1.0:
+        raise SimulationInputError(f"{name} must be in [0, 1], got {value!r}")
+    return float(value)
+
+
+def _derived_ts_fraction(stream: dict[str, Any]) -> Optional[float]:
+    """ts_fraction from the stream's organic moisture, or None if absent."""
+    if ORGANIC_MOISTURE_FIELD not in stream:
+        return None
+    moisture = _require_unit_fraction(
+        f"location stream {ORGANIC_MOISTURE_FIELD}",
+        stream[ORGANIC_MOISTURE_FIELD]["value"],
+    )
+    return _require_unit_fraction(
+        f"{TS_FRACTION_FIELD} derived from {ORGANIC_MOISTURE_FIELD}", 1.0 - moisture
+    )
+
+
 def _location_data(location_id: str) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """Return (params from stream, stream, context) for *location_id*."""
     stream = get_stream(location_id)
@@ -93,7 +128,46 @@ def _location_data(location_id: str) -> tuple[dict[str, Any], dict[str, Any], di
         for stream_field, params_field in STREAM_FIELD_MAP.items()
         if stream_field in stream
     }
+    ts_fraction = _derived_ts_fraction(stream)
+    if ts_fraction is not None:
+        values[TS_FRACTION_FIELD] = ts_fraction
     return values, stream, context
+
+
+# Params field → the P3 stream field its value came from.
+_STREAM_SOURCE_FIELD: dict[str, str] = {
+    **{params_field: stream_field for stream_field, params_field in STREAM_FIELD_MAP.items()},
+    TS_FRACTION_FIELD: ORGANIC_MOISTURE_FIELD,
+}
+
+
+def _stream_meta(stream: dict[str, Any], params_field: str) -> dict[str, Any]:
+    entry = stream.get(_STREAM_SOURCE_FIELD[params_field])
+    meta = entry.get("meta") if isinstance(entry, dict) else None
+    return dict(meta) if isinstance(meta, dict) else {}
+
+
+def _placeholder_fields(stream: dict[str, Any], stream_values: dict[str, Any]) -> list[str]:
+    """Stream-supplied Params fields that are placeholders, not site data."""
+    return sorted(
+        field
+        for field in stream_values
+        if field in PLACEHOLDER_STREAM_FIELDS
+        or _stream_meta(stream, field).get("source_id") in PLACEHOLDER_SOURCE_IDS
+    )
+
+
+def _derived_fields(stream: dict[str, Any], stream_values: dict[str, Any]) -> dict[str, Any]:
+    """Provenance of Params fields computed from (not copied from) the stream."""
+    if TS_FRACTION_FIELD not in stream_values:
+        return {}
+    return {
+        TS_FRACTION_FIELD: {
+            "source_field": ORGANIC_MOISTURE_FIELD,
+            "formula": f"1 - {ORGANIC_MOISTURE_FIELD}",
+            "meta": _stream_meta(stream, TS_FRACTION_FIELD),
+        }
+    }
 
 
 def resolve_params(
@@ -116,7 +190,8 @@ def resolve_params(
         location_notes = {
             "location_id": req.location_id,
             "stream_fields_applied": sorted(stream_values),
-            "placeholder_fields": sorted(PLACEHOLDER_STREAM_FIELDS & set(stream_values)),
+            "placeholder_fields": _placeholder_fields(stream, stream_values),
+            "derived_fields": _derived_fields(stream, stream_values),
             "stream": stream,
             "context": context,
         }
@@ -158,15 +233,46 @@ def resolve_params(
     return params, sources, location_notes
 
 
+def _placeholders_in_use(
+    sources: dict[str, str], location_notes: Optional[dict[str, Any]]
+) -> list[str]:
+    """Placeholder stream fields whose value survived precedence (not
+    replaced by a request field or override)."""
+    if not location_notes:
+        return []
+    return [
+        field
+        for field in location_notes["placeholder_fields"]
+        if sources.get(field) == "location_stream"
+    ]
+
+
+def _response_status(
+    results_status: str, sources: dict[str, str], location_notes: Optional[dict[str, Any]]
+) -> str:
+    """The engine's status, except that a run using placeholder stream data
+    is never reported as anything stronger than an illustrative estimate."""
+    if _placeholders_in_use(sources, location_notes) and results_status not in NON_EMPIRICAL_STATUSES:
+        return PLACEHOLDER_STATUS
+    return results_status
+
+
 def _build_notes(
     sources: dict[str, str], location_notes: Optional[dict[str, Any]]
 ) -> dict[str, Any]:
     caveats: list[str] = []
-    if sources.get(MASS_FIELD) == "location_stream":
-        caveats.append(
-            f"{MASS_FIELD} comes from the P3 location stream, which is currently "
-            "a placeholder default, not measured site data."
-        )
+    for field in _placeholders_in_use(sources, location_notes):
+        if field == TS_FRACTION_FIELD:
+            caveats.append(
+                f"{TS_FRACTION_FIELD} is derived from the P3 location stream's "
+                f"{ORGANIC_MOISTURE_FIELD}, which is currently a placeholder "
+                "default, not measured site data."
+            )
+        else:
+            caveats.append(
+                f"{field} comes from the P3 location stream, which is currently "
+                "a placeholder default, not measured site data."
+            )
     return {
         "orchestrator": {"model_version": ENGINE_MODEL_VERSION, "ml_yield": "not_used"},
         "param_sources": dict(sorted(sources.items())),
@@ -212,7 +318,7 @@ def run_simulation(req: SimRequest, store: Optional[RunStore] = None) -> SimResp
         notes=_build_notes(sources, location_notes),
         model_version=ENGINE_MODEL_VERSION,
         audit_hash=audit_hash,
-        status=results.status,
+        status=_response_status(results.status, sources, location_notes),
         defaults_used_unvalidated=defaults_used(params),
         warnings_detail=[
             RuleWarningModel(**dataclasses.asdict(w))

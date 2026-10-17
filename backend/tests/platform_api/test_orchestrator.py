@@ -238,7 +238,9 @@ def test_location_stream_supplies_mass_and_is_labelled_placeholder(client, store
     notes = body["notes"]
     assert notes["param_sources"]["total_mass_kg_d"] == "location_stream"
     assert notes["location"]["location_id"] == "farm_1"
-    assert notes["location"]["placeholder_fields"] == ["total_mass_kg_d"]
+    # Mass by fixed list; ts_fraction because P3 tags organic_moisture_fraction
+    # source_id="placeholder_general" (see test_ts_fraction_mapping.py).
+    assert notes["location"]["placeholder_fields"] == ["total_mass_kg_d", "ts_fraction"]
     assert any("placeholder" in c for c in notes["caveats"])
     # P3 provenance is preserved verbatim
     meta = notes["location"]["stream"]["total_mass_kg_d"]["meta"]
@@ -246,10 +248,13 @@ def test_location_stream_supplies_mass_and_is_labelled_placeholder(client, store
     assert "sinks" in notes["location"]["context"]
 
 
-def test_stream_moisture_is_not_mapped_to_ts_fraction():
+def test_stream_ts_fraction_comes_from_organic_moisture_not_whole_stream_moisture():
+    # Mapping details are covered in test_ts_fraction_mapping.py.
     params, sources, _ = resolve_params(_req(location_id="farm_1"))
-    assert params.ts_fraction == Params().ts_fraction
-    assert "ts_fraction" not in sources
+    organic_moisture = STREAM["organic_moisture_fraction"]["value"]
+    assert params.ts_fraction == 1.0 - organic_moisture
+    assert params.ts_fraction != 1.0 - STREAM["moisture_fraction"]["value"]
+    assert sources["ts_fraction"] == "location_stream"
 
 
 def test_explicit_request_fields_override_stream(store):
@@ -261,7 +266,9 @@ def test_explicit_request_fields_override_stream(store):
     assert resp.params["organic_fraction"] == 0.3
     assert resp.notes["param_sources"]["total_mass_kg_d"] == "request"
     assert resp.notes["param_sources"]["organic_fraction"] == "request"
-    assert resp.notes["caveats"] == []  # mass no longer the placeholder
+    # Mass is no longer the placeholder; the stream-derived ts_fraction still is.
+    assert not any(c.startswith("total_mass_kg_d") for c in resp.notes["caveats"])
+    assert [c.split()[0] for c in resp.notes["caveats"]] == ["ts_fraction"]
 
 
 def test_overrides_beat_top_level_fields_and_stream():
