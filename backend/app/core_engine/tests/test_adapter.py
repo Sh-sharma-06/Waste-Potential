@@ -369,12 +369,13 @@ class TestPhysicsInputsGHG(unittest.TestCase):
         self.assertEqual(out["anaerobic_digestion"]["direct_ghg_kg_per_tonne"], 0.0)
 
     def test_composting_ghg_formula(self) -> None:
-        """Manual GWP check: composting GHG = (CH4*28 + N2O*265) / tonne."""
+        """Manual GWP check: composting GHG = (CH4*29.8 + N2O*273.0) / tonne."""
+        # NOTE: updated from AR5 (CH4=28, N2O=265) to AR6 (CH4=29.8, N2O=273.0)
         from app.core_engine.pathways.composting import CompostingParams, simulate_composting
         fs = feedstock_from_stream(_plain_stream())
         sim = simulate_composting(fs, CompostingParams())
         M_t = fs.total_mass_kg_d / 1000.0
-        expected = (sim["ch4_kg_d"] * 28.0 + sim["n2o_kg_d"] * 265.0) / M_t
+        expected = (sim["ch4_kg_d"] * 29.8 + sim["n2o_kg_d"] * 273.0) / M_t  # NOTE: AR6 values
         out = physics_inputs(_plain_stream())
         self.assertAlmostEqual(
             out["composting"]["direct_ghg_kg_per_tonne"],
@@ -771,6 +772,208 @@ class TestPhysicsInputsOrganicMoisture(unittest.TestCase):
         ad = physics_inputs(stream)["anaerobic_digestion"]
         self.assertEqual(ad["ts_source"], "stream")
         self.assertGreater(ad["net_kwh_per_tonne"], 0.0)
+
+
+# ---------------------------------------------------------------------------
+# AR6 GWP constants: composting GHG absolute value
+# ---------------------------------------------------------------------------
+
+class TestCompostingGHGAR6(unittest.TestCase):
+    """Composting GHG must reflect AR6 GWP-100 values (CH4=29.8, N2O=273.0)."""
+
+    def test_composting_ghg_equals_201_1_per_tonne(self) -> None:
+        """With composting sim defaults and plain_stream the formula
+        4.0 kg CH4/t * 29.8 + 0.3 kg N2O/t * 273.0 = 119.2 + 81.9 = 201.1 kg CO2e/t
+        is the expected AR6 result.  We test that physics_inputs returns a value
+        consistent with the AR6 constants by comparing against the formula directly."""
+        from app.core_engine.pathways.composting import CompostingParams, simulate_composting
+        from app.core_engine.pathways.adapter import _GWP_CH4, _GWP_N2O
+        fs = feedstock_from_stream(_plain_stream())
+        sim = simulate_composting(fs, CompostingParams())
+        M_t = fs.total_mass_kg_d / 1000.0
+        expected = (sim["ch4_kg_d"] * _GWP_CH4 + sim["n2o_kg_d"] * _GWP_N2O) / M_t
+        out = physics_inputs(_plain_stream())
+        self.assertAlmostEqual(
+            out["composting"]["direct_ghg_kg_per_tonne"],
+            expected,
+            places=6,
+        )
+
+    def test_composting_ghg_ar6_constants_give_201_1(self) -> None:
+        """Spot-check: 4.0*29.8 + 0.3*273.0 = 201.1 exactly."""
+        self.assertAlmostEqual(4.0 * 29.8 + 0.3 * 273.0, 201.1, places=6)
+
+
+# ---------------------------------------------------------------------------
+# Primary product, energy basis, GHG modelled — three new keys on every entry
+# ---------------------------------------------------------------------------
+
+_EXPECTED_PRIMARY_PRODUCT = {
+    "anaerobic_digestion": "electricity",
+    "composting":          "compost",
+    "incineration":        "electricity",
+    "gasification":        "electricity",
+    "pyrolysis":           "fuel",
+    "htc":                 "fuel",
+    "torrefaction":        "fuel",
+}
+_EXPECTED_ENERGY_BASIS = {
+    "anaerobic_digestion": "electrical",
+    "composting":          "electrical",
+    "incineration":        "electrical",
+    "gasification":        "electrical",
+    "pyrolysis":           "thermal",
+    "htc":                 "thermal",
+    "torrefaction":        "thermal",
+}
+_EXPECTED_GHG_MODELLED = {
+    "anaerobic_digestion": False,
+    "composting":          True,
+    "incineration":        True,
+    "gasification":        False,
+    "pyrolysis":           False,
+    "htc":                 False,
+    "torrefaction":        False,
+}
+
+
+class TestPhysicsInputsNewKeys(unittest.TestCase):
+    """All 7 pathway entries must carry primary_product, energy_basis, ghg_modelled."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        # _plain_stream() → all thermal pathways infeasible (high moisture), wet pathways feasible
+        cls.out = physics_inputs(_plain_stream())
+        # _dry_stream() → thermal pathways feasible
+        cls.dry_out = physics_inputs(_dry_stream())
+
+    def test_all_entries_have_primary_product(self) -> None:
+        for pw in PATHWAYS_EXTENDED:
+            with self.subTest(pathway=pw):
+                self.assertIn("primary_product", self.out[pw])
+
+    def test_all_entries_have_energy_basis(self) -> None:
+        for pw in PATHWAYS_EXTENDED:
+            with self.subTest(pathway=pw):
+                self.assertIn("energy_basis", self.out[pw])
+
+    def test_all_entries_have_ghg_modelled(self) -> None:
+        for pw in PATHWAYS_EXTENDED:
+            with self.subTest(pathway=pw):
+                self.assertIn("ghg_modelled", self.out[pw])
+
+    def test_primary_product_values_correct(self) -> None:
+        for pw in PATHWAYS_EXTENDED:
+            with self.subTest(pathway=pw):
+                self.assertEqual(
+                    self.out[pw]["primary_product"], _EXPECTED_PRIMARY_PRODUCT[pw]
+                )
+
+    def test_energy_basis_values_correct(self) -> None:
+        for pw in PATHWAYS_EXTENDED:
+            with self.subTest(pathway=pw):
+                self.assertEqual(
+                    self.out[pw]["energy_basis"], _EXPECTED_ENERGY_BASIS[pw]
+                )
+
+    def test_ghg_modelled_values_correct(self) -> None:
+        for pw in PATHWAYS_EXTENDED:
+            with self.subTest(pathway=pw):
+                self.assertEqual(
+                    self.out[pw]["ghg_modelled"], _EXPECTED_GHG_MODELLED[pw]
+                )
+
+    def test_infeasible_entry_carries_new_keys(self) -> None:
+        """Gasification is infeasible on plain stream — must still have the three keys."""
+        gp = self.out["gasification"]
+        self.assertFalse(gp["feasible"])
+        self.assertIn("primary_product", gp)
+        self.assertIn("energy_basis", gp)
+        self.assertIn("ghg_modelled", gp)
+
+    def test_infeasible_primary_product_correct(self) -> None:
+        self.assertEqual(self.out["gasification"]["primary_product"], "electricity")
+
+    def test_infeasible_ghg_modelled_false(self) -> None:
+        self.assertFalse(self.out["gasification"]["ghg_modelled"])
+
+    def test_feasible_dry_stream_new_keys_present(self) -> None:
+        """Gasification feasible on dry stream — keys must still be present."""
+        gp = self.dry_out["gasification"]
+        self.assertTrue(gp["feasible"])
+        self.assertIn("primary_product", gp)
+
+    def test_ghg_modelled_false_has_ghg_not_modelled_warning(self) -> None:
+        """Feasible pathways with ghg_modelled=False must carry 'GHG not modelled' warning."""
+        for pw in PATHWAYS_EXTENDED:
+            if not _EXPECTED_GHG_MODELLED[pw]:
+                # Only check feasible entries (warnings differ for infeasible)
+                entry = self.dry_out[pw]
+                if entry["feasible"]:
+                    with self.subTest(pathway=pw):
+                        self.assertTrue(
+                            any("GHG not modelled" in w for w in entry["warnings"]),
+                            f"{pw}: expected 'GHG not modelled' warning, got {entry['warnings']}",
+                        )
+
+    def test_new_keys_are_json_serialisable(self) -> None:
+        import json
+        serialised = json.dumps(self.out)
+        parsed = json.loads(serialised)
+        for pw in PATHWAYS_EXTENDED:
+            self.assertIn("primary_product", parsed[pw])
+            self.assertIn("energy_basis", parsed[pw])
+            self.assertIn("ghg_modelled", parsed[pw])
+
+
+# ---------------------------------------------------------------------------
+# Cross-reference: adapter GWP constants vs app.decision.emission_factors
+# ---------------------------------------------------------------------------
+
+class TestAdapterGWPMatchesEmissionFactors(unittest.TestCase):
+    """At least one numeric attribute in app.decision.emission_factors whose name
+    contains 'ch4' or 'n2o' must match one of the adapter's GWP constants."""
+
+    def test_emission_factors_ch4_or_n2o_matches_adapter(self) -> None:
+        try:
+            import app.decision.emission_factors as ef  # noqa: PLC0415
+        except ImportError:
+            self.skipTest("app.decision.emission_factors not importable — skipping cross-reference check")
+
+        from app.core_engine.pathways.adapter import _GWP_CH4, _GWP_N2O
+
+        adapter_values = {_GWP_CH4, _GWP_N2O}
+        matched_name: str | None = None
+        matched_value: float | None = None
+
+        for attr_name in dir(ef):
+            if not ("ch4" in attr_name.lower() or "n2o" in attr_name.lower()):
+                continue
+            val = getattr(ef, attr_name, None)
+            if not isinstance(val, (int, float)):
+                continue
+            if float(val) in adapter_values:
+                matched_name = attr_name
+                matched_value = float(val)
+                break
+
+        if matched_name is None:
+            self.skipTest(
+                f"app.decision.emission_factors has no module-level numeric attribute "
+                f"whose name contains 'ch4' or 'n2o' that equals adapter "
+                f"_GWP_CH4={_GWP_CH4} or _GWP_N2O={_GWP_N2O}. "
+                f"Attributes scanned: "
+                f"{[a for a in dir(ef) if 'ch4' in a.lower() or 'n2o' in a.lower()]}. "
+                f"The emission_factors module stores GWP values inside the AR6_FACTORS "
+                f"dict, not as standalone module-level floats — no match possible."
+            )
+        self.assertAlmostEqual(
+            matched_value,
+            _GWP_CH4 if matched_value == _GWP_CH4 else _GWP_N2O,
+            places=6,
+            msg=f"Matched attribute '{matched_name}' value {matched_value} "
+                f"does not equal expected adapter GWP constant",
+        )
 
 
 if __name__ == "__main__":

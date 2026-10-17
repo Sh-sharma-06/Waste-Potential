@@ -5,8 +5,8 @@ Units: mass in kg/d (wet basis), energy in kWh/d, gas in Nm³ at 0 °C.
 GHG outputs are in kg CO2-equivalent per tonne of total_mass_kg_d input.
 
 GWP assumptions (MODEL ASSUMPTION, source="TBD", status="illustrative"):
-    CH4   GWP-100 = 28   (IPCC AR5)
-    N2O   GWP-100 = 265  (IPCC AR5)
+    CH4   GWP-100 = 29.8  (IPCC AR6 GWP-100, matches P4 emission_factors.py; citation unverified)
+    N2O   GWP-100 = 273.0 (IPCC AR6 GWP-100, matches P4 emission_factors.py; citation unverified)
 """
 from __future__ import annotations
 
@@ -22,8 +22,38 @@ from .gasification import simulate_gasification
 from .pyrolysis import simulate_pyrolysis
 
 # GWP-100 constants (MODEL ASSUMPTION, source="TBD", status="illustrative")
-_GWP_CH4: float = 28.0   # kg CO2-eq / kg CH4   — IPCC AR5, source="TBD"
-_GWP_N2O: float = 265.0  # kg CO2-eq / kg N2O   — IPCC AR5, source="TBD"
+_GWP_CH4: float = 29.8   # kg CO2-eq / kg CH4   — IPCC AR6 GWP-100, matches P4 emission_factors.py; citation unverified, source="TBD"
+_GWP_N2O: float = 273.0  # kg CO2-eq / kg N2O   — IPCC AR6 GWP-100, matches P4 emission_factors.py; citation unverified, source="TBD"
+
+# Per-pathway primary product and energy/GHG metadata — MODEL ASSUMPTION,
+# a pathway's headline product may differ in practice (e.g. AD can produce CBG).
+_PRIMARY_PRODUCT: dict = {
+    "anaerobic_digestion": "electricity",
+    "composting":          "compost",
+    "incineration":        "electricity",
+    "gasification":        "electricity",
+    "pyrolysis":           "fuel",
+    "htc":                 "fuel",
+    "torrefaction":        "fuel",
+}
+_ENERGY_BASIS: dict = {
+    "anaerobic_digestion": "electrical",
+    "composting":          "electrical",
+    "incineration":        "electrical",
+    "gasification":        "electrical",
+    "pyrolysis":           "thermal",
+    "htc":                 "thermal",
+    "torrefaction":        "thermal",
+}
+_GHG_MODELLED: dict = {
+    "anaerobic_digestion": False,
+    "composting":          True,
+    "incineration":        True,
+    "gasification":        False,
+    "pyrolysis":           False,
+    "htc":                 False,
+    "torrefaction":        False,
+}
 
 # Feedstock field names that must be present in a stream dict
 _REQUIRED_KEYS: tuple = (
@@ -200,6 +230,9 @@ def physics_inputs(
                 "direct_ghg_kg_per_tonne": 0.0,
                 "model_status": "infeasible",
                 "warnings": list(feasibility.reasons),
+                "primary_product": _PRIMARY_PRODUCT[pathway],
+                "energy_basis": _ENERGY_BASIS[pathway],
+                "ghg_modelled": _GHG_MODELLED[pathway],
             }
             if pathway == "torrefaction":
                 entry["lignocellulosic_source"] = (
@@ -299,6 +332,9 @@ def physics_inputs(
             "direct_ghg_kg_per_tonne": ghg_per_tonne,
             "model_status": model_status,
             "warnings": all_warnings,
+            "primary_product": _PRIMARY_PRODUCT[pathway],
+            "energy_basis": _ENERGY_BASIS[pathway],
+            "ghg_modelled": _GHG_MODELLED[pathway],
         }
         if pathway == "torrefaction":
             entry["lignocellulosic_source"] = (
