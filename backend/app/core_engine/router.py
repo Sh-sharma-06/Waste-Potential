@@ -1,6 +1,6 @@
 """core_engine APIRouter — simulation parameters, uncertainty, and validation summary.
 
-Mounted by P5 at /api/v1 (no prefix here).
+Mounted by P5 at the application root (no prefix here); a shared /api/v1 prefix may be introduced later by team decision.
 
 Endpoints
 ---------
