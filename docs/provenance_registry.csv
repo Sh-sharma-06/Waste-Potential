@@ -1,0 +1,98 @@
+name,value,unit,status,source,basis,applies_to,notes
+total_mass_kg_d,1000.0,kg/d,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+organic_fraction,0.45,fraction,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+suitable_fraction,0.8,fraction,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+ts_fraction,0.27,kg TS/kg wet,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+vs_of_ts,0.88,kg VS/kg TS,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+target_ts,0.1,fraction,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+y_biogas_nm3_per_kg_vs,0.55,Nm³/kg VS,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+ch4_fraction,0.6,fraction,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+ch4_slip,0.015,fraction,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+availability,0.9,fraction,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+eta_el,0.35,fraction,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+eta_th,0.45,fraction,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+eta_boiler,0.9,fraction,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+digester_temp_c,37.0,°C,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+ambient_temp_c,25.0,°C,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+hrt_days,30.0,days,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+cp_kj_kg_k,4.0,kJ/kg·K,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+u_wall_w_m2k,0.5,W/m²·K,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+aux_mix_kwh_m3_d,0.15,kWh/m³/day,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+aux_sort_kwh_t,5.0,kWh/t,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+aux_gas_kwh_nm3,0.02,kWh/Nm³,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+composition,"(0.6, 0.2, 0.2)",fraction tuple,illustrative_estimate,TBD,per kg wet waste feed,anaerobic_digestion,AD Params default; blueprint catalog (unvalidated)
+LHV_CH4_KWH_NM3,9.94,kWh/Nm³,sourced,"Lide (CRC Handbook, 2007): 35.8 MJ/Nm³ / 3.6",per Nm³ CH4 at 0°C 1 atm,all,Lower heating value of methane; 35.8 MJ/Nm³ ÷ 3.6
+RHO_CH4,0.717,kg/Nm³,sourced,"Lide (CRC Handbook, 2007): ideal gas density at 0°C 1 atm",per Nm³ at 0°C 1 atm,all,
+RHO_CO2,1.977,kg/Nm³,sourced,"Lide (CRC Handbook, 2007): ideal gas density at 0°C 1 atm",per Nm³ at 0°C 1 atm,all,
+BUSWELL_carb,0.415,Nm³ CH4/kg VS,derived,Buswell & Mueller (1952); Angelidaki & Sanders (2004),per kg VS,anaerobic_digestion,"Reproduced from Buswell stoichiometric equation: CnHaOb → (n/2 + a/8 − b/4) CH4 + (n/2 − a/8 + b/4) CO2; carbohydrate=C6H10O5, protein=C5H7NO2, lipid=C57H104O6"
+BUSWELL_protein,0.496,Nm³ CH4/kg VS,derived,Buswell & Mueller (1952); Angelidaki & Sanders (2004),per kg VS,anaerobic_digestion,"Reproduced from Buswell stoichiometric equation: CnHaOb → (n/2 + a/8 − b/4) CH4 + (n/2 − a/8 + b/4) CO2; carbohydrate=C6H10O5, protein=C5H7NO2, lipid=C57H104O6"
+BUSWELL_lipid,1.014,Nm³ CH4/kg VS,derived,Buswell & Mueller (1952); Angelidaki & Sanders (2004),per kg VS,anaerobic_digestion,"Reproduced from Buswell stoichiometric equation: CnHaOb → (n/2 + a/8 − b/4) CH4 + (n/2 − a/8 + b/4) CO2; carbohydrate=C6H10O5, protein=C5H7NO2, lipid=C57H104O6"
+_BUSWELL_CARB,0.415,Nm³ CH4/kg VS,derived,Buswell & Mueller (1952); Angelidaki & Sanders (2004),per kg VS,anaerobic_digestion,"Reproduced from Buswell stoichiometric equation: CnHaOb → (n/2 + a/8 − b/4) CH4 + (n/2 − a/8 + b/4) CO2; carbohydrate=C6H10O5, protein=C5H7NO2, lipid=C57H104O6"
+_BUSWELL_PROT,0.496,Nm³ CH4/kg VS,derived,Buswell & Mueller (1952); Angelidaki & Sanders (2004),per kg VS,anaerobic_digestion,"Reproduced from Buswell stoichiometric equation: CnHaOb → (n/2 + a/8 − b/4) CH4 + (n/2 − a/8 + b/4) CO2; carbohydrate=C6H10O5, protein=C5H7NO2, lipid=C57H104O6"
+_BUSWELL_LIP,1.014,Nm³ CH4/kg VS,derived,Buswell & Mueller (1952); Angelidaki & Sanders (2004),per kg VS,anaerobic_digestion,"Reproduced from Buswell stoichiometric equation: CnHaOb → (n/2 + a/8 − b/4) CH4 + (n/2 − a/8 + b/4) CO2; carbohydrate=C6H10O5, protein=C5H7NO2, lipid=C57H104O6"
+_VS_DESTRUCTION_LIMIT,0.85,fraction,illustrative_estimate,TBD,fraction of VS destroyed,anaerobic_digestion,MODEL ASSUMPTION: mesophilic AD max VS destruction; literature range 0.60–0.90
+_NM3_PER_MOL,0.022414,Nm³/mol,sourced,"Ideal gas law at 0°C, 1 atm (22.414 L/mol)",per mol ideal gas,all,
+LHV_CH4,9.94,kWh/Nm³,sourced,"Lide (CRC Handbook, 2007): 35.8 MJ/Nm³ / 3.6",per Nm³ CH4 at 0°C 1 atm,all,Same physical constant as engine.LHV_CH4_KWH_NM3
+BUSWELL_CARB,0.415,Nm³ CH4/kg VS,derived,Buswell & Mueller (1952); Angelidaki & Sanders (2004),per kg VS,anaerobic_digestion,"Reproduced from Buswell stoichiometric equation: CnHaOb → (n/2 + a/8 − b/4) CH4 + (n/2 − a/8 + b/4) CO2; carbohydrate=C6H10O5, protein=C5H7NO2, lipid=C57H104O6"
+BUSWELL_PROT,0.496,Nm³ CH4/kg VS,derived,Buswell & Mueller (1952); Angelidaki & Sanders (2004),per kg VS,anaerobic_digestion,"Reproduced from Buswell stoichiometric equation: CnHaOb → (n/2 + a/8 − b/4) CH4 + (n/2 − a/8 + b/4) CO2; carbohydrate=C6H10O5, protein=C5H7NO2, lipid=C57H104O6"
+BUSWELL_LIP,1.014,Nm³ CH4/kg VS,derived,Buswell & Mueller (1952); Angelidaki & Sanders (2004),per kg VS,anaerobic_digestion,"Reproduced from Buswell stoichiometric equation: CnHaOb → (n/2 + a/8 − b/4) CH4 + (n/2 − a/8 + b/4) CO2; carbohydrate=C6H10O5, protein=C5H7NO2, lipid=C57H104O6"
+vs_loss_fraction,0.5,,illustrative_estimate,TBD,per kg wet feed,composting,Default field of CompostingParams; blueprint catalog (unvalidated)
+target_moisture,0.4,,illustrative_estimate,TBD,per kg wet feed,composting,Default field of CompostingParams; blueprint catalog (unvalidated)
+aeration_kwh_per_t,30.0,,illustrative_estimate,TBD,per kg wet feed,composting,Default field of CompostingParams; blueprint catalog (unvalidated)
+ch4_kg_per_t,4.0,,illustrative_estimate,TBD,per kg wet feed,composting,Default field of CompostingParams; blueprint catalog (unvalidated)
+n2o_kg_per_t,0.3,,illustrative_estimate,TBD,per kg wet feed,composting,Default field of CompostingParams; blueprint catalog (unvalidated)
+eta_el,0.22,,illustrative_estimate,TBD,per kg wet feed,incineration,Default field of IncinerationParams; blueprint catalog (unvalidated)
+aux_kwh_per_t,70.0,,illustrative_estimate,TBD,per kg wet feed,incineration,Default field of IncinerationParams; blueprint catalog (unvalidated)
+carbon_content_plastic,0.75,,illustrative_estimate,TBD,per kg wet feed,incineration,Default field of IncinerationParams; blueprint catalog (unvalidated)
+cold_gas_efficiency,0.7,,illustrative_estimate,TBD,per kg wet feed,gasification,Default field of GasificationParams; blueprint catalog (unvalidated)
+eta_engine,0.3,,illustrative_estimate,TBD,per kg wet feed,gasification,Default field of GasificationParams; blueprint catalog (unvalidated)
+aux_kwh_per_t,100.0,,illustrative_estimate,TBD,per kg wet feed,gasification,Default field of GasificationParams; blueprint catalog (unvalidated)
+target_moisture,0.15,,illustrative_estimate,TBD,per kg wet feed,gasification,Default field of GasificationParams; blueprint catalog (unvalidated)
+oil_yield,0.4,,illustrative_estimate,TBD,per kg wet feed,pyrolysis,Default field of PyrolysisParams; blueprint catalog (unvalidated)
+char_yield,0.3,,illustrative_estimate,TBD,per kg wet feed,pyrolysis,Default field of PyrolysisParams; blueprint catalog (unvalidated)
+gas_yield,0.3,,illustrative_estimate,TBD,per kg wet feed,pyrolysis,Default field of PyrolysisParams; blueprint catalog (unvalidated)
+cp_kj_kg_k,1.5,,illustrative_estimate,TBD,per kg wet feed,pyrolysis,Default field of PyrolysisParams; blueprint catalog (unvalidated)
+delta_t_k,450.0,,illustrative_estimate,TBD,per kg wet feed,pyrolysis,Default field of PyrolysisParams; blueprint catalog (unvalidated)
+target_moisture,0.2,,illustrative_estimate,TBD,per kg wet feed,pyrolysis,Default field of PyrolysisParams; blueprint catalog (unvalidated)
+hydrochar_dry_kg_per_kg,0.135,,illustrative_estimate,TBD,per kg wet feed,htc,Default field of HTCParams; blueprint catalog (unvalidated)
+hhv_mj_per_kg,20.0,,illustrative_estimate,TBD,per kg wet feed,htc,Default field of HTCParams; blueprint catalog (unvalidated)
+heat_kwh_per_kg,0.158,,illustrative_estimate,TBD,per kg wet feed,htc,Default field of HTCParams; blueprint catalog (unvalidated)
+aux_sort_kwh_per_kg,0.005,,illustrative_estimate,TBD,per kg wet feed,htc,Default field of HTCParams; blueprint catalog (unvalidated)
+aux_press_kwh_per_kg,0.006,,illustrative_estimate,TBD,per kg wet feed,htc,Default field of HTCParams; blueprint catalog (unvalidated)
+aux_pellet_kwh_per_kg,0.012,,illustrative_estimate,TBD,per kg wet feed,htc,Default field of HTCParams; blueprint catalog (unvalidated)
+aux_dosing_kwh_per_kg,0.005,,illustrative_estimate,TBD,per kg wet feed,htc,Default field of HTCParams; blueprint catalog (unvalidated)
+cp_kj_kg_k,4.0,,illustrative_estimate,TBD,per kg wet feed,htc,Default field of HTCParams; blueprint catalog (unvalidated)
+reactor_temp_c,220.0,,illustrative_estimate,TBD,per kg wet feed,htc,Default field of HTCParams; blueprint catalog (unvalidated)
+feed_temp_c,25.0,,illustrative_estimate,TBD,per kg wet feed,htc,Default field of HTCParams; blueprint catalog (unvalidated)
+heat_recovery_fraction,0.6,,illustrative_estimate,TBD,per kg wet feed,htc,Default field of HTCParams; blueprint catalog (unvalidated)
+pellet_kg_per_kg,0.633,,illustrative_estimate,TBD,per kg wet feed,torrefaction,Default field of TorrefactionParams; blueprint catalog (unvalidated)
+hhv_mj_per_kg,19.7,,illustrative_estimate,TBD,per kg wet feed,torrefaction,Default field of TorrefactionParams; blueprint catalog (unvalidated)
+dryer_heat_kwh_per_kg,0.0349,,illustrative_estimate,TBD,per kg wet feed,torrefaction,Default field of TorrefactionParams; blueprint catalog (unvalidated)
+aux_sort_kwh_per_kg,0.005,,illustrative_estimate,TBD,per kg wet feed,torrefaction,Default field of TorrefactionParams; blueprint catalog (unvalidated)
+aux_grind_dry_kwh_per_kg,0.018,,illustrative_estimate,TBD,per kg wet feed,torrefaction,Default field of TorrefactionParams; blueprint catalog (unvalidated)
+aux_torr_pellet_kwh_per_kg,0.0209,,illustrative_estimate,TBD,per kg wet feed,torrefaction,Default field of TorrefactionParams; blueprint catalog (unvalidated)
+aux_packaging_kwh_per_kg,0.003,,illustrative_estimate,TBD,per kg wet feed,torrefaction,Default field of TorrefactionParams; blueprint catalog (unvalidated)
+mass_yield,0.7,,illustrative_estimate,TBD,per kg wet feed,torrefaction,Default field of TorrefactionParams; blueprint catalog (unvalidated)
+target_moisture,0.1,,illustrative_estimate,TBD,per kg wet feed,torrefaction,Default field of TorrefactionParams; blueprint catalog (unvalidated)
+capex_inr,40000000.0,INR,illustrative_estimate,TBD,project-level,anaerobic_digestion,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+opex_inr_per_t,800.0,INR/t/y,illustrative_estimate,TBD,project-level,anaerobic_digestion,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+life_years,20.0,years,illustrative_estimate,TBD,project-level,anaerobic_digestion,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+discount_rate,0.1,fraction,illustrative_estimate,TBD,project-level,anaerobic_digestion,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+capex_inr,8000000.0,INR,illustrative_estimate,TBD,project-level,composting,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+opex_inr_per_t,300.0,INR/t/y,illustrative_estimate,TBD,project-level,composting,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+life_years,15.0,years,illustrative_estimate,TBD,project-level,composting,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+discount_rate,0.1,fraction,illustrative_estimate,TBD,project-level,composting,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+capex_inr,120000000.0,INR,illustrative_estimate,TBD,project-level,incineration,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+opex_inr_per_t,1500.0,INR/t/y,illustrative_estimate,TBD,project-level,incineration,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+life_years,25.0,years,illustrative_estimate,TBD,project-level,incineration,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+discount_rate,0.1,fraction,illustrative_estimate,TBD,project-level,incineration,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+capex_inr,60000000.0,INR,illustrative_estimate,TBD,project-level,gasification,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+opex_inr_per_t,900.0,INR/t/y,illustrative_estimate,TBD,project-level,gasification,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+life_years,20.0,years,illustrative_estimate,TBD,project-level,gasification,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+discount_rate,0.1,fraction,illustrative_estimate,TBD,project-level,gasification,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+capex_inr,50000000.0,INR,illustrative_estimate,TBD,project-level,pyrolysis,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+opex_inr_per_t,1000.0,INR/t/y,illustrative_estimate,TBD,project-level,pyrolysis,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+life_years,20.0,years,illustrative_estimate,TBD,project-level,pyrolysis,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+discount_rate,0.1,fraction,illustrative_estimate,TBD,project-level,pyrolysis,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
+_GWP_CH4,28.0,kg CO2-eq/kg CH4,illustrative_estimate,TBD,per kg CH4 emitted,all,GWP-100 for CH4; IPCC AR5 value cited in adapter.py but source listed as TBD
+_GWP_N2O,265.0,kg CO2-eq/kg N2O,illustrative_estimate,TBD,per kg N2O emitted,all,GWP-100 for N2O; IPCC AR5 value cited in adapter.py but source listed as TBD
