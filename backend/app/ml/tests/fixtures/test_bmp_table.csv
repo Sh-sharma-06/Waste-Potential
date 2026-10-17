@@ -1,0 +1,18 @@
+# TEST FIXTURE - SYNTHETIC DATA FOR AUDIT TESTING ONLY - NOT REAL DATA
+# This file is used exclusively by test_dataset.py to verify data quality audits.
+study_id,feedstock,yield_value,yield_basis,ts_fraction,vs_of_ts,ch4_fraction,temperature_c,hrt_days,olr,c_n,method,source
+study_1,food,0.55,per_vs,,,0.60,37.0,30.0,3.5,25.0,CSTR,LabA
+study_1,crop,0.44,per_ts,,0.88,0.60,38.0,25.0,2.0,30.0,BMP,LabA
+study_2,manure,0.08316,per_fresh,0.27,0.88,0.60,35.0,20.0,,,Batch,LabB
+study_3,mixed,0.60,per_vs,,,0.65,55.0,15.0,4.0,18.0,Thermophilic,LabC
+study_1,food,0.55,per_vs,,,0.60,37.0,30.0,3.5,25.0,CSTR,LabA
+,food,0.55,per_vs,,,0.60,37.0,30.0,3.5,25.0,CSTR,LabA
+study_4,food,0.55,per_dry_matter,,,0.60,37.0,30.0,3.5,25.0,CSTR,LabD
+study_4,crop,0.44,per_ts,,,0.60,37.0,30.0,3.5,25.0,CSTR,LabD
+study_4,manure,0.08,per_fresh,,0.88,0.60,37.0,30.0,3.5,25.0,CSTR,LabD
+study_5,food,0.55,per_vs,,,0.60,5.0,30.0,3.5,25.0,CSTR,LabE
+study_5,food,0.55,per_vs,,,0.60,95.0,30.0,3.5,25.0,CSTR,LabE
+study_6,food,-0.55,per_vs,,,0.60,37.0,30.0,3.5,25.0,CSTR,LabF
+study_6,food,0.55,per_vs,,,0.60,37.0,-5.0,3.5,25.0,CSTR,LabF
+study_7,food,0.55,per_vs,,,1.20,37.0,30.0,3.5,25.0,CSTR,LabG
+study_8,food,1.50,per_vs,,,0.60,37.0,30.0,3.5,25.0,CSTR,LabH

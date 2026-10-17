@@ -62,17 +62,17 @@ def convert_to_vs_yield(
         raise ValueError(f"ch4_fraction must be in (0, 1.0], got {ch4_fraction}")
 
     basis_norm = from_basis.lower().strip()
-    if basis_norm in ("per_kg_vs", "vs"):
+    if basis_norm in ("per_kg_vs", "vs", "per_vs"):
         y_norm = float(yield_value)
 
-    elif basis_norm in ("per_kg_ts", "ts"):
+    elif basis_norm in ("per_kg_ts", "ts", "per_ts"):
         if vs_of_ts is None:
             raise ValueError("vs_of_ts is required when converting from a TS basis")
         if not (0.0 < vs_of_ts <= 1.0):
             raise ValueError(f"vs_of_ts must be in (0, 1.0], got {vs_of_ts}")
         y_norm = yield_value / vs_of_ts
 
-    elif basis_norm in ("per_kg_fresh", "fresh"):
+    elif basis_norm in ("per_kg_fresh", "fresh", "per_fresh"):
         if ts_fraction is None:
             raise ValueError("ts_fraction is required when converting from a fresh basis")
         if not (0.0 < ts_fraction <= 1.0):
