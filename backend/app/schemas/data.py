@@ -103,6 +103,10 @@ class Feedstock(BaseModel, frozen=True):
     ----------
     total_mass_kg_d:
         Total incoming waste mass in kg per day.
+    category:
+        Categorical label for the feedstock type, e.g. ``"mixed"``,
+        ``"agricultural"``, ``"municipal"``.  Used by P2's ML yield engine for
+        stream classification.  Defaults to ``"mixed"``.
     organic_fraction:
         Mass fraction of organic / biodegradable material (0–1).
     plastic_fraction:
@@ -129,6 +133,13 @@ class Feedstock(BaseModel, frozen=True):
     total_mass_kg_d: FeedstockField = Field(
         ..., description="Total daily waste throughput (kg/day)."
     )
+    category: str = Field(
+        "",
+        description="Categorical label for the feedstock type "
+                    "(e.g. 'mixed', 'agricultural', 'municipal'). "
+                    "Empty string when unknown — the ML engine will reject "
+                    "uncategorised streams with a 422 error.",
+    )
     organic_fraction: FeedstockField = Field(
         ..., description="Organic / biodegradable mass fraction (0–1)."
     )
@@ -148,6 +159,14 @@ class Feedstock(BaseModel, frozen=True):
         ),
         description="Lignocellulosic biomass mass fraction (0–1). "
                     "Used by the Torrefaction pathway physics engine.",
+    )
+    organic_moisture_fraction: FeedstockField = Field(
+        default_factory=lambda: FeedstockField(
+            value=0.70,
+            meta=Metadata(kind="estimated", resolution="n/a", source_id="default_v1"),
+        ),
+        description="Moisture fraction of the organic component (0–1). "
+                    "Used by the AD digester total-solids calculation.",
     )
     moisture_fraction: FeedstockField = Field(
         ..., description="As-received moisture content (0–1)."
