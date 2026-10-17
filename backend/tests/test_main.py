@@ -63,6 +63,9 @@ def test_expected_routes_are_mounted():
         ("POST", "/simulations"),
         ("GET", "/runs"),
         ("GET", "/runs/{run_id}"),
+        ("GET", "/parameters"),
+        ("POST", "/simulations/{run_id}/uncertainty"),
+        ("GET", "/validation/summary"),
     }
 
 
@@ -170,3 +173,60 @@ def test_non_finite_simulation_input_saves_no_run():
     )
     assert resp.status_code == 422
     assert len(store) == 0
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: P5 simulation → shared run store → P1 uncertainty
+# ---------------------------------------------------------------------------
+
+GOLDEN_SIM = {"waste_mass_kg_day": 1000, "organic_fraction": 0.45, "suitable_fraction": 0.80}
+UNCERTAINTY_FIELDS = {"n", "seed", "median", "p2_5", "p97_5", "sensitivity"}
+
+
+@pytest.fixture
+def shared_store(monkeypatch):
+    """A real RunStore installed as the process-wide store.
+
+    No dependency overrides: POST /simulations resolves Depends(get_run_store)
+    and P1's uncertainty endpoint resolves its own get_run_reader, which calls
+    app.platform.runs.get_run → get_run_store(). Both reach this store.
+    """
+    from app.platform import runs
+
+    store = runs.RunStore()
+    monkeypatch.setattr(runs, "_store", store)
+    return store
+
+
+def test_simulation_then_uncertainty_through_shared_store(shared_store):
+    application = create_app(Settings(environment="test"))
+    assert application.dependency_overrides == {}
+    e2e = TestClient(application)
+
+    sim = e2e.post("/simulations", json=GOLDEN_SIM)
+    assert sim.status_code == 200, sim.text
+    body = sim.json()
+    assert body["results"]["e_net_kwh_d"] == pytest.approx(76.7406, abs=1e-4)
+    assert body["results"]["biogas_nm3_d"] == pytest.approx(47.0448, abs=1e-4)
+    assert body["status"] == "illustrative_estimate"
+
+    run_id = body["id"]
+    assert len(shared_store) == 1
+    assert shared_store.get(run_id).model_dump(mode="json") == body
+
+    unc = e2e.post(f"/simulations/{run_id}/uncertainty", json={})
+    assert unc.status_code == 200, unc.text
+    result = unc.json()
+    assert UNCERTAINTY_FIELDS <= set(result)
+    assert result["n"] == 2000 and result["seed"] == 42  # UncertaintyRequest defaults
+    assert result["p2_5"] <= result["median"] <= result["p97_5"]
+    assert isinstance(result["sensitivity"], list) and result["sensitivity"]
+    assert {"input", "abs_spearman"} <= set(result["sensitivity"][0])
+
+    unknown = e2e.post("/simulations/definitely-unknown-run-id/uncertainty", json={})
+    assert unknown.status_code == 404
+
+    # The uncertainty endpoint reads the same store: once the run is gone, 404.
+    shared_store.clear()
+    gone = e2e.post(f"/simulations/{run_id}/uncertainty", json={})
+    assert gone.status_code == 404
