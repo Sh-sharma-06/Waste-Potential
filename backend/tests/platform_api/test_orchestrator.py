@@ -628,3 +628,84 @@ def test_mutating_run_reader_dict_does_not_change_store(store):
     assert fresh["params"]["total_mass_kg_d"] == 1000.0
     assert fresh["results"]["warnings"] == []
     assert fresh["notes"]["orchestrator"]["model_version"] == ENGINE_MODEL_VERSION
+
+
+# ---------------------------------------------------------------------------
+# 11. Provenance in audit hash (fix: same numbers, different provenance → new run)
+# ---------------------------------------------------------------------------
+
+def _measured_stream() -> dict:
+    """A stream identical to get_stream("any") except organic_moisture_fraction
+    is tagged kind="measured" (not a placeholder), so ts_fraction provenance
+    differs from the default placeholder stream."""
+    from app.data.service import get_stream
+    stream = {k: (dict(v) if isinstance(v, dict) else v) for k, v in get_stream("any").items()}
+    entry = dict(stream["organic_moisture_fraction"])
+    entry["meta"] = dict(entry["meta"])
+    entry["meta"]["kind"] = "measured"
+    entry["meta"]["source_id"] = "survey_2024"
+    stream["organic_moisture_fraction"] = entry
+    return stream
+
+
+def test_placeholder_vs_measured_provenance_give_different_hashes(store):
+    """Identical numbers from a placeholder stream vs a measured stream must
+    produce different audit hashes and be stored as separate runs."""
+    # Request with location_id so provenance comes from the stream.
+    req = _req(location_id="farm_1", waste_mass_kg_day=1000.0,
+               organic_fraction=0.45, suitable_fraction=0.80)
+
+    placeholder_resp = run_simulation(req, store=store)
+
+    with patch.object(orchestrator, "get_stream", return_value=_measured_stream()):
+        measured_resp = run_simulation(req, store=store)
+
+    # Identical numbers, different provenance → different hash and run id.
+    assert placeholder_resp.audit_hash != measured_resp.audit_hash
+    assert placeholder_resp.id != measured_resp.id
+    assert len(store) == 2
+
+    # Provenance embedded in inputs blob must differ.
+    prov_placeholder = placeholder_resp.inputs["provenance"]["ts_fraction"]
+    prov_measured = measured_resp.inputs["provenance"]["ts_fraction"]
+    assert prov_placeholder["placeholder"] is True
+    assert prov_measured["placeholder"] is False
+    assert prov_measured["source_id"] == "survey_2024"
+
+
+def test_identical_provenance_reuses_stored_run(store):
+    """Two requests that are byte-for-byte identical (same numbers, same stream
+    provenance) must yield the same hash and reuse the same run."""
+    req = _req(location_id="farm_1", waste_mass_kg_day=1000.0,
+               organic_fraction=0.45, suitable_fraction=0.80)
+
+    first = run_simulation(req, store=store)
+    second = run_simulation(req, store=store)
+
+    assert first.audit_hash == second.audit_hash
+    assert first.id == second.id
+    assert len(store) == 1
+
+
+def test_provenance_in_hash_golden_numeric_regression(store):
+    """No location_id, waste_mass_kg_day=1000, organic_fraction=0.45,
+    suitable_fraction=0.80 → e_net_kwh_d ≈ 76.7406, biogas_nm3_d ≈ 47.0448.
+    Provenance for a pure-request run (no stream) carries request kind only."""
+    resp = run_simulation(_req(**GOLDEN), store=store)
+
+    assert resp.results.e_net_kwh_d == pytest.approx(76.7406, abs=1e-3)
+    assert resp.results.biogas_nm3_d == pytest.approx(47.0448, abs=1e-3)
+
+    # Provenance blob must be present in inputs and included in the hash.
+    assert "provenance" in resp.inputs
+    prov = resp.inputs["provenance"]
+    assert prov["total_mass_kg_d"]["kind"] == "request"
+    assert prov["total_mass_kg_d"]["placeholder"] is False
+
+    # Hash must be reproducible from the stored inputs (which include provenance).
+    from app.platform.audit import compute_audit_hash, run_id_from_hash
+    recomputed = compute_audit_hash(
+        resp.inputs, resp.params, resp.model_version, resp.results.model_dump(mode="json")
+    )
+    assert recomputed == resp.audit_hash
+    assert run_id_from_hash(recomputed) == resp.id

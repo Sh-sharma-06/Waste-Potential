@@ -320,10 +320,13 @@ def test_status_guard_does_not_apply_without_placeholders_in_use(store):
     assert all_replaced.status == "validated"
 
 
-def test_provenance_does_not_change_the_audit_hash(store):
-    # notes are outside the audit hash (inputs, params, model_version, results).
+def test_provenance_changes_the_audit_hash(store):
+    # Provenance is embedded in inputs["provenance"] before hashing, so two runs
+    # with identical numbers but different stream provenance (placeholder vs measured)
+    # must produce different audit hashes and be stored as separate runs.
     with patch.object(orchestrator, "get_stream", return_value=_with_moisture_meta(PLACEHOLDER_META)):
         placeholder = run_simulation(SimRequest(location_id="farm_1"), store=RunStore())
     with patch.object(orchestrator, "get_stream", return_value=_with_moisture_meta(MEASURED_META)):
         measured = run_simulation(SimRequest(location_id="farm_1"), store=RunStore())
-    assert placeholder.audit_hash == measured.audit_hash
+    assert placeholder.audit_hash != measured.audit_hash
+    assert placeholder.id != measured.id
