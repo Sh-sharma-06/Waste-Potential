@@ -73,9 +73,7 @@ def test_expected_routes_are_mounted():
         ("GET", "/weather"),
         ("GET", "/facilities"),
 
-        ("GET", "/facilities"),
-        ("GET", "/weather"),
-
+        ("GET", "/buyers"),
     }
 
 
