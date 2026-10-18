@@ -347,6 +347,29 @@ class TestUncertaintyResult(unittest.TestCase):
         with self.assertRaises(ValidationError):
             UncertaintyResult(**r)
 
+    def test_new_optional_keys_have_correct_defaults(self):
+        """centred_on, fixed_inputs, recentred, clipped_samples default correctly."""
+        # Build a minimal dict without the new keys to check optional defaults.
+        r = _mc_result_dict()
+        # Remove new keys if present so we test defaults.
+        for key in ("centred_on", "fixed_inputs", "recentred", "clipped_samples"):
+            r.pop(key, None)
+        ur = UncertaintyResult(**r)
+        self.assertEqual(ur.centred_on, {})
+        self.assertEqual(ur.fixed_inputs, [])
+        self.assertFalse(ur.recentred)
+        self.assertEqual(ur.clipped_samples, 0)
+
+    def test_validates_run_mc_output_including_new_keys(self):
+        """UncertaintyResult must validate full run_mc(Params(), n=200) output."""
+        r = run_mc(Params(), n=200, seed=42)
+        ur = UncertaintyResult(**r)
+        self.assertIsInstance(ur.centred_on, dict)
+        self.assertIsInstance(ur.fixed_inputs, list)
+        self.assertIsInstance(ur.recentred, bool)
+        self.assertIsInstance(ur.clipped_samples, int)
+        self.assertTrue(ur.recentred)  # default recentre=True
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

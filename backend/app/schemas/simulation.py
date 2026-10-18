@@ -202,3 +202,8 @@ class UncertaintyResult(_Base):
     sensitivity: List[_SensitivityItem]
     distributions: Dict[str, Any]
     assumptions_note: str
+    # New optional keys added by recentring / clipping support.
+    centred_on: Dict[str, Any] = Field(default_factory=dict)
+    fixed_inputs: List[str] = Field(default_factory=list)
+    recentred: bool = False
+    clipped_samples: int = 0

@@ -22,6 +22,12 @@ import numpy as np
 from app.core_engine.engine import simulate
 from app.core_engine.params import Params
 
+# Fraction-valued Params fields that must be clipped to [0, 1] after sampling.
+_FRACTION_FIELDS: frozenset = frozenset({
+    "ts_fraction", "vs_of_ts", "suitable_fraction", "eta_el",
+    "ch4_fraction", "availability", "ch4_slip",
+})
+
 # ---------------------------------------------------------------------------
 # Validated field names (built once at import time)
 # ---------------------------------------------------------------------------
@@ -164,6 +170,98 @@ def default_dists() -> Dict[str, Dist]:
 
 
 # ===========================================================================
+# recentred_dists
+# ===========================================================================
+
+def recentred_dists(
+    params: Params,
+    base: Optional[Dict[str, "Dist"]] = None,
+) -> Dict[str, "Dist"]:
+    """Return distributions from *base* recentred on the values in *params*.
+
+    For each parameter name in *base*:
+    - Let *d* be the default value (``Params().<name>``) and *v* the run value
+      (``getattr(params, name)``).
+    - If ``v == d``: return the Dist unchanged.
+    - If ``v == 0`` or ``d == 0``: **omit** the parameter (it will be held
+      fixed at the run value by the caller).
+    - Otherwise scale by ``r = v / d``:
+        - triangular: ``(low*r, mode*r, high*r)``
+        - uniform:    ``(low*r, high*r)``
+        - normal:     ``(mu*r, sigma*r)``
+        - lognormal:  ``(mu_log + ln(r), sigma_log)``
+        - clip bounds scaled by ``r`` (if present).
+      Appends `` | recentred on run value`` to the evidence string.
+
+    Parameters
+    ----------
+    params:
+        The run's Params instance whose values are used as new centres.
+    base:
+        The base dict of Dist objects to recentre.  Defaults to
+        ``default_dists()``.
+
+    Returns
+    -------
+    dict[str, Dist]
+        A new dict containing recentred (or unchanged) Dist objects.
+        Parameters that cannot be scaled (``v == 0`` or ``d == 0``) are
+        omitted so the caller can hold them fixed.
+    """
+    if base is None:
+        base = default_dists()
+
+    defaults = Params()
+    result: Dict[str, Dist] = {}
+
+    for name, dist in base.items():
+        d = getattr(defaults, name)  # default value
+        v = getattr(params, name)    # run value
+
+        # Cannot scale: leave out entirely so caller holds it fixed.
+        if v == 0 or d == 0:
+            continue
+
+        # No change needed.
+        if v == d:
+            result[name] = dist
+            continue
+
+        r = v / d
+        new_evidence = dist.evidence + " | recentred on run value"
+
+        if dist.kind == "triangular":
+            low, mode, high = dist.args
+            new_args: tuple = (low * r, mode * r, high * r)
+        elif dist.kind == "uniform":
+            low, high = dist.args
+            new_args = (low * r, high * r)
+        elif dist.kind == "normal":
+            mu, sigma = dist.args
+            new_args = (mu * r, sigma * r)
+        elif dist.kind == "lognormal":
+            mu_log, sigma_log = dist.args
+            new_args = (mu_log + math.log(r), sigma_log)
+        else:  # pragma: no cover
+            result[name] = dist
+            continue
+
+        new_clip: Optional[Tuple[float, float]] = None
+        if dist.clip is not None:
+            new_clip = (dist.clip[0] * r, dist.clip[1] * r)
+
+        result[name] = Dist(
+            kind=dist.kind,
+            args=new_args,
+            evidence=new_evidence,
+            assumed=dist.assumed,
+            clip=new_clip,
+        )
+
+    return result
+
+
+# ===========================================================================
 # Internal sampling helpers
 # ===========================================================================
 
@@ -221,27 +319,35 @@ def run_mc(
     dists: Optional[Dict[str, Dist]] = None,
     n: int = 2000,
     seed: int = 42,
+    recentre: bool = True,
 ) -> Dict[str, Any]:
     """Run a Monte Carlo simulation over ``engine.simulate`` and return statistics.
 
     Parameters
     ----------
     params:
-        Base Params instance.  Fields not covered by *dists* keep their default
+        Base Params instance.  Fields not covered by *dists* keep their
         values on every run.
     dists:
-        Dict mapping Params field names to :class:`Dist` objects.  ``None``
-        uses :func:`default_dists`.
+        Dict mapping Params field names to :class:`Dist` objects.
+        - ``None`` + ``recentre=True``  → :func:`recentred_dists(params)`
+        - ``None`` + ``recentre=False`` → :func:`default_dists` (old behaviour)
+        - Caller-supplied dict          → used exactly as given (no recentring).
     n:
         Number of simulation runs.  Must be >= 10.
     seed:
         Random seed for reproducibility.
+    recentre:
+        When *dists* is ``None`` and this is ``True`` (default), use
+        :func:`recentred_dists` so the distributions are centred on *params*
+        rather than on the hard-coded defaults.
 
     Returns
     -------
     dict
         Keys: n, seed, median, p2_5, p97_5, p_net_nonpositive,
-        runs_with_warnings, sensitivity, distributions, assumptions_note.
+        runs_with_warnings, sensitivity, distributions, assumptions_note,
+        centred_on, fixed_inputs, recentred, clipped_samples.
         All numeric values are plain Python floats.
 
     Raises
@@ -252,8 +358,23 @@ def run_mc(
     if n < 10:
         raise ValueError(f"n must be >= 10; got {n}.")
 
+    # Determine whether we applied recentring and which params are fixed.
+    caller_supplied = dists is not None
+    fixed_inputs: List[str] = []
+
     if dists is None:
-        dists = default_dists()
+        if recentre:
+            dists = recentred_dists(params)
+            _recentred = True
+            # Parameters in default_dists that were omitted (v==0 or d==0)
+            # are held fixed at the run value.
+            all_default_names = set(default_dists().keys())
+            fixed_inputs = sorted(all_default_names - set(dists.keys()))
+        else:
+            dists = default_dists()
+            _recentred = False
+    else:
+        _recentred = False
 
     if len(dists) == 0:
         raise ValueError("dists must contain at least one distribution.")
@@ -272,6 +393,15 @@ def run_mc(
     samples: Dict[str, np.ndarray] = {
         name: _sample(rng, dists[name], n) for name in param_names
     }
+
+    # Clip fraction-valued parameters to [0, 1] and count clipped samples.
+    clipped_samples = 0
+    for name in param_names:
+        if name in _FRACTION_FIELDS:
+            arr = samples[name]
+            clipped = np.clip(arr, 0.0, 1.0)
+            clipped_samples += int(np.sum(clipped != arr))
+            samples[name] = clipped
 
     # Run engine for each sample
     e_net_values: List[float] = []
@@ -314,12 +444,25 @@ def run_mc(
 
     # Assumptions note (required when any dist is assumed)
     any_assumed = any(d.assumed for d in dists.values())
-    assumptions_note = (
-        "One or more input distributions are flagged as assumed. "
-        "The credible interval is only as credible as the distributions and "
-        "is not a measure of model accuracy."
-        if any_assumed else ""
+    centred_note = (
+        " Distributions are centred on the stored run values."
+        if _recentred else
+        " Distributions are centred on hard-coded prior defaults, not the run values."
+        if not caller_supplied else ""
     )
+    assumptions_note = (
+        (
+            "One or more input distributions are flagged as assumed. "
+            "The credible interval is only as credible as the distributions and "
+            "is not a measure of model accuracy."
+            if any_assumed else ""
+        ) + centred_note
+    ).strip()
+
+    # centred_on: echo the sampled parameter value from the run
+    centred_on: Dict[str, float] = {
+        name: float(getattr(params, name)) for name in param_names
+    }
 
     return {
         "n": int(n),
@@ -332,4 +475,8 @@ def run_mc(
         "sensitivity": sensitivity,
         "distributions": distributions,
         "assumptions_note": assumptions_note,
+        "centred_on": centred_on,
+        "fixed_inputs": fixed_inputs,
+        "recentred": bool(_recentred),
+        "clipped_samples": int(clipped_samples),
     }

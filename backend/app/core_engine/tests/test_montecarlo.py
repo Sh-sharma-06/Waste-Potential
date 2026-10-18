@@ -8,13 +8,19 @@ Coverage:
     narrow-interval case, default run median range and p_net_nonpositive,
     top sensitivity is y_biogas_nm3_per_kg_vs, error cases (n<10, empty dists,
     unknown name), assumptions_note present, json.dumps works.
+  - recentred_dists: scaling by r, zero cases, lognormal mu shift.
+  - run_mc recentring: default Params gives same median with recentre T/F,
+    overridden y/ts_fraction centres on run value, availability=0 fixed,
+    availability=0.99 no sample > 1, caller-supplied dists not recentred,
+    new additive keys present in output, JSON serialisable.
 """
 
+import dataclasses
 import json
 import math
 import unittest
 
-from app.core_engine.montecarlo import Dist, default_dists, run_mc
+from app.core_engine.montecarlo import Dist, default_dists, recentred_dists, run_mc
 from app.core_engine.params import Params
 
 
@@ -323,6 +329,185 @@ class TestRunMc(unittest.TestCase):
         )}
         with self.assertRaises(ValueError, msg="should reject unknown field name"):
             run_mc(Params(), dists=bad_dists)
+
+
+# ===========================================================================
+# recentred_dists
+# ===========================================================================
+
+class TestRecentredDists(unittest.TestCase):
+
+    def test_unchanged_when_v_equals_d(self):
+        """Default Params → every distribution is returned unchanged (no scaling)."""
+        base = default_dists()
+        result = recentred_dists(Params(), base=base)
+        # All 9 keys should be present (no zero values in defaults).
+        self.assertEqual(set(result.keys()), set(base.keys()))
+        for name in base:
+            self.assertIs(result[name], base[name],
+                          msg=f"{name}: expected identical Dist object when v==d")
+
+    def test_triangular_scaled(self):
+        """y_biogas_nm3_per_kg_vs = 0.45  (default 0.55) → r = 0.45/0.55."""
+        p = dataclasses.replace(Params(), y_biogas_nm3_per_kg_vs=0.45)
+        d = recentred_dists(p)["y_biogas_nm3_per_kg_vs"]
+        r = 0.45 / 0.55
+        base = default_dists()["y_biogas_nm3_per_kg_vs"]
+        self.assertAlmostEqual(d.args[1], base.args[1] * r, places=12,
+                               msg="mode should be scaled by r")
+        self.assertAlmostEqual(d.args[0], base.args[0] * r, places=12,
+                               msg="low should be scaled by r")
+        self.assertAlmostEqual(d.args[2], base.args[2] * r, places=12,
+                               msg="high should be scaled by r")
+        self.assertIn("recentred on run value", d.evidence)
+
+    def test_ts_fraction_mode(self):
+        """ts_fraction = 0.30  (default 0.27) → mode should be 0.30."""
+        p = dataclasses.replace(Params(), ts_fraction=0.30)
+        d = recentred_dists(p)["ts_fraction"]
+        self.assertAlmostEqual(d.args[1], 0.30, places=12)
+
+    def test_lognormal_mu_shift(self):
+        """aux_mix_kwh_m3_d recentred: mu_log increases by ln(r)."""
+        v = 0.20  # default 0.15
+        p = dataclasses.replace(Params(), aux_mix_kwh_m3_d=v)
+        d = recentred_dists(p)["aux_mix_kwh_m3_d"]
+        base = default_dists()["aux_mix_kwh_m3_d"]
+        expected_mu = base.args[0] + math.log(v / 0.15)
+        self.assertAlmostEqual(d.args[0], expected_mu, places=12)
+        self.assertEqual(d.args[1], base.args[1])  # sigma_log unchanged
+
+    def test_normal_clip_scaled(self):
+        """ch4_fraction recentred → clip bounds scale by r too."""
+        v = 0.65  # default 0.60
+        p = dataclasses.replace(Params(), ch4_fraction=v)
+        d = recentred_dists(p)["ch4_fraction"]
+        r = v / 0.60
+        base = default_dists()["ch4_fraction"]
+        self.assertIsNotNone(d.clip)
+        self.assertAlmostEqual(d.clip[0], base.clip[0] * r, places=12)
+        self.assertAlmostEqual(d.clip[1], base.clip[1] * r, places=12)
+
+    def test_v_zero_omits_parameter(self):
+        """availability = 0.0 → parameter omitted from result."""
+        p = dataclasses.replace(Params(), availability=0.0)
+        result = recentred_dists(p)
+        self.assertNotIn("availability", result)
+
+    def test_assumed_and_kind_preserved(self):
+        """assumed flag and kind are carried through unchanged."""
+        p = dataclasses.replace(Params(), y_biogas_nm3_per_kg_vs=0.45)
+        d = recentred_dists(p)["y_biogas_nm3_per_kg_vs"]
+        base = default_dists()["y_biogas_nm3_per_kg_vs"]
+        self.assertEqual(d.kind, base.kind)
+        self.assertEqual(d.assumed, base.assumed)
+
+
+# ===========================================================================
+# run_mc — recentring behaviour and new additive keys
+# ===========================================================================
+
+class TestRunMcRecentring(unittest.TestCase):
+
+    def test_default_params_median_identical_with_and_without_recentre(self):
+        """Params() defaults → recentre=True and False give the same median."""
+        r_true  = run_mc(Params(), n=2000, seed=42, recentre=True)
+        r_false = run_mc(Params(), n=2000, seed=42, recentre=False)
+        self.assertAlmostEqual(r_true["median"], 73.60400263343567, places=9)
+        self.assertAlmostEqual(r_false["median"], 73.60400263343567, places=9)
+
+    def test_y_045_echoed_mode_and_lower_median(self):
+        """y=0.45 → echoed distribution mode 0.45 and median < default."""
+        p = dataclasses.replace(Params(), y_biogas_nm3_per_kg_vs=0.45)
+        r = run_mc(p, n=2000, seed=42, recentre=True)
+        r_default = run_mc(Params(), n=2000, seed=42, recentre=True)
+        self.assertAlmostEqual(
+            r["distributions"]["y_biogas_nm3_per_kg_vs"]["args"][1], 0.45, places=12
+        )
+        self.assertLess(r["median"], r_default["median"])
+
+    def test_y_060_gives_higher_median(self):
+        """y=0.60 → median > default run's median."""
+        p = dataclasses.replace(Params(), y_biogas_nm3_per_kg_vs=0.60)
+        r = run_mc(p, n=2000, seed=42, recentre=True)
+        r_default = run_mc(Params(), n=2000, seed=42, recentre=True)
+        self.assertGreater(r["median"], r_default["median"])
+
+    def test_ts_fraction_030_mode_echoed(self):
+        """ts_fraction=0.30 → recentred distribution has mode 0.30."""
+        p = dataclasses.replace(Params(), ts_fraction=0.30)
+        r = run_mc(p, n=200, seed=42, recentre=True)
+        self.assertAlmostEqual(
+            r["distributions"]["ts_fraction"]["args"][1], 0.30, places=12
+        )
+
+    def test_availability_zero_is_fixed_and_p_net_nonpositive_one(self):
+        """availability=0.0 → in fixed_inputs, p_net_nonpositive == 1.0, no exception."""
+        p = dataclasses.replace(Params(), availability=0.0)
+        r = run_mc(p, n=200, seed=42, recentre=True)
+        self.assertIn("availability", r["fixed_inputs"])
+        self.assertEqual(r["p_net_nonpositive"], 1.0)
+
+    def test_availability_099_no_sample_above_one(self):
+        """availability=0.99 → clipped_samples > 0 and no ValueError raised."""
+        p = dataclasses.replace(Params(), availability=0.99)
+        r = run_mc(p, n=2000, seed=42, recentre=True)
+        # The recentred distribution extends above 1.0; clipping prevents ValueError.
+        self.assertGreater(r["clipped_samples"], 0)
+        # If any sample had slipped through unclipped, Params.__post_init__ would have
+        # raised; the fact we got here proves no sample was above 1.0.
+
+    def test_caller_supplied_dists_not_recentred(self):
+        """A caller-supplied dists dict is used exactly as given; recentred=False."""
+        custom = {
+            "y_biogas_nm3_per_kg_vs": Dist(
+                kind="uniform", args=(0.50, 0.60), evidence="caller", assumed=False
+            )
+        }
+        r = run_mc(Params(), dists=custom, n=50, seed=1)
+        self.assertFalse(r["recentred"])
+        # mode-like midpoint should be (0.50+0.60)/2 not scaled
+        self.assertAlmostEqual(r["distributions"]["y_biogas_nm3_per_kg_vs"]["args"][0], 0.50)
+
+    def test_new_additive_keys_present(self):
+        """centred_on, fixed_inputs, recentred, clipped_samples all present."""
+        r = run_mc(Params(), n=200, seed=42)
+        for key in ("centred_on", "fixed_inputs", "recentred", "clipped_samples"):
+            self.assertIn(key, r, msg=f"Missing new key: {key}")
+        self.assertIsInstance(r["centred_on"], dict)
+        self.assertIsInstance(r["fixed_inputs"], list)
+        self.assertIsInstance(r["recentred"], bool)
+        self.assertIsInstance(r["clipped_samples"], int)
+
+    def test_centred_on_contains_run_values(self):
+        """centred_on echoes the param value from params for each sampled param."""
+        p = dataclasses.replace(Params(), y_biogas_nm3_per_kg_vs=0.45)
+        r = run_mc(p, n=50, seed=0, recentre=True)
+        self.assertIn("y_biogas_nm3_per_kg_vs", r["centred_on"])
+        self.assertAlmostEqual(r["centred_on"]["y_biogas_nm3_per_kg_vs"], 0.45, places=12)
+
+    def test_recentred_flag_true_when_recentred(self):
+        r = run_mc(Params(), n=50, seed=0, recentre=True)
+        self.assertTrue(r["recentred"])
+
+    def test_recentred_flag_false_when_not_recentred(self):
+        r = run_mc(Params(), n=50, seed=0, recentre=False)
+        self.assertFalse(r["recentred"])
+
+    def test_assumptions_note_mentions_run_values_when_recentred(self):
+        r = run_mc(Params(), n=50, seed=0, recentre=True)
+        self.assertIn("run values", r["assumptions_note"])
+
+    def test_assumptions_note_mentions_defaults_when_not_recentred(self):
+        r = run_mc(Params(), n=50, seed=0, recentre=False)
+        self.assertIn("defaults", r["assumptions_note"])
+
+    def test_output_is_json_serialisable_with_new_keys(self):
+        r = run_mc(Params(), n=50, seed=0, recentre=True)
+        try:
+            json.dumps(r)
+        except (TypeError, ValueError) as e:
+            self.fail(f"json.dumps raised with new keys: {e}")
 
 
 if __name__ == "__main__":
