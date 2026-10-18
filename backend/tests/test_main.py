@@ -74,6 +74,9 @@ def test_expected_routes_are_mounted():
         ("GET", "/facilities"),
 
         ("GET", "/buyers"),
+
+        ("POST", "/vision/classify"),
+        ("POST", "/vision/advice"),
     }
 
 
