@@ -121,21 +121,19 @@ def estimate(
         UnknownFeedstockError: If the feedstock was not present in the trained model.
         ValueError: For physically impossible input values.
     """
-    if bundle is None:
-        bundle = load_bundle(model_dir=model_dir)
-
-    # Feedstock validation (must come before physical checks)
-    if feedstock is None or not isinstance(feedstock, str) or not feedstock.strip():
-        raise MissingFeedstockError()
-    fs_clean = normalise_feedstock(feedstock)
+    # Validate feedstock before loading bundle
+    fs_clean = normalise_feedstock(feedstock)  # raises MissingFeedstockError if blank or missing
     if fs_clean not in FEEDSTOCK_NAMES:
         raise UnknownFeedstockError(
             f"Unknown feedstock '{feedstock}'. Supported: {list(FEEDSTOCK_NAMES)}"
         )
-    # If a bundle is already loaded, ensure the feedstock was present during training
-    if bundle is not None and fs_clean not in bundle.feedstocks_seen:
+    # Load the model bundle if not provided
+    if bundle is None:
+        bundle = load_bundle(model_dir=model_dir)
+    # Verify the bundle contains data for the feedstock
+    if fs_clean not in bundle.feedstocks_seen:
         raise UnknownFeedstockError(
-            f"Feedstock '{feedstock}' is valid but not in the trained model. Model sees: {bundle.feedstocks_seen}"
+            f"Feedstock '{feedstock}' is valid but the trained model has no data for it. Model sees: {bundle.feedstocks_seen}"
         )
 
     hrt_val, temp_val, olr_val, cn_val = _validate_inputs(operating)
@@ -249,9 +247,7 @@ def estimate_illustrative_l1(
     it is NEVER used as an automatic fallback when bundles are missing.
     """
     # Feedstock validation (must come before operating validation)
-    if feedstock is None or not isinstance(feedstock, str) or not feedstock.strip():
-        raise MissingFeedstockError()
-    fs_clean = normalise_feedstock(feedstock)
+    fs_clean = normalise_feedstock(feedstock)  # raises MissingFeedstockError if blank or missing
     if fs_clean not in FEEDSTOCK_NAMES:
         raise UnknownFeedstockError(
             f"Unknown feedstock '{feedstock}'. Supported: {list(FEEDSTOCK_NAMES)}"

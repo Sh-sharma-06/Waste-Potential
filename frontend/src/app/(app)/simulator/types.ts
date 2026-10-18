@@ -12,4 +12,5 @@ export interface ProcessStage {
   inputs: string[];
   outputs: string[];
   equipmentHighlights: string[];
+  equipmentType?: string;
 }

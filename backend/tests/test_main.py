@@ -69,8 +69,13 @@ def test_expected_routes_are_mounted():
         ("POST", "/api/v1/assistant/parse"),
         ("POST", "/api/v1/assistant/advise"),
         ("POST", "/api/v1/assistant/audit"),
+
         ("GET", "/weather"),
         ("GET", "/facilities"),
+
+        ("GET", "/facilities"),
+        ("GET", "/weather"),
+
     }
 
 
