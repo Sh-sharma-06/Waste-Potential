@@ -139,6 +139,10 @@ class PathwayCompareRequest(BaseModel):
         0.10, ge=0.0, le=1.0,
         description="Coefficient of variation applied to electricity yield in MC runs.",
     )
+    mc_seed: int = Field(
+        42,
+        description="Random seed for reproducible Monte Carlo draws (default 42).",
+    )
 
     # --- Emission factors ---
     region: Optional[str] = Field(
@@ -225,4 +229,17 @@ class PathwayResult(BaseModel):
     warnings: list[str] = Field(
         default_factory=list,
         description="Non-fatal caveats, e.g. parameter assumptions or data gaps.",
+    )
+    optimality_share: Optional[float] = Field(
+        None,
+        description="Fraction of MC runs in which this pathway had the highest "
+                    "annual net value among deterministically feasible pathways.",
+    )
+    win_count: Optional[int] = Field(
+        None,
+        description="Number of MC runs in which this pathway was the winner.",
+    )
+    optimality_note: Optional[str] = Field(
+        None,
+        description="Explanatory note about the optimality share.",
     )

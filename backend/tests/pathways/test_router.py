@@ -35,6 +35,9 @@ RESULT_KEYS = {
     "model_status",
     "status",
     "warnings",
+    "optimality_share",
+    "win_count",
+    "optimality_note",
 }
 VALID_STATUSES = {"feasible", "rejected", "uncertain"}
 
@@ -256,8 +259,15 @@ def test_router_passes_region_and_overrides_and_returns_merged(client):
     assert resp.status_code == 200
     assert resp.json() == [r.model_dump() for r in merged]
 
-    for fn in (ev, mc_fn):
-        (req,), kwargs = fn.call_args
-        assert req.farm_id == "farm_001"
-        assert kwargs == {"region": "IN", "operator_overrides": overrides}
+    (req_ev,), kwargs_ev = ev.call_args
+    assert req_ev.farm_id == "farm_001"
+    assert kwargs_ev == {"region": "IN", "operator_overrides": overrides}
+
+    (req_mc,), kwargs_mc = mc_fn.call_args
+    assert req_mc.farm_id == "farm_001"
+    assert kwargs_mc["region"] == "IN"
+    assert kwargs_mc["operator_overrides"] == overrides
+    # feasible_pathways is now also passed by the router
+    assert "feasible_pathways" in kwargs_mc
+
     merge.assert_called_once_with(deterministic, mc)

@@ -59,11 +59,13 @@ def compare_pathways(request: PathwayCompareRequest) -> list[PathwayResult]:
             operator_overrides=request.operator_overrides,
         )
 
-        # 2 — Monte Carlo uncertainty pass
+        # 2 — Monte Carlo uncertainty pass (feasible set passed for optimality share)
+        feasible_pathways = {r.pathway for r in results if r.feasible}
         mc_results = run_mc_compare(
             request,
             region=request.region,
             operator_overrides=request.operator_overrides,
+            feasible_pathways=feasible_pathways,
         )
 
         # 3 — Merge MC stats into PathwayResult objects (warnings + status)
