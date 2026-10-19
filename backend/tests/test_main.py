@@ -81,6 +81,8 @@ def test_expected_routes_are_mounted():
         ("GET", "/pathways/catalog/{process_id}"),
 
         ("GET", "/geocode"),
+
+        ("POST", "/pathways/explain"),
     }
 
 
