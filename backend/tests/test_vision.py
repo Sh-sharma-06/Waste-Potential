@@ -289,3 +289,87 @@ def test_advice_missing_api_key_returns_503(client):
     with patch("app.ml.vision_router._GEMINI_API_KEY_VISION", ""):
         resp = client.post(URL_ADVICE, json={"sector": "urban", "items": ["paper"]})
     assert resp.status_code == 503
+
+
+# ---------------------------------------------------------------------------
+# 13. Text file renamed .jpg → 422 (magic-byte validation)
+# ---------------------------------------------------------------------------
+
+def test_classify_text_file_renamed_jpg_returns_422(client):
+    """A plain-text file sent with content-type image/jpeg must be rejected
+    because its magic bytes do not match JPEG (\\xff\\xd8\\xff)."""
+    text_bytes = b"This is plain text, not a JPEG image.\n"
+    resp = client.post(
+        URL_CLASSIFY,
+        files={"file": ("sneaky.jpg", io.BytesIO(text_bytes), "image/jpeg")},
+    )
+    assert resp.status_code == 422, resp.text
+    detail = resp.json()["detail"]
+    assert "image format" in detail.lower() or "magic" in detail.lower() or "content" in detail.lower()
+
+
+# ---------------------------------------------------------------------------
+# 14. confidence 1.5 in Gemini response → 502 (not clipped silently)
+# ---------------------------------------------------------------------------
+
+def test_classify_confidence_out_of_range_returns_502(client):
+    """Gemini returning confidence=1.5 (> 1.0) must be rejected as malformed (502),
+    not silently clipped to 1.0."""
+    gemini_json = json.dumps({
+        "items": [
+            {"label": "mystery item", "category": "plastic", "confidence": 1.5},
+        ]
+    })
+    with patch("app.ml.vision_router._GEMINI_API_KEY_VISION", "fake-key"), \
+         patch("app.ml.vision_router.genai.Client") as mock_client_cls:
+        mock_client = mock_client_cls.return_value
+        mock_client.models.generate_content.return_value = _gemini_response(gemini_json)
+        resp = _upload_jpeg(client)
+
+    assert resp.status_code == 502, (
+        f"Expected 502 for out-of-range confidence, got {resp.status_code}: {resp.text}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 15. Advice system prompt contains "no numbers" instruction
+# ---------------------------------------------------------------------------
+
+def test_advice_prompt_forbids_numbers(client):
+    """The system prompt sent to Gemini must contain the instruction to not include
+    numbers, prices or yields.  Assert this on the captured call args."""
+    advice_text = "• Sort your waste.\nFollow your local municipal waste rules."
+
+    captured_config = {}
+
+    def fake_generate_content(model, contents, config):
+        captured_config["system_instruction"] = config.system_instruction
+        resp = MagicMock()
+        resp.text = advice_text
+        return resp
+
+    with patch("app.ml.vision_router._GEMINI_API_KEY_VISION", "fake-key"), \
+         patch("app.ml.vision_router.genai.Client") as mock_client_cls:
+        mock_client_cls.return_value.models.generate_content.side_effect = fake_generate_content
+        resp = client.post(URL_ADVICE, json={"sector": "urban", "items": ["plastic bag"]})
+
+    assert resp.status_code == 200
+    system_prompt = captured_config.get("system_instruction", "")
+    # Spec: system prompt must forbid numbers, prices and yields
+    assert "number" in system_prompt.lower(), (
+        "System prompt must mention 'numbers' restriction"
+    )
+    assert "price" in system_prompt.lower(), (
+        "System prompt must mention 'prices' restriction"
+    )
+    assert "yield" in system_prompt.lower() or "quantit" in system_prompt.lower(), (
+        "System prompt must mention 'yields' or 'quantities' restriction"
+    )
+    # Spec: safety line — do not burn waste
+    assert "burn" in system_prompt.lower(), (
+        "System prompt must forbid burning waste"
+    )
+    # Spec: follow local rules
+    assert "local" in system_prompt.lower(), (
+        "System prompt must include 'follow local rules'"
+    )

@@ -48,6 +48,25 @@ _GEMINI_API_KEY_VISION = get_setting("GEMINI_API_KEY_VISION")
 _MAX_BYTES = 5 * 1024 * 1024          # 5 MB
 _ALLOWED_MIME = {"image/jpeg", "image/png", "image/webp"}
 
+# Magic-byte signatures for each allowed image type.
+# We check the first few bytes of the upload so a text file renamed .jpg is rejected.
+_MAGIC: list[tuple[bytes, str]] = [
+    (b"\xff\xd8\xff", "image/jpeg"),          # JPEG
+    (b"\x89PNG\r\n\x1a\n", "image/png"),      # PNG
+    (b"RIFF", "image/webp"),                   # WebP (RIFF....WEBP)
+]
+
+
+def _detect_mime(data: bytes) -> str | None:
+    """Return the detected MIME type from *data*'s magic bytes, or None."""
+    for magic, mime in _MAGIC:
+        if data[:len(magic)] == magic:
+            # Extra check for WebP: bytes 8-12 must be b"WEBP"
+            if mime == "image/webp" and data[8:12] != b"WEBP":
+                continue
+            return mime
+    return None
+
 VALID_CATEGORIES = frozenset({
     "organic", "plastic", "metal", "glass",
     "paper", "e_waste", "hazardous", "other",
@@ -272,8 +291,21 @@ async def classify_waste(
             detail=f"Image exceeds 5 MB limit ({len(image_bytes) / 1_048_576:.1f} MB).",
         )
 
+    # --- Validate by magic bytes (content-type alone is not trusted) ---
+    detected = _detect_mime(image_bytes)
+    if detected is None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "File content does not match a supported image format "
+                "(JPEG, PNG or WebP). "
+                "Ensure the file is a real image, not a renamed text or binary file."
+            ),
+        )
+
     # --- Call Gemini (image + text prompt) ---
-    image_part = types.Part.from_bytes(data=image_bytes, mime_type=content_type)
+    # Use the magic-byte detected type so the MIME sent to Gemini is always accurate.
+    image_part = types.Part.from_bytes(data=image_bytes, mime_type=detected)
     text_part = types.Part.from_text(
         text="Classify every distinct waste item visible in this image."
     )
