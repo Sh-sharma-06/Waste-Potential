@@ -30,9 +30,10 @@ from .feedstock import Feedstock
 # LHV constants — ILLUSTRATIVE, not validated plant data
 # ---------------------------------------------------------------------------
 
-_LHV_OIL_MJ_KG: float = 40.0   # MJ/kg pyrolysis oil — ILLUSTRATIVE
-_LHV_CHAR_MJ_KG: float = 25.0  # MJ/kg char — ILLUSTRATIVE
-_LHV_GAS_MJ_KG: float = 15.0   # MJ/kg pyrolysis gas — ILLUSTRATIVE
+# conservative placeholder, unsourced; real values depend on feedstock and scale
+_LHV_OIL_MJ_KG: float = 25.0   # MJ/kg pyrolysis oil — conservative placeholder, unsourced; real values depend on feedstock and scale; status illustrative; source TBD
+_LHV_CHAR_MJ_KG: float = 25.0  # MJ/kg char — ILLUSTRATIVE (unchanged)
+_LHV_GAS_MJ_KG: float = 15.0   # MJ/kg pyrolysis gas — ILLUSTRATIVE (unchanged)
 
 
 # ---------------------------------------------------------------------------
