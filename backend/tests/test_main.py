@@ -83,6 +83,9 @@ def test_expected_routes_are_mounted():
         ("GET", "/geocode"),
 
         ("POST", "/pathways/explain"),
+
+        ("GET", "/recyclables/buyers"),
+        ("GET", "/recyclables/prices"),
     }
 
 
