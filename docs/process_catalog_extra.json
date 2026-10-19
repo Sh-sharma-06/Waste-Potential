@@ -5,6 +5,7 @@
     "inputs": {
       "organic_waste_kg": 1000.0,
       "water_kg": 200.0,
+      "dilution_water_kg": 1700.0,
       "electricity_kwh": 50.0,
       "inoculum_kg": null
     },
