@@ -79,6 +79,8 @@ def test_expected_routes_are_mounted():
         ("POST", "/vision/advice"),
 
         ("GET", "/pathways/catalog/{process_id}"),
+
+        ("GET", "/geocode"),
     }
 
 

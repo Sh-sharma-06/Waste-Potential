@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import Settings, get_settings
 from app.api.external import router as external_router
+from app.api.geocode import router as geocode_router
 from app.core_engine.router import router as core_engine_router
 from app.data.buyers import router as buyers_router
 from app.decision.router import router as decision_router
@@ -61,6 +62,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # P3 external-data endpoints: /weather and /facilities.
     app.include_router(external_router)
+
+    # Geocoding: /geocode
+    app.include_router(geocode_router)
 
     # P4 buyer discovery: /buyers
     app.include_router(buyers_router)
