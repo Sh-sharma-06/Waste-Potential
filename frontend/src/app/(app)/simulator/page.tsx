@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useId } from "react";
+import Link from "next/link";
 import { Canvas } from "@react-three/fiber";
 import {
   Layers,
@@ -25,6 +26,9 @@ import {
   Maximize2,
   ShieldAlert,
   Database,
+  Gauge,
+  Workflow,
+  Radio,
 } from "lucide-react";
 import PlantScene from "./equipment-3d";
 import { getStages, PATHWAY_CONFIGS, type PathwayId } from "./pathway-config";
@@ -99,6 +103,166 @@ function getStageIcon(code: string) {
     default:
       return <Activity className="w-4 h-4" />;
   }
+}
+
+interface StageFlowMetrics {
+  inflowLabel: string;
+  inflowValue: string;
+  outflowLabel: string;
+  outflowValue: string;
+  conversionSummary: string;
+  operatingParam: string;
+  upstreamSource: string;
+  downstreamTarget: string;
+  transportMedium: string;
+  isBackendCalculated: boolean;
+}
+
+function getStageFlowMetrics(
+  pathwayId: PathwayId,
+  stageIndex: number,
+  form: { waste_mass_kg_day: number; organic_fraction: number; suitable_fraction: number },
+  result: any | null
+): StageFlowMetrics {
+  const mass = form.waste_mass_kg_day || 1000;
+  const org = form.organic_fraction || 0.55;
+  const suit = form.suitable_fraction || 0.8;
+  const sortedOrganics = mass * org;
+  const netSlurry = sortedOrganics * suit;
+
+  if (pathwayId === "anaerobic_digestion") {
+    switch (stageIndex) {
+      case 0: // Feedstock Reception
+        return {
+          inflowLabel: "Gross Intake Waste",
+          inflowValue: `${fmt(mass, 0)} kg/day`,
+          outflowLabel: "Conveyed to Sorting",
+          outflowValue: `${fmt(mass, 0)} kg/day`,
+          conversionSummary: "Raw municipal and agricultural bulk intake inspection",
+          operatingParam: "Ambient temp · Negative pressure odor control",
+          upstreamSource: "Municipal Waste Haulers & Ag Trucks",
+          downstreamTarget: "Stage 02: Mechanical Pre-treatment",
+          transportMedium: "Heavy-duty apron feeder & belt conveyor",
+          isBackendCalculated: false,
+        };
+      case 1: // Sorting & Pre-treatment
+        return {
+          inflowLabel: "Feedstock Intake",
+          inflowValue: `${fmt(mass, 0)} kg/day`,
+          outflowLabel: "Sorted Organics",
+          outflowValue: `${fmt(sortedOrganics, 0)} kg/day (${fmt(mass - sortedOrganics, 0)} kg reject)`,
+          conversionSummary: `${(org * 100).toFixed(0)}% organic yield after magnetic & trommel separation`,
+          operatingParam: "Trommel screen mesh 40mm · High-gradient eddy current",
+          upstreamSource: "Stage 01: Feedstock Reception",
+          downstreamTarget: "Stage 03: Thermal Conditioning",
+          transportMedium: "Enclosed screw auger & shredder chute",
+          isBackendCalculated: false,
+        };
+      case 2: // Thermal Conditioning & Hydrolysis
+        return {
+          inflowLabel: "Sorted Organics",
+          inflowValue: `${fmt(sortedOrganics, 0)} kg/day`,
+          outflowLabel: "Conditioned Slurry",
+          outflowValue: `${fmt(netSlurry, 0)} kg/day`,
+          conversionSummary: `${(suit * 100).toFixed(0)}% digestible solids slurry conditioning`,
+          operatingParam: "Thermal hydrolysis 70°C pasteurization · 1 hour hold",
+          upstreamSource: "Stage 02: Mechanical Pre-treatment",
+          downstreamTarget: "Stage 04: Anaerobic Digestion",
+          transportMedium: "Positive displacement slurry pump & jacketed pipe",
+          isBackendCalculated: false,
+        };
+      case 3: // Anaerobic Digestion
+        return {
+          inflowLabel: "Hydrolized Slurry Inflow",
+          inflowValue: `${fmt(netSlurry, 0)} kg/day`,
+          outflowLabel: result ? "Calculated Biogas Yield" : "Estimated Biogas Yield",
+          outflowValue: result
+            ? `${fmt(result.results.biogas_nm3_d, 1)} Nm³/day`
+            : `${fmt(netSlurry * 0.12, 1)} Nm³/day (est.)`,
+          conversionSummary: result
+            ? `Digester Volume: ${fmt(result.results.digester_m3, 0)} m³ active volume`
+            : "Mesophilic methanogenesis (38°C) · 25-30 days HRT",
+          operatingParam: "Mesophilic (38 ± 1°C) · pH 7.2 - 7.6 · Volatile solids 68%",
+          upstreamSource: "Stage 03: Thermal Conditioning",
+          downstreamTarget: "Stage 05 (Biogas) & Stage 07 (Digestate)",
+          transportMedium: "Overhead gas duct & base discharge pipeline",
+          isBackendCalculated: Boolean(result),
+        };
+      case 4: // Gas Upgrading & Cleaning
+        return {
+          inflowLabel: "Raw Biogas Inflow",
+          inflowValue: result
+            ? `${fmt(result.results.biogas_nm3_d, 1)} Nm³/day`
+            : `${fmt(netSlurry * 0.12, 1)} Nm³/day (est.)`,
+          outflowLabel: "Clean Biomethane (60% CH₄)",
+          outflowValue: result
+            ? `${fmt(result.results.biogas_nm3_d * 0.6, 1)} Nm³/day CH₄`
+            : `${fmt(netSlurry * 0.12 * 0.6, 1)} Nm³/day CH₄`,
+          conversionSummary: "H₂S scrubbed < 10 ppm · Dew-point moisture knockout to 4°C",
+          operatingParam: "Condensate chilling at 4°C · Activated carbon polishing",
+          upstreamSource: "Stage 04: Anaerobic Digester",
+          downstreamTarget: "Stage 06: Cogeneration Unit (CHP)",
+          transportMedium: "Stainless steel biogas header with flame arrestor",
+          isBackendCalculated: Boolean(result),
+        };
+      case 5: // CHP Cogeneration
+        return {
+          inflowLabel: "Upgraded Biogas Fuel",
+          inflowValue: result
+            ? `${fmt(result.results.biogas_nm3_d, 1)} Nm³/day`
+            : `${fmt(netSlurry * 0.12, 1)} Nm³/day (est.)`,
+          outflowLabel: result ? "Verified Net Electricity" : "Estimated Net Energy",
+          outflowValue: result
+            ? `${fmt(result.results.e_net_kwh_d, 1)} kWh/day`
+            : `${fmt(netSlurry * 0.25, 1)} kWh/day (est.)`,
+          conversionSummary: "Combined electrical generation (38% eff) & thermal recovery (45% eff)",
+          operatingParam: "Synchronous 415V 3-phase grid tie · Heat exchanger jacket",
+          upstreamSource: "Stage 05: Gas Upgrading System",
+          downstreamTarget: "Local Electrical Substation & District Heat",
+          transportMedium: "Copper busbars & closed-loop thermal water loop",
+          isBackendCalculated: Boolean(result),
+        };
+      case 6: // Digestate Separation & Bio-fertilizer
+      default:
+        return {
+          inflowLabel: "Effluent Digestate",
+          inflowValue: `${fmt(netSlurry * 0.9, 0)} kg/day`,
+          outflowLabel: "Separated Bio-Products",
+          outflowValue: `${fmt(netSlurry * 0.18, 0)} kg cake / ${fmt(netSlurry * 0.72, 0)} L liquid`,
+          conversionSummary: "Separates pathogen-free mineralized N-P-K bio-fertilizer",
+          operatingParam: "Screw press dewatering · Decanter centrifuge 2800 RPM",
+          upstreamSource: "Stage 04: Anaerobic Digester Base",
+          downstreamTarget: "Organic Compost Depot & Liquid Fert Storage Tank",
+          transportMedium: "Low-shear progressive cavity pump & cake conveyor",
+          isBackendCalculated: Boolean(result),
+        };
+    }
+  }
+
+  // Generalized operational flow for other 6 pathways
+  const ratios = [
+    { inR: 1.0, outR: 1.0, label: "Feedstock Reception & Intake", param: "Intake weight bridge & pit inspection" },
+    { inR: 1.0, outR: 0.85, label: "Feed Sizing, Shredding & Sorting", param: "Mechanical reduction & moisture balancing" },
+    { inR: 0.85, outR: 0.7, label: "Core Thermal / Biochemical Prep", param: "Reaction prep & conditioning regime" },
+    { inR: 0.7, outR: 0.55, label: "Primary Reactor Bioconversion / Thermolysis", param: "Controlled atmosphere & reaction chamber" },
+    { inR: 0.55, outR: 0.4, label: "Secondary Conversion & Gas/Vapor Cleaning", param: "Scrubbing, condensation & particulate filters" },
+    { inR: 0.4, outR: 0.3, label: "Power & Primary Product Recovery", param: "High-efficiency thermodynamic recovery" },
+    { inR: 0.3, outR: 0.25, label: "Final Byproduct Refining & Stabilization", param: "Stabilization, packaging, and curing depot" },
+  ];
+  const r = ratios[stageIndex] ?? ratios[0];
+
+  return {
+    inflowLabel: "Input Feed Stream",
+    inflowValue: `${fmt(mass * r.inR, 0)} kg/day`,
+    outflowLabel: "Processed Yield Stream",
+    outflowValue: `${fmt(mass * r.outR, 0)} kg/day`,
+    conversionSummary: `${r.label} (Yield ratio: ${(r.outR / r.inR * 100).toFixed(0)}%)`,
+    operatingParam: r.param,
+    upstreamSource: stageIndex > 0 ? `Stage 0${stageIndex}: Upstream Unit` : "Feedstock Logistics & Silos",
+    downstreamTarget: stageIndex < 6 ? `Stage 0${stageIndex + 2}: Downstream Unit` : "Product Dispatch & Storage Depot",
+    transportMedium: "Sealed ducting, auger conveyors, & refractory piping",
+    isBackendCalculated: false,
+  };
 }
 
 // ─── SimulatorPage Component ──────────────────────────────────────────────────
@@ -215,6 +379,12 @@ export default function SimulatorPage() {
   };
 
   const activeStage = stages[selected] ?? stages[0];
+  const stageFlow = getStageFlowMetrics(
+    selectedPathway,
+    selected,
+    form,
+    result
+  );
 
   return (
     <main className="relative min-h-screen bg-[#060a14] text-slate-100 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
@@ -233,26 +403,48 @@ export default function SimulatorPage() {
       <div className="relative z-10 max-w-[1720px] mx-auto space-y-6">
 
         {/* =========================================================================
-            A. TOP NAVIGATION / HEADER
+            PLATFORM NAVIGATION BAR
         ========================================================================= */}
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+        <nav aria-label="Main Navigation" className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500/20 to-emerald-500/10 border border-teal-500/40 shadow-lg shadow-teal-500/10">
-              <Sparkles className="w-5 h-5 text-teal-400" />
-            </div>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-500/10 border border-teal-500/30 text-teal-400">
+              <Sparkles className="h-4 w-4" />
+            </span>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-base tracking-tight text-white">
-                  Waste-Potential
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-teal-500/10 text-teal-400 border border-teal-500/30">
-                  PROCESS LAB
-                </span>
-              </div>
-              <p className="text-xs text-slate-400">
-                Interactive Biological &amp; Mechanical Plant Simulation
-              </p>
+              <span className="font-extrabold text-sm tracking-tight text-white">Waste-Potential</span>
+              <span className="ml-2 rounded-full border border-teal-500/30 bg-teal-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-teal-400">
+                Process Lab
+              </span>
             </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs font-medium">
+            <Link href="/dashboard" className="rounded-lg px-3 py-1.5 text-slate-400 transition hover:bg-slate-900 hover:text-white">
+              Dashboard
+            </Link>
+            <Link href="/simulator" className="rounded-lg bg-teal-950 px-3 py-1.5 font-bold text-teal-300 border border-teal-700/50">
+              3D Simulator
+            </Link>
+            <Link href="/compare" className="rounded-lg px-3 py-1.5 text-slate-400 transition hover:bg-slate-900 hover:text-white">
+              Compare
+            </Link>
+            <Link href="/assistant" className="rounded-lg px-3 py-1.5 text-slate-400 transition hover:bg-slate-900 hover:text-white">
+              AI Assistant
+            </Link>
+          </div>
+        </nav>
+
+        {/* =========================================================================
+            A. TOP STATUS / SUB-HEADER
+        ========================================================================= */}
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <span className="flex items-center gap-1.5 text-slate-300">
+              <Radio className="w-3.5 h-3.5 text-teal-400 animate-pulse" />
+              <span>Real-Time Facility Twin</span>
+            </span>
+            <span className="text-slate-600">·</span>
+            <span>Feedstock: <strong className="text-slate-200">{fmt(form.waste_mass_kg_day, 0)} kg/day</strong></span>
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -752,6 +944,71 @@ export default function SimulatorPage() {
                 </div>
               </div>
 
+              {/* Dynamic Mass Flow & Operational Throughput */}
+              <div className="pt-3 border-t border-slate-800/80 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-teal-400 uppercase tracking-wider">
+                    <Gauge className="w-3.5 h-3.5" />
+                    <span>Real-Time Stage Throughput</span>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                      stageFlow.isBackendCalculated
+                        ? "bg-emerald-950/80 text-emerald-300 border-emerald-500/40"
+                        : "bg-slate-900 text-slate-400 border-slate-700"
+                    }`}
+                  >
+                    {stageFlow.isBackendCalculated ? "FastAPI Mass Balance" : "Scaled Model Flow"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                    <p className="text-[10px] font-medium text-slate-400 truncate">
+                      {stageFlow.inflowLabel}
+                    </p>
+                    <p className="text-sm font-extrabold text-sky-300 mt-0.5 font-mono">
+                      {stageFlow.inflowValue}
+                    </p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                    <p className="text-[10px] font-medium text-slate-400 truncate">
+                      {stageFlow.outflowLabel}
+                    </p>
+                    <p className="text-sm font-extrabold text-emerald-300 mt-0.5 font-mono">
+                      {stageFlow.outflowValue}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-xs text-slate-300 bg-slate-950/50 p-2.5 rounded-lg border border-slate-800/60 space-y-1">
+                  <p className="font-semibold text-slate-200">{stageFlow.conversionSummary}</p>
+                  <p className="text-[11px] text-slate-400 font-mono">Regime: {stageFlow.operatingParam}</p>
+                </div>
+              </div>
+
+              {/* Equipment Interconnection & Routing */}
+              <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-cyan-400 uppercase tracking-wider">
+                  <Workflow className="w-3.5 h-3.5" />
+                  <span>Equipment Interconnection</span>
+                </div>
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex items-start gap-2 text-slate-300">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 w-16 flex-shrink-0 mt-0.5">From</span>
+                    <span className="text-slate-300 font-medium">{stageFlow.upstreamSource}</span>
+                  </div>
+                  <div className="flex items-start gap-2 text-slate-300">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 w-16 flex-shrink-0 mt-0.5">To</span>
+                    <span className="text-slate-300 font-medium">{stageFlow.downstreamTarget}</span>
+                  </div>
+                  <div className="flex items-start gap-2 text-slate-400 text-[11px]">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 w-16 flex-shrink-0 mt-0.5">Medium</span>
+                    <span className="text-slate-400">{stageFlow.transportMedium}</span>
+                  </div>
+                </div>
+              </div>
+
               {/* Illustrative Disclaimer Note */}
               <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-600/30 text-[11px] text-amber-300/90 leading-relaxed flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
@@ -859,15 +1116,37 @@ export default function SimulatorPage() {
               </section>
 
               {/* Results card */}
-              {result || error ? (
+              {loading ? (
+                <section
+                  className={styles.resultsCard}
+                  aria-label="Simulation in progress"
+                >
+                  <div className="flex flex-col items-center justify-center text-center py-10 space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400">
+                      <RotateCw className="w-6 h-6 animate-spin text-teal-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-200">
+                        Running Mass Balance Simulation...
+                      </h3>
+                      <p className="text-xs text-slate-400 max-w-sm mt-1.5 leading-relaxed">
+                        Communicating with FastAPI service at <code>/simulations</code> to solve biochemical methane potential and thermodynamic energy yield.
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              ) : result || error ? (
                 <section
                   className={styles.resultsCard}
                   aria-label="Simulation results"
                 >
                   {error && (
-                    <p className={styles.errorMsg}>
-                      {t.errors.api_error}: {error}
-                    </p>
+                    <div className="p-3 mb-4 rounded-xl bg-rose-950/40 border border-rose-500/40 text-xs text-rose-300 flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <strong>{t.errors.api_error}:</strong> {error}
+                      </div>
+                    </div>
                   )}
 
                   {result && (
