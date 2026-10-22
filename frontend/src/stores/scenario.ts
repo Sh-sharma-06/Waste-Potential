@@ -2,8 +2,8 @@
  * Zustand store for the active simulation scenario.
  *
  * Holds the current form inputs, the last API response, loading state, and
- * any error message.  Consumed by the SimulatorPage and any child component
- * that needs access to `result.status` for the dynamic badge.
+ * any error message. Consumed by the SimulatorPage, ComparePage, Dashboard,
+ * and any child component that needs access to scenario parameters or results.
  */
 
 import { create } from "zustand";
@@ -13,10 +13,17 @@ import { postSimulation } from "@/lib/api/client";
 // ─── State shape ─────────────────────────────────────────────────────────────
 
 export interface ScenarioForm {
+  pincode: string;
+  latitude: number | null;
+  longitude: number | null;
+  location_name: string;
+  sector: "urban" | "rural" | "industrial";
+  waste_class: string;
   waste_mass_kg_day: number;
   organic_fraction: number;
   suitable_fraction: number;
   location_id: string;
+  selected_pathway: string;
 }
 
 export interface ScenarioState {
@@ -31,6 +38,8 @@ export interface ScenarioState {
 
   /** Update one or more form fields */
   setForm: (patch: Partial<ScenarioForm>) => void;
+  /** Set selected pathway */
+  setSelectedPathway: (pathway: string) => void;
   /** POST /simulations with the current form values */
   runSimulation: () => Promise<void>;
   /** Clear last result and error */
@@ -40,10 +49,17 @@ export interface ScenarioState {
 // ─── Default form values ──────────────────────────────────────────────────────
 
 const DEFAULT_FORM: ScenarioForm = {
+  pincode: "",
+  latitude: null,
+  longitude: null,
+  location_name: "",
+  sector: "urban",
+  waste_class: "organic_wet",
   waste_mass_kg_day: 1000,
   organic_fraction: 0.55,
   suitable_fraction: 0.8,
   location_id: "",
+  selected_pathway: "anaerobic_digestion",
 };
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -56,6 +72,10 @@ export const useScenarioStore = create<ScenarioState>((set, get) => ({
 
   setForm(patch) {
     set((s) => ({ form: { ...s.form, ...patch } }));
+  },
+
+  setSelectedPathway(pathway: string) {
+    set((s) => ({ form: { ...s.form, selected_pathway: pathway } }));
   },
 
   async runSimulation() {

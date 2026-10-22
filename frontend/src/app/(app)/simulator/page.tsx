@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect, useRef, useCallback, useId } from "react";
 import Link from "next/link";
@@ -36,6 +36,8 @@ import { useScenarioStore } from "@/stores/scenario";
 import { StatusBadge } from "@/components/Simulator/StatusBadge";
 import en from "@/i18n/en.json";
 import styles from "./SimulatorPage.module.css";
+import { getProcessCatalog } from "@/lib/api/client";
+import type { ProcessCatalogEntry } from "@/lib/api/api.d";
 
 const t = en.simulator;
 
@@ -269,8 +271,16 @@ function getStageFlowMetrics(
 
 export default function SimulatorPage() {
   // Scenario Store (Backend calculation integration)
-  const { form, result, loading, error, setForm, runSimulation, reset } =
-    useScenarioStore();
+  const {
+    form,
+    result,
+    loading,
+    error,
+    setForm,
+    setSelectedPathway: setStoredPathway,
+    runSimulation,
+    reset,
+  } = useScenarioStore();
 
   // Stable IDs for form inputs
   const massId = useId();
@@ -281,12 +291,47 @@ export default function SimulatorPage() {
   // Multi-Pathway State
   const [selectedPathway, setSelectedPathway] =
     useState<PathwayId>("anaerobic_digestion");
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const stages = getStages(selectedPathway);
   const [selected, setSelected] = useState<number>(0);
   const [tourRunning, setTourRunning] = useState(false);
   const [tourCompleted, setTourCompleted] = useState(false);
   const [canvasKey, setCanvasKey] = useState(0); // For resetting camera view
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [catalogEntry, setCatalogEntry] =
+  useState<ProcessCatalogEntry | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+
+    setCatalogLoading(true);
+    setCatalogError(null);
+    setCatalogEntry(null);
+
+    getProcessCatalog(selectedPathway, form.waste_mass_kg_day)
+      .then((entry) => {
+        if (!cancelled) {
+          setCatalogEntry(entry);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setCatalogError(
+            err instanceof Error ? err.message : "Catalog data unavailable."
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setCatalogLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPathway, form.waste_mass_kg_day]);
+
 
   // Stop tour cleanly
   const stopTour = useCallback(() => {
@@ -368,6 +413,7 @@ export default function SimulatorPage() {
   function handlePathwayChange(pathwayId: PathwayId) {
     stopTour();
     setSelectedPathway(pathwayId);
+    setStoredPathway(pathwayId);
     setSelected(0);
     setTourCompleted(false);
     setCanvasKey((prev) => prev + 1);
@@ -894,6 +940,51 @@ export default function SimulatorPage() {
                 </p>
               </div>
 
+              {/* Scaled process catalog */}
+              <div className="rounded-xl border border-sky-500/20 bg-slate-900/60 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-sky-400">
+                    Scaled Catalog Inputs
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    {fmt(form.waste_mass_kg_day, 0)} kg/day
+                  </span>
+                </div>
+
+                {catalogLoading ? (
+                  <p className="text-xs text-slate-400">Loading catalog values…</p>
+                ) : catalogError ? (
+                  <p className="text-xs text-amber-300">
+                    Catalog unavailable for this pathway. Existing stage estimates remain in use.
+                  </p>
+                ) : catalogEntry ? (
+                  <>
+                    <p className="text-xs text-slate-300">{catalogEntry.name}</p>
+                    <div className="space-y-1">
+                      {Object.entries(catalogEntry.inputs).map(([key, value]) => (
+                        <div
+                          key={key}
+                          className="flex items-start justify-between gap-3 text-xs"
+                        >
+                          <span className="text-slate-400 break-words">
+                            {key.replace(/_/g, " ")}
+                          </span>
+                          <span className="text-sky-200 font-mono text-right">
+                            {typeof value === "number"
+                              ? Number(value.toFixed(2)).toLocaleString()
+                              : value == null
+                                ? "Not specified"
+                                : value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-slate-500">
+                      Catalog input estimates; outputs are not recalculated predictions.
+                    </p>
+                  </>
+                ) : null}
+              </div>
               {/* Process Inputs & Outputs */}
               <div className="space-y-3 pt-2 border-t border-slate-800/80">
                 {/* Inputs */}
