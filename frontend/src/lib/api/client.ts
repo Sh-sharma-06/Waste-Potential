@@ -8,7 +8,7 @@
  * responses, including the raw detail string from the backend where available.
  */
 
-import type { SimRequest, SimResponse } from "./api.d";
+import type { SimRequest, SimResponse, ProcessCatalogEntry } from "./api.d";
 
 const BASE =
   typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL
@@ -63,4 +63,15 @@ export async function getRuns(limit = 20): Promise<SimResponse[]> {
 
 export async function getRun(runId: string): Promise<SimResponse> {
   return request<SimResponse>(`/runs/${encodeURIComponent(runId)}`);
+}
+
+// ─── /pathways/catalog/{process_id} ──────────────────────────────────────────
+
+export async function getProcessCatalog(
+  processId: string,
+  wasteKg: number = 1000
+): Promise<ProcessCatalogEntry> {
+  return request<ProcessCatalogEntry>(
+    `/pathways/catalog/${encodeURIComponent(processId)}?waste_kg=${encodeURIComponent(wasteKg)}`
+  );
 }

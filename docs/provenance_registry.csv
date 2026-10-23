@@ -45,7 +45,7 @@ eta_el,0.22,,illustrative_estimate,TBD,per kg wet feed,incineration,Default fiel
 aux_kwh_per_t,70.0,,illustrative_estimate,TBD,per kg wet feed,incineration,Default field of IncinerationParams; blueprint catalog (unvalidated)
 carbon_content_plastic,0.75,,illustrative_estimate,TBD,per kg wet feed,incineration,Default field of IncinerationParams; blueprint catalog (unvalidated)
 cold_gas_efficiency,0.7,,illustrative_estimate,TBD,per kg wet feed,gasification,Default field of GasificationParams; blueprint catalog (unvalidated)
-eta_engine,0.3,,illustrative_estimate,TBD,per kg wet feed,gasification,Default field of GasificationParams; blueprint catalog (unvalidated)
+eta_engine,0.22,,illustrative_estimate,TBD,per kg wet feed,gasification,Default field of GasificationParams; blueprint catalog (unvalidated)
 aux_kwh_per_t,100.0,,illustrative_estimate,TBD,per kg wet feed,gasification,Default field of GasificationParams; blueprint catalog (unvalidated)
 target_moisture,0.15,,illustrative_estimate,TBD,per kg wet feed,gasification,Default field of GasificationParams; blueprint catalog (unvalidated)
 oil_yield,0.4,,illustrative_estimate,TBD,per kg wet feed,pyrolysis,Default field of PyrolysisParams; blueprint catalog (unvalidated)
@@ -94,5 +94,5 @@ capex_inr,50000000.0,INR,illustrative_estimate,TBD,project-level,pyrolysis,Econo
 opex_inr_per_t,1000.0,INR/t/y,illustrative_estimate,TBD,project-level,pyrolysis,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
 life_years,20.0,years,illustrative_estimate,TBD,project-level,pyrolysis,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
 discount_rate,0.1,fraction,illustrative_estimate,TBD,project-level,pyrolysis,Economic default from compare._DEFAULT_COSTS; blueprint catalog (unvalidated)
-_GWP_CH4,28.0,kg CO2-eq/kg CH4,illustrative_estimate,TBD,per kg CH4 emitted,all,GWP-100 for CH4; IPCC AR5 value cited in adapter.py but source listed as TBD
-_GWP_N2O,265.0,kg CO2-eq/kg N2O,illustrative_estimate,TBD,per kg N2O emitted,all,GWP-100 for N2O; IPCC AR5 value cited in adapter.py but source listed as TBD
+_GWP_CH4,29.8,kg CO2-eq/kg CH4,illustrative_estimate,TBD,per kg CH4 emitted,all,GWP-100 for CH4; IPCC AR5 value cited in adapter.py but source listed as TBD
+_GWP_N2O,273.0,kg CO2-eq/kg N2O,illustrative_estimate,TBD,per kg N2O emitted,all,GWP-100 for N2O; IPCC AR5 value cited in adapter.py but source listed as TBD

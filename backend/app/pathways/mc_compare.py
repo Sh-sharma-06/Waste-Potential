@@ -22,6 +22,21 @@ These weather/tariff perturbations feed into the electricity revenue calculation
 via ``match_demand_greedy`` so that the MC p10/p50/p90 reflects real site
 uncertainty — not just cost estimation error.
 
+Shared inputs
+-------------
+Within each MC run the shared inputs (electricity tariff, ambient temperature,
+relative humidity) are drawn **once** and reused across all pathways so that
+pathways are compared on an identical economic environment per run.
+Pathway-specific perturbations (cost, yield) stay independent per pathway.
+
+Optimality share
+----------------
+After running all pathways, for each run the winner is the deterministically
+feasible pathway with the highest simulated annual net value.  Deterministically
+rejected pathways are never eligible to win.  The fraction of runs in which each
+pathway is the winner is reported as ``optimality_share`` (sums to 1 over runs
+that had at least one feasible pathway).
+
 The outputs of this module are ADDITIVE to the PathwayResult objects produced
 by compare.py — they do NOT replace the deterministic screening.  The router
 merges the MC statistics into the warnings list.
@@ -34,6 +49,8 @@ Design decisions
 - All MC estimates use the same ANNUAL boundary as the deterministic layer.
 - The MC result carries a `p10`, `p50`, `p90` summary so the frontend can
   display an uncertainty band without transmitting all N samples.
+- Seeded via ``PathwayCompareRequest.mc_seed`` (default 42) so results are
+  deterministic and reproducible.
 """
 
 from __future__ import annotations
@@ -108,6 +125,14 @@ class PathwayMCResult:
     status:
         "feasible", "rejected", or "uncertain" (set to "uncertain" when
         prob_positive_npv is between 0.25 and 0.75).
+    win_count:
+        Number of MC runs in which this pathway had the highest net value
+        among deterministically feasible pathways (set by run_mc_compare).
+    optimality_share:
+        Fraction of contested runs won by this pathway (set by run_mc_compare).
+    net_value_samples:
+        Raw per-run net value samples, kept for cross-pathway winner comparison
+        in run_mc_compare.  Not serialised to the API response.
     """
     pathway: str
     annual_net_value_mc: MCStats
@@ -115,6 +140,10 @@ class PathwayMCResult:
     e_net_kwh_d_mc: MCStats
     prob_positive_npv: float
     status: str
+    win_count: int = 0
+    optimality_share: float = 0.0
+    # Raw samples — used internally for optimality computation, not returned
+    net_value_samples: list[float] = field(default_factory=list, repr=False)
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +153,11 @@ class PathwayMCResult:
 _WEATHER_TEMP_BAND_C: float = 5.0        # ±5 °C uniform perturbation
 _WEATHER_RH_BAND: float = 0.15           # ±15 % relative humidity (absolute fraction)
 _TARIFF_BAND: float = 0.15               # ±15 % electricity tariff variation
+
+_OPTIMALITY_NOTE = (
+    "Share of runs in which this pathway has the highest modelled annual net value; "
+    "it depends on assumed price and cost distributions and is not a validated prediction."
+)
 
 # ---------------------------------------------------------------------------
 # Sampling helpers
@@ -135,6 +169,7 @@ def _truncated_normal_samples(
     n: int,
     *,
     lower_bound: Optional[float] = 0.0,
+    rng: Optional[random.Random] = None,
 ) -> list[float]:
     """Draw *n* samples from a normal distribution N(mu, cv·mu), truncated below
     *lower_bound*.
@@ -152,14 +187,21 @@ def _truncated_normal_samples(
     lower_bound:
         Samples below this value are re-drawn (rejection sampling, up to 10×).
         Pass None to disable truncation.
+    rng:
+        Optional seeded ``random.Random`` instance (used for pathway-specific
+        perturbations so they remain independent across pathways).
     """
     sigma = abs(mu) * cv
 
-    if _HAS_NUMPY:
-        rng = _np.random.default_rng()
-        samples = rng.normal(mu, sigma, n).tolist()
+    # Numpy path uses its own internal RNG (numpy does not share state with
+    # Python's random module), so we always fall back to Python random when a
+    # seeded rng is provided for reproducibility.
+    if _HAS_NUMPY and rng is None:
+        np_rng = _np.random.default_rng()
+        samples = np_rng.normal(mu, sigma, n).tolist()
     else:
-        samples = [random.gauss(mu, sigma) for _ in range(n)]
+        _rng = rng or random
+        samples = [_rng.gauss(mu, sigma) for _ in range(n)]
 
     if lower_bound is not None:
         # Replace out-of-bounds samples with the lower bound (conservative)
@@ -181,11 +223,19 @@ def _percentiles(samples: list[float]) -> tuple[float, float, float]:
     return _p(0.10), _p(0.50), _p(0.90)
 
 
-def _uniform_samples(mu: float, half_band: float, n: int, *, lower_bound: float = 0.0) -> list[float]:
+def _uniform_samples(
+    mu: float,
+    half_band: float,
+    n: int,
+    *,
+    lower_bound: float = 0.0,
+    rng: Optional[random.Random] = None,
+) -> list[float]:
     """Draw *n* samples uniformly from [mu − half_band, mu + half_band], clamped below *lower_bound*."""
     lo = mu - half_band
     hi = mu + half_band
-    samples = [random.uniform(lo, hi) for _ in range(n)]
+    _rng = rng or random
+    samples = [_rng.uniform(lo, hi) for _ in range(n)]
     return [max(lower_bound, s) for s in samples]
 
 
@@ -205,7 +255,7 @@ def _to_stats(samples: list[float]) -> MCStats:
 
 
 # ---------------------------------------------------------------------------
-# Per-pathway MC run
+# Per-pathway MC run (shared draws passed in)
 # ---------------------------------------------------------------------------
 
 def mc_pathway(
@@ -219,6 +269,12 @@ def mc_pathway(
     base_electricity_price: Optional[float] = None,
     base_ambient_temp_c: Optional[float] = None,
     base_relative_humidity: Optional[float] = None,
+    # Shared draws (one per run, same across all pathways)
+    shared_e_price_samples: Optional[list[float]] = None,
+    shared_temp_samples: Optional[list[float]] = None,
+    shared_rh_samples: Optional[list[float]] = None,
+    # Per-pathway RNG for independent cost/yield perturbations
+    pathway_rng: Optional[random.Random] = None,
 ) -> PathwayMCResult:
     """Run Monte Carlo uncertainty analysis for a single *pathway*.
 
@@ -237,17 +293,30 @@ def mc_pathway(
         MC iteration.  When None, falls back to flat-price calculation.
     base_electricity_price:
         Baseline electricity tariff from LocationContext (INR/kWh).  Perturbed
-        ±15 % in each MC iteration.
+        ±15 % in each MC iteration when shared_e_price_samples is None.
     base_ambient_temp_c:
         Baseline ambient temperature (°C) from LocationContext.
         Currently carried as metadata; reserved for Phase 5b mass-balance.
     base_relative_humidity:
         Baseline relative humidity (0–1) from LocationContext.
         Currently carried as metadata; reserved for Phase 5b mass-balance.
+    shared_e_price_samples:
+        Pre-drawn tariff samples shared across all pathways so each run uses
+        the same economic environment.  When provided, base_electricity_price
+        is used only as a fallback baseline.
+    shared_temp_samples:
+        Pre-drawn ambient temperature samples shared across all pathways.
+    shared_rh_samples:
+        Pre-drawn relative humidity samples shared across all pathways.
+    pathway_rng:
+        Seeded ``random.Random`` instance for pathway-specific cost/yield
+        perturbations (independent per pathway, deterministic with seed).
 
     Returns
     -------
     PathwayMCResult
+        Raw ``net_value_samples`` are included for cross-pathway winner
+        comparison in ``run_mc_compare``.
     """
     n = request.mc_runs
     cost_cv = request.mc_cost_cv
@@ -272,32 +341,38 @@ def mc_pathway(
     ann_capex_base = capex * crf(dr, life_yr) if capex > 0 else 0.0
     cost_base = ann_capex_base + opex_yr
 
-    # --- Sample cost with CV applied to total annual cost ---
+    # --- Sample cost with CV applied to total annual cost (pathway-specific) ---
     cost_samples: list[float]
     if cost_base > 0:
-        cost_samples = _truncated_normal_samples(cost_base, cost_cv, n, lower_bound=0.0)
+        cost_samples = _truncated_normal_samples(
+            cost_base, cost_cv, n, lower_bound=0.0, rng=pathway_rng
+        )
     else:
         cost_samples = [0.0] * n
 
-    # --- Sample electricity yield (net kWh/tonne) ---
+    # --- Sample electricity yield (net kWh/tonne) (pathway-specific) ---
     net_kwh_t_base = net_kwh_t
     if abs(net_kwh_t_base) > 1e-9:
         net_kwh_t_samples = _truncated_normal_samples(
-            net_kwh_t_base, yield_cv, n, lower_bound=None
+            net_kwh_t_base, yield_cv, n, lower_bound=None, rng=pathway_rng
         )
     else:
         net_kwh_t_samples = [0.0] * n
 
-    # --- Sample tariff variation (±15 %) ---
-    e_price_samples = _uniform_samples(e_price_base, _TARIFF_BAND * e_price_base, n,
-                                       lower_bound=0.0)
+    # --- Tariff samples: use shared draws if provided, else sample independently ---
+    if shared_e_price_samples is not None:
+        e_price_samples = shared_e_price_samples
+    else:
+        e_price_samples = _uniform_samples(
+            e_price_base, _TARIFF_BAND * e_price_base, n, lower_bound=0.0
+        )
 
-    # --- Sample weather variation (for metadata / future mass-balance use) ---
-    if base_ambient_temp_c is not None:
+    # --- Weather samples: use shared draws if provided ---
+    if shared_temp_samples is None and base_ambient_temp_c is not None:
         _temp_samples = _uniform_samples(  # noqa: F841 — reserved Phase 5b
             base_ambient_temp_c, _WEATHER_TEMP_BAND_C, n, lower_bound=-50.0
         )
-    if base_relative_humidity is not None:
+    if shared_rh_samples is None and base_relative_humidity is not None:
         _rh_samples = _uniform_samples(  # noqa: F841 — reserved Phase 5b
             base_relative_humidity, _WEATHER_RH_BAND * base_relative_humidity, n,
             lower_bound=0.0
@@ -348,6 +423,7 @@ def mc_pathway(
         e_net_kwh_d_mc=_to_stats(e_kwh_d_samples),
         prob_positive_npv=round(prob_positive, 4),
         status=mc_status,
+        net_value_samples=net_value_samples,
     )
 
 
@@ -360,6 +436,7 @@ def run_mc_compare(
     *,
     region: Optional[str] = None,
     operator_overrides: Optional[dict[str, float]] = None,
+    feasible_pathways: Optional[set[str]] = None,
 ) -> list[PathwayMCResult]:
     """Run MC uncertainty analysis for all pathways in *request*.
 
@@ -369,6 +446,21 @@ def run_mc_compare(
       - Passes these to ``mc_pathway()`` so each iteration perturbs weather
         (±5 °C / ±15 % RH) and tariff (±15 %) around the location baseline.
 
+    Shared inputs:
+      - Within each run the tariff, ambient temperature and relative humidity
+        draws are identical across all pathways (drawn once via a seeded RNG),
+        so pathways are compared on the same economic environment.
+      - Pathway-specific cost and yield perturbations use independent seeded
+        RNGs, one per pathway.
+
+    Optimality share:
+      - After running all pathways, for each run the winner is the pathway in
+        ``feasible_pathways`` with the highest net value.  If no feasible
+        pathway is provided, all pathways in the request are treated as
+        eligible (backward-compatible behaviour).
+      - ``PathwayMCResult.win_count`` and ``.optimality_share`` are set on
+        each result before returning.
+
     Parameters
     ----------
     request:
@@ -377,11 +469,16 @@ def run_mc_compare(
         ISO region code for grid emission factor resolution.
     operator_overrides:
         Operator-supplied emission factor overrides.
+    feasible_pathways:
+        Set of pathway ids that passed deterministic feasibility checks.
+        Only these pathways are eligible to win a run.  When None all
+        pathways in ``request.pathways`` are treated as feasible.
 
     Returns
     -------
     list[PathwayMCResult]
         One entry per pathway in request.pathways, in the same order.
+        ``win_count`` and ``optimality_share`` are populated.
     """
     overrides = operator_overrides or {}
     grid_factor = get_factor(
@@ -403,6 +500,13 @@ def run_mc_compare(
         raw_tariff.get("value", 7.50) if isinstance(raw_tariff, dict) else raw_tariff
     )
 
+    # Prefer request override for tariff baseline
+    e_price_base = (
+        request.electricity_price_inr_kwh
+        if request.electricity_price_inr_kwh > 0
+        else base_electricity_price
+    )
+
     # Weather baselines
     raw_temp = ctx.get("ambient_temp_c", 25.0)
     base_ambient_temp_c = float(
@@ -414,8 +518,36 @@ def run_mc_compare(
         raw_rh.get("value", 0.65) if isinstance(raw_rh, dict) else raw_rh
     )
 
-    return [
-        mc_pathway(
+    n = request.mc_runs
+    seed = request.mc_seed
+
+    # ------------------------------------------------------------------
+    # Draw shared inputs ONCE for all pathways using the master seed.
+    # ------------------------------------------------------------------
+    shared_rng = random.Random(seed)
+    shared_e_price_samples = _uniform_samples(
+        e_price_base, _TARIFF_BAND * e_price_base, n, lower_bound=0.0, rng=shared_rng
+    )
+    shared_temp_samples = _uniform_samples(
+        base_ambient_temp_c, _WEATHER_TEMP_BAND_C, n, lower_bound=-50.0, rng=shared_rng
+    )
+    raw_rh_samples = _uniform_samples(
+        base_relative_humidity,
+        _WEATHER_RH_BAND * base_relative_humidity,
+        n,
+        lower_bound=0.0,
+        rng=shared_rng,
+    )
+    shared_rh_samples = [min(1.0, v) for v in raw_rh_samples]
+
+    # ------------------------------------------------------------------
+    # Per-pathway independent RNGs (seeded deterministically from master
+    # seed + pathway index so pathways don't share cost/yield draws).
+    # ------------------------------------------------------------------
+    mc_results: list[PathwayMCResult] = []
+    for pw_idx, pw in enumerate(request.pathways):
+        pathway_rng = random.Random(seed + pw_idx + 1)
+        result = mc_pathway(
             pw,
             request,
             grid_factor=grid_factor,
@@ -424,16 +556,45 @@ def run_mc_compare(
             base_electricity_price=base_electricity_price,
             base_ambient_temp_c=base_ambient_temp_c,
             base_relative_humidity=base_relative_humidity,
+            shared_e_price_samples=shared_e_price_samples,
+            shared_temp_samples=shared_temp_samples,
+            shared_rh_samples=shared_rh_samples,
+            pathway_rng=pathway_rng,
         )
-        for pw in request.pathways
-    ]
+        mc_results.append(result)
+
+    # ------------------------------------------------------------------
+    # Optimality share: per run, the winner is the feasible pathway with
+    # the highest net value.
+    # ------------------------------------------------------------------
+    eligible = feasible_pathways if feasible_pathways is not None else set(request.pathways)
+    mc_by_pathway = {r.pathway: r for r in mc_results}
+
+    # Only eligible pathways participate in optimality counting.
+    eligible_results = [r for r in mc_results if r.pathway in eligible]
+
+    if eligible_results:
+        contested_runs = 0
+        for i in range(n):
+            # net value for each eligible pathway at run i
+            values = [(r.net_value_samples[i], r.pathway) for r in eligible_results]
+            best_val, best_pw = max(values, key=lambda x: x[0])
+            # A run is contested only when there is at least one eligible pathway.
+            contested_runs += 1
+            mc_by_pathway[best_pw].win_count += 1
+
+        if contested_runs > 0:
+            for r in mc_results:
+                r.optimality_share = round(r.win_count / contested_runs, 6)
+
+    return mc_results
 
 
 def merge_mc_into_results(
     results: list[PathwayResult],
     mc_results: list[PathwayMCResult],
 ) -> list[PathwayResult]:
-    """Merge MC status and probability into deterministic PathwayResult objects.
+    """Merge MC status, probability and optimality share into deterministic PathwayResult objects.
 
     Rules:
     - If a pathway is deterministically rejected (feasible=False), its status
@@ -442,6 +603,9 @@ def merge_mc_into_results(
       (0.25 < prob_positive_npv < 0.75), status is upgraded to "uncertain".
     - prob_positive_npv and MC percentiles are appended to warnings for
       frontend display without adding extra response fields.
+    - optimality_share and win_count are set on the PathwayResult if present.
+    - optimality_note is set on every PathwayResult that receives an
+      optimality_share (including share=0.0 for rejected pathways).
 
     Parameters
     ----------
@@ -456,6 +620,9 @@ def merge_mc_into_results(
         Mutated in-place (status and warnings updated); same objects returned.
     """
     mc_by_pathway = {m.pathway: m for m in mc_results}
+
+    # Determine whether any optimality shares were computed.
+    has_shares = any(m.win_count > 0 or m.optimality_share > 0.0 for m in mc_results)
 
     for res in results:
         mc = mc_by_pathway.get(res.pathway)
@@ -475,5 +642,12 @@ def merge_mc_into_results(
             f"{mc.annual_net_value_mc.p50:,.0f} / "
             f"{mc.annual_net_value_mc.p90:,.0f} INR/yr."
         )
+
+        # Optimality share fields — set regardless of feasibility so that
+        # rejected pathways are visibly attributed a share of 0.
+        if has_shares:
+            res.optimality_share = mc.optimality_share
+            res.win_count = mc.win_count
+            res.optimality_note = _OPTIMALITY_NOTE
 
     return results

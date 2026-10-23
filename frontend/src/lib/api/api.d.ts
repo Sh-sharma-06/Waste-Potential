@@ -95,6 +95,16 @@ export interface SimResponse {
   missing_inputs: string[];
 }
 
+// ─── Process Catalog ──────────────────────────────────────────────────────────
+
+export interface ProcessCatalogEntry {
+  name: string;
+  description: string;
+  inputs: Record<string, number | string | null>;
+  outputs: Record<string, number | string | null>;
+  category: string;
+}
+
 // ─── API error shape ──────────────────────────────────────────────────────────
 
 export interface ApiError {

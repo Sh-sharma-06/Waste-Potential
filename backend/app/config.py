@@ -71,7 +71,10 @@ def get_settings() -> Settings:
     return load_settings()
 
 
+# ---------------------------------------------------------------------------
 # Gemini configuration. API keys are loaded on the backend only.
+# ---------------------------------------------------------------------------
+
 def get_setting(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
 
@@ -80,3 +83,15 @@ GEMINI_MODEL = get_setting("GEMINI_MODEL", "gemini-3.8-flash")
 GEMINI_API_KEY_AUDIT = get_setting("GEMINI_API_KEY_AUDIT")
 GEMINI_API_KEY_ADVISOR = get_setting("GEMINI_API_KEY_ADVISOR")
 GEMINI_API_KEY_PARSER = get_setting("GEMINI_API_KEY_PARSER")
+
+# ---------------------------------------------------------------------------
+# External API keys — P3 scope
+# These are read at module load time (after load_dotenv above).
+# An empty string means the key was not set; clients will raise a clear error.
+# ---------------------------------------------------------------------------
+
+OPEN_ROUTE_SERVICE_API_KEY: str = get_setting("OPEN_ROUTE_SERVICE_API_KEY")
+GOOGLE_PLACES_API_KEY: str = get_setting("GOOGLE_PLACES_API_KEY")
+# Open-Meteo is a public API that requires no key; this is reserved for
+# future premium / commercial access.
+OPEN_METEO_API_KEY: str = get_setting("OPEN_METEO_API_KEY")

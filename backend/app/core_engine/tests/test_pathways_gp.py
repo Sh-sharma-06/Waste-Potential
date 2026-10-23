@@ -62,9 +62,10 @@ def _fs_zero() -> Feedstock:
 class TestGasificationParams(unittest.TestCase):
 
     def test_defaults_construct(self):
+        # NOTE: eta_engine changed 0.30 → 0.22 (conservative placeholder)
         p = GasificationParams()
         self.assertEqual(p.cold_gas_efficiency, 0.70)
-        self.assertEqual(p.eta_engine, 0.30)
+        self.assertEqual(p.eta_engine, 0.22)
         self.assertEqual(p.aux_kwh_per_t, 100.0)
         self.assertEqual(p.target_moisture, 0.15)
 
@@ -240,16 +241,19 @@ class TestSimulateGasificationMoistureEffect(unittest.TestCase):
 
 class TestSimulateGasificationReference(unittest.TestCase):
     """Reference: 1000 kg/d, moisture=0.10, lhv_dry=15.0, ash_dry=0.08.
-    Params: cold_gas_efficiency=0.70, eta_engine=0.30, aux_kwh_per_t=100, target_moisture=0.15
+    Params: cold_gas_efficiency=0.70, eta_engine=0.22, aux_kwh_per_t=100, target_moisture=0.15
+
+    NOTE: eta_engine changed 0.30 → 0.22 (conservative placeholder, unsourced;
+          real values depend on feedstock and scale).
 
     moisture=0.10 < target=0.15  → no drying
     dry_kg_d            = 1000 * (1 - 0.10)           = 900.0 kg/d
     drying_kwh_d        = 0.0
     syngas_energy_kwh_d = 900 * 15.0 / 3.6 * 0.70    = 900 * 4.16667 * 0.70
                         = 900 * 2.91667 = 2625.0 kWh/d
-    e_gross_kwh_d       = 2625.0 * 0.30               = 787.5 kWh/d
+    e_gross_kwh_d       = 2625.0 * 0.22               = 577.5 kWh/d   (was 787.5 @ 0.30)
     aux_kwh_d           = 100 * 1000/1000              = 100.0 kWh/d
-    e_net_kwh_d         = 787.5 - 100.0 - 0.0         = 687.5 kWh/d
+    e_net_kwh_d         = 577.5 - 100.0 - 0.0         = 477.5 kWh/d   (was 687.5)
     char_kg_d           = 900 * 0.08 * 1.5            = 108.0 kg/d
     """
 
@@ -268,14 +272,16 @@ class TestSimulateGasificationReference(unittest.TestCase):
         self.assertAlmostEqual(self.r["syngas_energy_kwh_d"], expected, places=6)
 
     def test_e_gross_kwh_d(self):
-        expected = 900.0 * 15.0 / 3.6 * 0.70 * 0.30
+        # NOTE: eta_engine 0.30 → 0.22; 2625.0 * 0.22 = 577.5 kWh/d (was 787.5)
+        expected = 900.0 * 15.0 / 3.6 * 0.70 * 0.22
         self.assertAlmostEqual(self.r["e_gross_kwh_d"], expected, places=6)
 
     def test_aux_kwh_d(self):
         self.assertAlmostEqual(self.r["aux_kwh_d"], 100.0, places=6)
 
     def test_e_net_kwh_d(self):
-        expected = 900.0 * 15.0 / 3.6 * 0.70 * 0.30 - 100.0
+        # NOTE: eta_engine 0.30 → 0.22; 577.5 - 100.0 = 477.5 kWh/d (was 687.5)
+        expected = 900.0 * 15.0 / 3.6 * 0.70 * 0.22 - 100.0
         self.assertAlmostEqual(self.r["e_net_kwh_d"], expected, places=6)
 
     def test_char_kg_d(self):
@@ -456,8 +462,9 @@ class TestSimulatePyrolysisMoistureEffect(unittest.TestCase):
 
     def test_warn_when_e_net_nonpositive(self):
         # Very wet + extreme delta_t → huge process heat dominates product energy → e_net < 0
-        # dry_kg_d=450, product LHVs fixed (40/25/15 MJ/kg), product_energy≈3500 kWh/d
-        # process_heat = 450*1.5*20000/3600 + drying ≈ 3750+275=4025 > 3500 → e_net < 0
+        # NOTE: _LHV_OIL changed 40 → 25 MJ/kg; LHVs now (25/25/15 MJ/kg)
+        # dry_kg_d=450, product_energy = (450*0.4*25 + 450*0.3*25 + 450*0.3*15)/3.6 ≈ 2750 kWh/d
+        # process_heat = 450*1.5*20000/3600 + drying ≈ 3750+275=4025 > 2750 → e_net < 0
         fs = Feedstock(
             total_mass_kg_d=1000.0,
             organic_fraction=0.50, plastic_fraction=0.20,
@@ -478,18 +485,21 @@ class TestSimulatePyrolysisReference(unittest.TestCase):
     """Reference: 1000 kg/d, moisture=0.10, lhv_dry=15.0, ash_dry=0.08.
     Params: oil=0.40, char=0.30, gas=0.30, cp=1.5, dT=450, target_moisture=0.20
 
+    NOTE: _LHV_OIL changed 40 → 25 MJ/kg (conservative placeholder, unsourced;
+          real values depend on feedstock and scale).
+
     moisture=0.10 < target=0.20  → no drying
     dry_kg_d             = 1000 * 0.90                = 900.0 kg/d
     drying_kwh_d         = 0.0
     oil_kg_d             = 900 * 0.40                 = 360.0 kg/d
     char_kg_d            = 900 * 0.30                 = 270.0 kg/d
     gas_kg_d             = 900 * 0.30                 = 270.0 kg/d
-    product_energy_kwh_d = (360*40 + 270*25 + 270*15)/3.6
-                         = (14400 + 6750 + 4050)/3.6
-                         = 25200 / 3.6               = 7000.0 kWh/d
+    product_energy_kwh_d = (360*25 + 270*25 + 270*15)/3.6
+                         = (9000 + 6750 + 4050)/3.6
+                         = 19800 / 3.6               = 5500.0 kWh/d   (was 7000.0 @ LHV_OIL=40)
     process_heat_kwh_d   = 900 * 1.5 * 450 / 3600 + 0
                          = 607500 / 3600             = 168.75 kWh/d
-    e_net_energy_kwh_d   = 7000.0 - 168.75           = 6831.25 kWh/d
+    e_net_energy_kwh_d   = 5500.0 - 168.75           = 5331.25 kWh/d  (was 6831.25)
     """
 
     def setUp(self):
@@ -511,16 +521,17 @@ class TestSimulatePyrolysisReference(unittest.TestCase):
         self.assertAlmostEqual(self.r["gas_kg_d"], 270.0, places=6)
 
     def test_product_energy_kwh_d(self):
-        # (360*40 + 270*25 + 270*15)/3.6 = 25200/3.6 = 7000.0
-        self.assertAlmostEqual(self.r["product_energy_kwh_d"], 7000.0, places=6)
+        # NOTE: _LHV_OIL 40 → 25 MJ/kg; (360*25 + 270*25 + 270*15)/3.6 = 19800/3.6 = 5500.0
+        # (was (360*40 + 270*25 + 270*15)/3.6 = 25200/3.6 = 7000.0)
+        self.assertAlmostEqual(self.r["product_energy_kwh_d"], 5500.0, places=6)
 
     def test_process_heat_kwh_d(self):
-        # 900 * 1.5 * 450 / 3600 = 168.75
+        # 900 * 1.5 * 450 / 3600 = 168.75 (unchanged — no LHV dependency)
         self.assertAlmostEqual(self.r["process_heat_kwh_d"], 168.75, places=6)
 
     def test_e_net_energy_kwh_d(self):
-        # 7000.0 - 168.75 = 6831.25
-        self.assertAlmostEqual(self.r["e_net_energy_kwh_d"], 6831.25, places=6)
+        # NOTE: _LHV_OIL 40 → 25 MJ/kg; 5500.0 - 168.75 = 5331.25 (was 6831.25)
+        self.assertAlmostEqual(self.r["e_net_energy_kwh_d"], 5331.25, places=6)
 
 
 if __name__ == "__main__":

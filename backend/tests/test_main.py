@@ -68,9 +68,26 @@ def test_expected_routes_are_mounted():
         ("GET", "/parameters"),
         ("POST", "/simulations/{run_id}/uncertainty"),
         ("GET", "/validation/summary"),
-	("POST", "/api/v1/assistant/parse"),
-	("POST", "/api/v1/assistant/advise"),
-	("POST", "/api/v1/assistant/audit"),
+        ("POST", "/api/v1/assistant/parse"),
+        ("POST", "/api/v1/assistant/advise"),
+        ("POST", "/api/v1/assistant/audit"),
+
+        ("GET", "/weather"),
+        ("GET", "/facilities"),
+
+        ("GET", "/buyers"),
+
+        ("POST", "/vision/classify"),
+        ("POST", "/vision/advice"),
+
+        ("GET", "/pathways/catalog/{process_id}"),
+
+        ("GET", "/geocode"),
+
+        ("POST", "/pathways/explain"),
+
+        ("GET", "/recyclables/buyers"),
+        ("GET", "/recyclables/prices"),
     }
 
 

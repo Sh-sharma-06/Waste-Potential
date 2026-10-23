@@ -281,6 +281,61 @@ def _build_notes(
     }
 
 
+def _build_provenance(
+    sources: dict[str, str],
+    location_notes: Optional[dict[str, Any]],
+) -> dict[str, Any]:
+    """Serialisable provenance blob for every param field that drives status/notes.
+
+    Included in ``inputs["provenance"]`` before hashing so that two runs with
+    the same numbers but different provenance (e.g. ts_fraction=0.27 from the
+    Params default vs ts_fraction=0.27 derived from organic_moisture_fraction)
+    produce distinct audit hashes and are stored as separate runs.
+
+    Keys per field:
+        kind        — "estimated" / "measured" / "derived" / "request" / "override"
+        source_id   — stream source_id, or empty string when not from a stream
+        placeholder — True when the value is a placeholder, not site data
+        derived_from — the upstream stream field name when the value is derived,
+                       or empty string otherwise
+
+    Only fields recorded in ``sources`` are included; Params defaults that were
+    not set by the request or stream are omitted (they carry no provenance).
+    """
+    placeholder_fields: frozenset = frozenset(
+        location_notes["placeholder_fields"] if location_notes else []
+    )
+    derived: dict[str, Any] = (
+        location_notes.get("derived_fields", {}) if location_notes else {}
+    )
+    stream: dict[str, Any] = location_notes.get("stream", {}) if location_notes else {}
+
+    result: dict[str, Any] = {}
+    for field, source in sorted(sources.items()):
+        if source == "location_stream":
+            # Derive kind and source_id from the stream metadata.
+            stream_source_field = _STREAM_SOURCE_FIELD.get(field, field)
+            entry = stream.get(stream_source_field)
+            meta = entry.get("meta", {}) if isinstance(entry, dict) else {}
+            kind = meta.get("kind", "estimated")
+            source_id = meta.get("source_id", "")
+            derived_from = (
+                derived[field]["source_field"] if field in derived else ""
+            )
+        else:
+            kind = source          # "request" or "override"
+            source_id = ""
+            derived_from = ""
+
+        result[field] = {
+            "kind": kind,
+            "source_id": source_id,
+            "placeholder": field in placeholder_fields,
+            "derived_from": derived_from,
+        }
+    return result
+
+
 def run_simulation(req: SimRequest, store: Optional[RunStore] = None) -> SimResponse:
     """Run the non-ML simulation pipeline and store the completed run."""
     store = store if store is not None else get_run_store()
@@ -296,7 +351,12 @@ def run_simulation(req: SimRequest, store: Optional[RunStore] = None) -> SimResp
     for name, value in results.model_dump().items():
         _require_finite(f"result {name}", value)
 
+    # Build the inputs dict and embed provenance before hashing.
+    # inputs["provenance"] distinguishes runs with identical numbers but
+    # different origin (e.g. placeholder stream vs measured site data).
     inputs = req.model_dump(mode="json")
+    inputs["provenance"] = _build_provenance(sources, location_notes)
+
     params_dict = dataclasses.asdict(params)
     audit_hash = compute_audit_hash(
         inputs, params_dict, ENGINE_MODEL_VERSION, results.model_dump(mode="json")

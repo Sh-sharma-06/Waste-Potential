@@ -20,8 +20,9 @@ Design decisions:
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
+from .catalog_loader import load_catalog, scale_inputs
 from .compare import evaluate_pathways
 from .mc_compare import merge_mc_into_results, run_mc_compare
 from .schemas import PathwayCompareRequest, PathwayResult
@@ -59,11 +60,13 @@ def compare_pathways(request: PathwayCompareRequest) -> list[PathwayResult]:
             operator_overrides=request.operator_overrides,
         )
 
-        # 2 — Monte Carlo uncertainty pass
+        # 2 — Monte Carlo uncertainty pass (feasible set passed for optimality share)
+        feasible_pathways = {r.pathway for r in results if r.feasible}
         mc_results = run_mc_compare(
             request,
             region=request.region,
             operator_overrides=request.operator_overrides,
+            feasible_pathways=feasible_pathways,
         )
 
         # 3 — Merge MC stats into PathwayResult objects (warnings + status)
@@ -80,3 +83,31 @@ def compare_pathways(request: PathwayCompareRequest) -> list[PathwayResult]:
             status_code=500,
             detail=f"Unexpected pathway screening error: {exc}",
         ) from exc
+
+
+# ---------------------------------------------------------------------------
+# GET /catalog/{process_id}
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/catalog/{process_id}",
+    summary="Retrieve a scaled process catalog entry",
+    description=(
+        "Returns the catalog entry for *process_id* from "
+        "``docs/process_catalog_extra.json``, with numeric ``inputs`` values "
+        "scaled by ``waste_kg / 1000.0``. "
+        "Raises 404 if the process is not in the catalog."
+    ),
+)
+def get_catalog_entry(
+    process_id: str,
+    waste_kg: float = Query(default=1000.0, gt=0, description="Waste mass in kg (default 1000 kg = no scaling)."),
+) -> dict:
+    """GET /catalog/{process_id} — fetch and scale a process catalog entry."""
+    catalog = load_catalog()
+    if process_id not in catalog:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Process '{process_id}' not found in catalog.",
+        )
+    return scale_inputs(catalog[process_id], waste_kg)

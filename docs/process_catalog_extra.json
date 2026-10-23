@@ -1,0 +1,62 @@
+{
+  "anaerobic_digestion": {
+    "name": "Anaerobic Digestion",
+    "description": "Biological decomposition of organic matter in the absence of oxygen, producing biogas and digestate.",
+    "inputs": {
+      "organic_waste_kg": 1000.0,
+      "water_kg": 200.0,
+      "dilution_water_kg": 1700.0,
+      "electricity_kwh": 50.0,
+      "inoculum_kg": null
+    },
+    "outputs": {
+      "biogas_nm3": 47.0,
+      "digestate_kg": 850.0
+    },
+    "category": "biological"
+  },
+  "composting": {
+    "name": "Composting",
+    "description": "Aerobic biological decomposition of organic matter to produce a soil amendment.",
+    "inputs": {
+      "organic_waste_kg": 1000.0,
+      "bulking_agent_kg": 300.0,
+      "water_kg": 100.0
+    },
+    "outputs": {
+      "compost_kg": 400.0
+    },
+    "category": "biological"
+  },
+  "pyrolysis": {
+    "name": "Pyrolysis",
+    "description": "Thermal decomposition of organic material in the absence of oxygen, producing biochar, bio-oil, and syngas.",
+    "inputs": {
+      "dry_waste_kg": 1000.0,
+      "electricity_kwh": 80.0,
+      "heat_kwh": 120.0,
+      "catalyst_label": "none"
+    },
+    "outputs": {
+      "biochar_kg": 300.0,
+      "bio_oil_kg": 250.0,
+      "syngas_nm3": 180.0
+    },
+    "category": "thermal"
+  },
+  "incineration": {
+    "name": "Incineration",
+    "description": "Combustion of waste at high temperature with energy recovery.",
+    "inputs": {
+      "mixed_waste_kg": 1000.0,
+      "auxiliary_fuel_kg": 30.0,
+      "electricity_kwh": 20.0
+    },
+    "outputs": {
+      "electricity_kwh": 250.0,
+      "bottom_ash_kg": 200.0,
+      "fly_ash_kg": 30.0
+    },
+    "category": "thermal"
+  }
+}

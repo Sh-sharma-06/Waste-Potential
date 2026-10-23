@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Backend tests (Python 3.12)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run pytest
+        run: python -m pytest backend -q
+        # External services must not be called during CI.
+        # All tests that require network access or API keys must mock those
+        # calls. If a test genuinely requires a secret (no mock path exists),
+        # do not add a secret here — report it as a test gap instead.
+
+  golden-numbers:
+    name: Golden-number regression
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Check golden numbers
+        run: |
+          python - <<'EOF'
+          import sys
+          sys.path.insert(0, "backend")
+          from app.core_engine import Params, simulate
+
+          result = simulate(Params())
+
+          expected_e_net   = 76.74057020848
+          expected_biogas  = 47.0448
+          tol = 1e-6
+
+          errors = []
+
+          rel_e = abs(result.e_net_kwh_d - expected_e_net) / abs(expected_e_net)
+          if rel_e > tol:
+              errors.append(
+                  f"e_net_kwh_d: got {result.e_net_kwh_d}, "
+                  f"expected {expected_e_net}, rel_error {rel_e:.2e}"
+              )
+
+          rel_b = abs(result.biogas_nm3_d - expected_biogas) / abs(expected_biogas)
+          if rel_b > tol:
+              errors.append(
+                  f"biogas_nm3_d: got {result.biogas_nm3_d}, "
+                  f"expected {expected_biogas}, rel_error {rel_b:.2e}"
+              )
+
+          if errors:
+              for e in errors:
+                  print("FAIL:", e)
+              sys.exit(1)
+
+          print("OK  e_net_kwh_d  =", result.e_net_kwh_d)
+          print("OK  biogas_nm3_d =", result.biogas_nm3_d)
+          EOF

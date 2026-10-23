@@ -12,9 +12,11 @@ joblib
 google-genai
 python-dotenv
 
+# HTTP client (used by external API service clients)
+httpx>=0.25
+
 # ASGI server
 uvicorn[standard]
 
 # Test dependencies
 pytest
-httpx

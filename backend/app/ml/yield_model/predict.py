@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 import numpy as np
 
+from .feedstocks import FEEDSTOCK_NAMES, normalise_feedstock, MissingFeedstockError, UnknownFeedstockError
 from app.schemas.ml import YieldEstimate
 from app.ml.registry.store import ModelBundle, NoTrainedModelError, load_bundle
 
@@ -32,20 +33,25 @@ ILLUSTRATIVE_K: float = 0.8
 ILLUSTRATIVE_RESIDUAL_STD_LOG: float = 0.15
 
 
-class UnknownFeedstockError(Exception):
-    """Raised when an input feedstock has no fitted kinetic parameters in the model bundle."""
-    pass
 
 
-def _validate_inputs(feedstock: str, operating: Dict[str, Any]) -> Tuple[float, float, Optional[float], Optional[float]]:
+
+def _validate_inputs(operating: Dict[str, Any]) -> Tuple[float, float, Optional[float], Optional[float]]:
     """Validates input values for physical impossibility.
 
     Raises:
         ValueError: For physical impossibilities (hrt_days <= 0, olr <= 0, c_n <= 0,
                     or temperature_c outside [0, 100] C).
     """
-    if not isinstance(feedstock, str) or not feedstock.strip():
-        raise ValueError("feedstock must be a non-empty string")
+    # Feedstock validation moved to estimate() and estimate_illustrative_l1()
+
+    """Validates input values for physical impossibility.
+
+    Raises:
+        ValueError: For physical impossibilities (hrt_days <= 0, olr <= 0, c_n <= 0,
+                    or temperature_c outside [0, 100] C).
+    """
+    # Feedstock validation moved to estimate()
 
     hrt = operating.get("hrt_days")
     if hrt is None or float(hrt) <= 0:
@@ -115,16 +121,22 @@ def estimate(
         UnknownFeedstockError: If the feedstock was not present in the trained model.
         ValueError: For physically impossible input values.
     """
+    # Validate feedstock before loading bundle
+    fs_clean = normalise_feedstock(feedstock)  # raises MissingFeedstockError if blank or missing
+    if fs_clean not in FEEDSTOCK_NAMES:
+        raise UnknownFeedstockError(
+            f"Unknown feedstock '{feedstock}'. Supported: {list(FEEDSTOCK_NAMES)}"
+        )
+    # Load the model bundle if not provided
     if bundle is None:
         bundle = load_bundle(model_dir=model_dir)
-
-    hrt_val, temp_val, olr_val, cn_val = _validate_inputs(feedstock, operating)
-
-    fs_clean = feedstock.lower().strip()
+    # Verify the bundle contains data for the feedstock
     if fs_clean not in bundle.feedstocks_seen:
         raise UnknownFeedstockError(
-            f"Unknown feedstock '{feedstock}'. Known feedstocks in model: {bundle.feedstocks_seen}"
+            f"Feedstock '{feedstock}' is valid but the trained model has no data for it. Model sees: {bundle.feedstocks_seen}"
         )
+
+    hrt_val, temp_val, olr_val, cn_val = _validate_inputs(operating)
 
     # 1. Calculate L1 Kinetic Physics Yield
     kp = bundle.kinetic_params
@@ -234,9 +246,16 @@ def estimate_illustrative_l1(
     This function MUST only run when explicitly invoked by demo scenarios;
     it is NEVER used as an automatic fallback when bundles are missing.
     """
-    hrt_val, temp_val, _, _ = _validate_inputs(feedstock, operating)
+    # Feedstock validation (must come before operating validation)
+    fs_clean = normalise_feedstock(feedstock)  # raises MissingFeedstockError if blank or missing
+    if fs_clean not in FEEDSTOCK_NAMES:
+        raise UnknownFeedstockError(
+            f"Unknown feedstock '{feedstock}'. Supported: {list(FEEDSTOCK_NAMES)}"
+        )
+    # Operating validation
+    hrt_val, temp_val, _, _ = _validate_inputs(operating)
 
-    fs_clean = feedstock.lower().strip()
+    # Illustrative Y0 availability check
     if fs_clean not in ILLUSTRATIVE_Y0_NM3_PER_KG_VS:
         raise UnknownFeedstockError(
             f"Unknown illustrative feedstock '{feedstock}'. Available: {list(ILLUSTRATIVE_Y0_NM3_PER_KG_VS.keys())}"

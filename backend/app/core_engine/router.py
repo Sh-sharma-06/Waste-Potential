@@ -183,6 +183,10 @@ def run_uncertainty(
         ],
         distributions=mc["distributions"],
         assumptions_note=mc["assumptions_note"],
+        centred_on=mc.get("centred_on", {}),
+        fixed_inputs=mc.get("fixed_inputs", []),
+        recentred=mc.get("recentred", False),
+        clipped_samples=mc.get("clipped_samples", 0),
     )
 
 

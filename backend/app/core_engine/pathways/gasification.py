@@ -42,7 +42,8 @@ class GasificationParams:
         (cold-gas efficiency, dimensionless).  Default 0.70.
     eta_engine:
         Engine/turbine electrical efficiency applied to syngas energy.
-        Default 0.30.
+        Conservative placeholder, unsourced; real values depend on feedstock
+        and scale.  Default 0.22.
     aux_kwh_per_t:
         Parasitic electricity for fans, controls, gas clean-up, etc.
         (kWh per tonne wet input).  Default 100.
@@ -52,7 +53,8 @@ class GasificationParams:
     """
 
     cold_gas_efficiency: float = 0.70
-    eta_engine: float = 0.30
+    # conservative placeholder, unsourced; real values depend on feedstock and scale; status illustrative; source TBD
+    eta_engine: float = 0.22
     aux_kwh_per_t: float = 100.0
     target_moisture: float = 0.15
 
