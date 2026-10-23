@@ -384,10 +384,10 @@ class TestE2ESmoke:
     # Step 7 — GET /buyers
     # -----------------------------------------------------------------------
 
-    def test_step7_buyers_distance_km_present_no_price(self, e2e):
+    def test_step7_buyers_distance_km_present_no_price(self, e2e, monkeypatch):
         """Every buyer result must have distance_km; no price-related field allowed."""
+        monkeypatch.setattr("app.data.buyers.GOOGLE_PLACES_API_KEY", "test-api-key")
         price_fields = {"price", "tariff", "rate", "cost_per_unit", "unit_price"}
-
         with patch("app.data.buyers.httpx.post",
                    return_value=_httpx_ok(_PLACES_BUYER_HIT)), \
              patch("app.services.routing_client.httpx.post",

@@ -72,6 +72,99 @@
         }
       }
     },
+    "/pathways/catalog/{process_id}": {
+      "get": {
+        "tags": [
+          "Pathways Screening"
+        ],
+        "summary": "Retrieve a scaled process catalog entry",
+        "description": "Returns the catalog entry for *process_id* from ``docs/process_catalog_extra.json``, with numeric ``inputs`` values scaled by ``waste_kg / 1000.0``. Raises 404 if the process is not in the catalog.",
+        "operationId": "get_catalog_entry_pathways_catalog__process_id__get",
+        "parameters": [
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Process Id"
+            }
+          },
+          {
+            "name": "waste_kg",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Waste mass in kg (default 1000 kg = no scaling).",
+              "default": 1000.0,
+              "title": "Waste Kg"
+            },
+            "description": "Waste mass in kg (default 1000 kg = no scaling)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Catalog Entry Pathways Catalog  Process Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pathways/explain": {
+      "post": {
+        "tags": [
+          "Pathways Screening"
+        ],
+        "summary": "Explain why a pathway ranks where it does",
+        "description": "Return a short narrative explaining the ranking of a single pathway.\n\nGemini's answer is numerically grounded against a FACTS dict built\nserver-side from the matching PathwayResult row.  If any number invented\nby Gemini cannot be matched to FACTS within 1 %, the template is returned\ninstead.  API failures and missing keys also fall back to the template.",
+        "operationId": "explain_pathway_pathways_explain_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExplainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplainResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Pathway not found in the supplied results list."
+          }
+        }
+      }
+    },
     "/decision/optimize": {
       "post": {
         "tags": [
@@ -623,10 +716,520 @@
           }
         }
       }
+    },
+    "/weather": {
+      "get": {
+        "tags": [
+          "External Data"
+        ],
+        "summary": "Get current ambient weather for a location",
+        "description": "Return the latest hourly ambient temperature and relative humidity\nfrom Open-Meteo for the supplied coordinates.",
+        "operationId": "get_weather_weather_get",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "description": "Decimal latitude (−90 to 90).",
+              "title": "Lat"
+            },
+            "description": "Decimal latitude (−90 to 90)."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "description": "Decimal longitude (−180 to 180).",
+              "title": "Lon"
+            },
+            "description": "Decimal longitude (−180 to 180)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeatherResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Open-Meteo is unreachable or returned an error."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/facilities": {
+      "get": {
+        "tags": [
+          "External Data"
+        ],
+        "summary": "Search for nearby waste facilities via Google Places",
+        "description": "Return nearby waste treatment and recycling facilities from Google Places.",
+        "operationId": "get_facilities_facilities_get",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "description": "Decimal latitude of the site.",
+              "title": "Lat"
+            },
+            "description": "Decimal latitude of the site."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "description": "Decimal longitude of the site.",
+              "title": "Lon"
+            },
+            "description": "Decimal longitude of the site."
+          },
+          {
+            "name": "radius_m",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50000,
+              "minimum": 1,
+              "description": "Search radius in metres (1–50 000). Default 50 000 (50 km).",
+              "default": 50000,
+              "title": "Radius M"
+            },
+            "description": "Search radius in metres (1–50 000). Default 50 000 (50 km)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FacilityResponse"
+                  },
+                  "title": "Response Get Facilities Facilities Get"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Google Places is unreachable, the API key is missing / invalid, or the request was otherwise denied."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/geocode": {
+      "get": {
+        "tags": [
+          "Geocoding"
+        ],
+        "summary": "Geocode a postal code to lat/lng",
+        "description": "Convert a postal code to approximate lat/lng coordinates via Nominatim.\n\nFor India the pincode must be exactly 6 digits and must not start with 0.\nFor other countries a non-empty alphanumeric string of at most 10 characters\nis accepted.\n\nResults are cached in memory (24 h TTL, up to 500 entries).  Outbound calls\nare rate-limited to at most one per 1.1 s in compliance with Nominatim's\npublic-usage policy.",
+        "operationId": "geocode_geocode_get",
+        "parameters": [
+          {
+            "name": "pincode",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Postal / PIN code to geocode.",
+              "title": "Pincode"
+            },
+            "description": "Postal / PIN code to geocode."
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Country name (default: India).",
+              "default": "India",
+              "title": "Country"
+            },
+            "description": "Country name (default: India)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeocodeResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No result found for the given pincode and country."
+          },
+          "422": {
+            "description": "Pincode fails country-specific validation rules."
+          },
+          "503": {
+            "description": "Nominatim is unreachable, timed out, or returned an error."
+          }
+        }
+      }
+    },
+    "/buyers": {
+      "get": {
+        "tags": [
+          "Buyers"
+        ],
+        "summary": "Search for nearby buyers of a waste-derived product",
+        "description": "Return candidate buyers for a product near the supplied coordinates.\n\nEach result includes a name, place_id, coordinates, distance (road or\nstraight-line), and a data-quality note.  No price or tariff is included.",
+        "operationId": "get_buyers_buyers_get",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "description": "Decimal latitude of the waste source.",
+              "title": "Lat"
+            },
+            "description": "Decimal latitude of the waste source."
+          },
+          {
+            "name": "lng",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "description": "Decimal longitude of the waste source.",
+              "title": "Lng"
+            },
+            "description": "Decimal longitude of the waste source."
+          },
+          {
+            "name": "product",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Product to sell: electricity, fuel, compost, or cbg.",
+              "title": "Product"
+            },
+            "description": "Product to sell: electricity, fuel, compost, or cbg."
+          },
+          {
+            "name": "radius_km",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 200.0,
+              "minimum": 1.0,
+              "description": "Search radius in km (1–200). Default 50.",
+              "default": 50.0,
+              "title": "Radius Km"
+            },
+            "description": "Search radius in km (1–200). Default 50."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BuyerResult"
+                  },
+                  "title": "Response Get Buyers Buyers Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid product or out-of-range radius_km."
+          },
+          "503": {
+            "description": "Google Places or ORS is unreachable or denied."
+          }
+        }
+      }
+    },
+    "/vision/classify": {
+      "post": {
+        "tags": [
+          "Vision"
+        ],
+        "summary": "Classify waste from a photo",
+        "description": "Classify waste items in the uploaded image using Gemini vision.",
+        "operationId": "classify_waste_vision_classify_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_classify_waste_vision_classify_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassifyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "File too large, wrong MIME type, or bad upload."
+          },
+          "502": {
+            "description": "Gemini returned malformed JSON."
+          },
+          "503": {
+            "description": "Gemini key missing or API failure."
+          }
+        }
+      }
+    },
+    "/vision/advice": {
+      "post": {
+        "tags": [
+          "Vision"
+        ],
+        "summary": "Get disposal advice for classified waste items",
+        "description": "Return short, contextual waste-disposal guidance for the given sector.",
+        "operationId": "give_advice_vision_advice_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdviceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdviceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unknown sector."
+          },
+          "503": {
+            "description": "Gemini key missing or API failure."
+          }
+        }
+      }
+    },
+    "/recyclables/buyers": {
+      "get": {
+        "tags": [
+          "Recyclables"
+        ],
+        "summary": "Find nearby recyclers for a material",
+        "description": "Return nearby recyclers for the given material, sorted by distance.",
+        "operationId": "get_recycler_buyers_recyclables_buyers_get",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "description": "Decimal latitude of the waste source.",
+              "title": "Lat"
+            },
+            "description": "Decimal latitude of the waste source."
+          },
+          {
+            "name": "lng",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "description": "Decimal longitude of the waste source.",
+              "title": "Lng"
+            },
+            "description": "Decimal longitude of the waste source."
+          },
+          {
+            "name": "material",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Material type: plastic, glass, metal, or e_waste.",
+              "title": "Material"
+            },
+            "description": "Material type: plastic, glass, metal, or e_waste."
+          },
+          {
+            "name": "radius_km",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 200.0,
+              "minimum": 1.0,
+              "description": "Search radius in km (1–200). Default 50.",
+              "default": 50.0,
+              "title": "Radius Km"
+            },
+            "description": "Search radius in km (1–200). Default 50."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RecyclerResult"
+                  },
+                  "title": "Response Get Recycler Buyers Recyclables Buyers Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unknown material."
+          },
+          "503": {
+            "description": "Google Places or ORS unreachable."
+          }
+        }
+      }
+    },
+    "/recyclables/prices": {
+      "get": {
+        "tags": [
+          "Recyclables"
+        ],
+        "summary": "Get indicative scrap prices for a material",
+        "description": "Return indicative price ranges for the given material from the local CSV.",
+        "operationId": "get_prices_recyclables_prices_get",
+        "parameters": [
+          {
+            "name": "material",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Material type: plastic, glass, metal, or e_waste.",
+              "title": "Material"
+            },
+            "description": "Material type: plastic, glass, metal, or e_waste."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unknown material."
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AdviceRequest": {
+        "properties": {
+          "sector": {
+            "type": "string",
+            "enum": [
+              "urban",
+              "rural"
+            ],
+            "title": "Sector"
+          },
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sector",
+          "items"
+        ],
+        "title": "AdviceRequest"
+      },
+      "AdviceResponse": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "AdviceResponse"
+      },
       "AdvisorRequest": {
         "properties": {
           "question": {
@@ -674,6 +1277,21 @@
           "results"
         ],
         "title": "AuditRequest"
+      },
+      "Body_classify_waste_vision_classify_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "JPEG, PNG or WebP image, max 5 MB."
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_classify_waste_vision_classify_post"
       },
       "Body_marketplace_match_decision_marketplace_match_post": {
         "properties": {
@@ -778,6 +1396,63 @@
         ],
         "title": "BuyerProfileIn"
       },
+      "BuyerResult": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Display name of the buyer."
+          },
+          "place_id": {
+            "type": "string",
+            "title": "Place Id",
+            "description": "Unique Google Place ID."
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat",
+            "description": "Decimal latitude of the buyer."
+          },
+          "lng": {
+            "type": "number",
+            "title": "Lng",
+            "description": "Decimal longitude of the buyer."
+          },
+          "distance_km": {
+            "type": "number",
+            "title": "Distance Km",
+            "description": "Distance from the query origin in km."
+          },
+          "distance_basis": {
+            "type": "string",
+            "title": "Distance Basis",
+            "description": "'road' when computed by ORS, 'straight_line' on routing fallback."
+          },
+          "product": {
+            "type": "string",
+            "title": "Product",
+            "description": "Product type queried."
+          },
+          "data_quality": {
+            "type": "string",
+            "title": "Data Quality",
+            "description": "Data quality note."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "place_id",
+          "lat",
+          "lng",
+          "distance_km",
+          "distance_basis",
+          "product",
+          "data_quality"
+        ],
+        "title": "BuyerResult",
+        "description": "A single candidate buyer returned by the /buyers endpoint."
+      },
       "CarbonRequest": {
         "properties": {
           "waste_streams": {
@@ -870,6 +1545,42 @@
         ],
         "title": "CarbonResponse"
       },
+      "ClassifyResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WasteItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "stream": {
+            "type": "string",
+            "title": "Stream"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "disclaimer": {
+            "type": "string",
+            "title": "Disclaimer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "stream",
+          "model",
+          "timestamp",
+          "disclaimer"
+        ],
+        "title": "ClassifyResponse"
+      },
       "CostsResponse": {
         "properties": {
           "coefficients": {
@@ -901,6 +1612,72 @@
         ],
         "title": "ErrorBody",
         "description": "Standard error response body: {\"detail\": str}."
+      },
+      "ExplainRequest": {
+        "properties": {
+          "pathway": {
+            "type": "string",
+            "title": "Pathway",
+            "description": "Pathway identifier to explain."
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/PathwayRowInput"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Results",
+            "description": "List returned by POST /pathways/compare."
+          }
+        },
+        "type": "object",
+        "required": [
+          "pathway",
+          "results"
+        ],
+        "title": "ExplainRequest"
+      },
+      "ExplainResponse": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "grounded": {
+            "type": "boolean",
+            "title": "Grounded"
+          },
+          "unsupported_numbers": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Unsupported Numbers"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "facts": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Facts"
+          },
+          "disclaimer": {
+            "type": "string",
+            "title": "Disclaimer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "grounded",
+          "unsupported_numbers",
+          "source",
+          "facts",
+          "disclaimer"
+        ],
+        "title": "ExplainResponse"
       },
       "FacilityOutputIn": {
         "properties": {
@@ -934,6 +1711,98 @@
           "longitude"
         ],
         "title": "FacilityOutputIn"
+      },
+      "FacilityResponse": {
+        "properties": {
+          "place_id": {
+            "type": "string",
+            "title": "Place Id",
+            "description": "Unique Google Place ID."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Display name of the facility."
+          },
+          "vicinity": {
+            "type": "string",
+            "title": "Vicinity",
+            "description": "Short address / neighbourhood."
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude",
+            "description": "Decimal latitude."
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude",
+            "description": "Decimal longitude."
+          },
+          "types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Types",
+            "description": "Google place type labels."
+          }
+        },
+        "type": "object",
+        "required": [
+          "place_id",
+          "name",
+          "vicinity",
+          "latitude",
+          "longitude"
+        ],
+        "title": "FacilityResponse",
+        "description": "A single waste treatment / recycling facility returned by Google Places."
+      },
+      "GeocodeResponse": {
+        "properties": {
+          "lat": {
+            "type": "number",
+            "title": "Lat",
+            "description": "Decimal latitude."
+          },
+          "lng": {
+            "type": "number",
+            "title": "Lng",
+            "description": "Decimal longitude."
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name",
+            "description": "Human-readable location name from Nominatim."
+          },
+          "precision": {
+            "type": "string",
+            "title": "Precision",
+            "description": "Precision statement for the returned coordinates.",
+            "default": "postal-code area centroid, approximate"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "Data source and licence.",
+            "default": "OpenStreetMap Nominatim (ODbL)"
+          },
+          "cached": {
+            "type": "boolean",
+            "title": "Cached",
+            "description": "True if the result was served from the in-memory cache."
+          }
+        },
+        "type": "object",
+        "required": [
+          "lat",
+          "lng",
+          "display_name",
+          "cached"
+        ],
+        "title": "GeocodeResponse",
+        "description": "Geocoded location derived from a postal code."
       },
       "HTTPValidationError": {
         "properties": {
@@ -1467,6 +2336,12 @@
             "description": "Coefficient of variation applied to electricity yield in MC runs.",
             "default": 0.1
           },
+          "mc_seed": {
+            "type": "integer",
+            "title": "Mc Seed",
+            "description": "Random seed for reproducible Monte Carlo draws (default 42).",
+            "default": 42
+          },
           "region": {
             "anyOf": [
               {
@@ -1618,6 +2493,42 @@
             "type": "array",
             "title": "Warnings",
             "description": "Non-fatal caveats, e.g. parameter assumptions or data gaps."
+          },
+          "optimality_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optimality Share",
+            "description": "Fraction of MC runs in which this pathway had the highest annual net value among deterministically feasible pathways."
+          },
+          "win_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Win Count",
+            "description": "Number of MC runs in which this pathway was the winner."
+          },
+          "optimality_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optimality Note",
+            "description": "Explanatory note about the optimality share."
           }
         },
         "type": "object",
@@ -1628,6 +2539,157 @@
         ],
         "title": "PathwayResult",
         "description": "Screening result for a single evaluated pathway.\n\nFrontend contract — field names and types are fixed."
+      },
+      "PathwayRowInput": {
+        "properties": {
+          "pathway": {
+            "type": "string",
+            "title": "Pathway"
+          },
+          "feasible": {
+            "type": "boolean",
+            "title": "Feasible",
+            "default": true
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          },
+          "e_net_kwh_d": {
+            "type": "number",
+            "title": "E Net Kwh D",
+            "default": 0.0
+          },
+          "annual_net_value_inr": {
+            "type": "number",
+            "title": "Annual Net Value Inr",
+            "default": 0.0
+          },
+          "primary_product": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Product"
+          },
+          "energy_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy Basis"
+          },
+          "optimality_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optimality Share"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "pathway"
+        ],
+        "title": "PathwayRowInput",
+        "description": "Minimal projection of a PathwayResult sufficient for the explain endpoint.\n\nAll fields are optional so the caller can pass the raw compare response\nwithout filtering; unknown keys are ignored."
+      },
+      "PriceRowResponse": {
+        "properties": {
+          "material": {
+            "type": "string",
+            "title": "Material"
+          },
+          "sub_type": {
+            "type": "string",
+            "title": "Sub Type"
+          },
+          "price_inr_per_kg_low": {
+            "type": "number",
+            "title": "Price Inr Per Kg Low"
+          },
+          "price_inr_per_kg_high": {
+            "type": "number",
+            "title": "Price Inr Per Kg High"
+          },
+          "as_of": {
+            "type": "string",
+            "title": "As Of"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "region": {
+            "type": "string",
+            "title": "Region"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale"
+          }
+        },
+        "type": "object",
+        "required": [
+          "material",
+          "sub_type",
+          "price_inr_per_kg_low",
+          "price_inr_per_kg_high",
+          "as_of",
+          "source",
+          "region",
+          "stale"
+        ],
+        "title": "PriceRowResponse"
+      },
+      "PricesResponse": {
+        "properties": {
+          "prices": {
+            "items": {
+              "$ref": "#/components/schemas/PriceRowResponse"
+            },
+            "type": "array",
+            "title": "Prices"
+          },
+          "rows_skipped": {
+            "type": "integer",
+            "title": "Rows Skipped"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prices",
+          "rows_skipped",
+          "note"
+        ],
+        "title": "PricesResponse"
       },
       "ProductSpecIn": {
         "properties": {
@@ -1685,6 +2747,49 @@
           "direct_emission_factor"
         ],
         "title": "ProposedTechIn"
+      },
+      "RecyclerResult": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "place_id": {
+            "type": "string",
+            "title": "Place Id"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lng": {
+            "type": "number",
+            "title": "Lng"
+          },
+          "distance_km": {
+            "type": "number",
+            "title": "Distance Km"
+          },
+          "distance_basis": {
+            "type": "string",
+            "title": "Distance Basis"
+          },
+          "material": {
+            "type": "string",
+            "title": "Material"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "place_id",
+          "lat",
+          "lng",
+          "distance_km",
+          "distance_basis",
+          "material"
+        ],
+        "title": "RecyclerResult"
       },
       "RuleWarningModel": {
         "properties": {
@@ -2204,6 +3309,28 @@
           "assumptions_note": {
             "type": "string",
             "title": "Assumptions Note"
+          },
+          "centred_on": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Centred On"
+          },
+          "fixed_inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fixed Inputs"
+          },
+          "recentred": {
+            "type": "boolean",
+            "title": "Recentred",
+            "default": false
+          },
+          "clipped_samples": {
+            "type": "integer",
+            "title": "Clipped Samples",
+            "default": 0
           }
         },
         "additionalProperties": false,
@@ -2263,6 +3390,31 @@
         ],
         "title": "ValidationError"
       },
+      "WasteItem": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "category",
+          "confidence"
+        ],
+        "title": "WasteItem"
+      },
       "WasteStreamIn": {
         "properties": {
           "stream_id": {
@@ -2292,6 +3444,39 @@
           "baseline_type"
         ],
         "title": "WasteStreamIn"
+      },
+      "WeatherResponse": {
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "title": "Latitude",
+            "description": "Latitude echoed from Open-Meteo."
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude",
+            "description": "Longitude echoed from Open-Meteo."
+          },
+          "ambient_temp_c": {
+            "type": "number",
+            "title": "Ambient Temp C",
+            "description": "Air temperature at 2 m (°C)."
+          },
+          "relative_humidity": {
+            "type": "number",
+            "title": "Relative Humidity",
+            "description": "Relative humidity as a fraction [0, 1]."
+          }
+        },
+        "type": "object",
+        "required": [
+          "latitude",
+          "longitude",
+          "ambient_temp_c",
+          "relative_humidity"
+        ],
+        "title": "WeatherResponse",
+        "description": "Current ambient conditions at the requested coordinates."
       },
       "_SensitivityItem": {
         "properties": {
