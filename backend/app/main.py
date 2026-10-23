@@ -13,6 +13,7 @@ from app.core_engine.router import router as core_engine_router
 from app.data.buyers import router as buyers_router
 from app.decision.router import router as decision_router
 from app.errors import register_error_handlers
+from app.ml.router import router as ml_router
 from app.ml.vision_router import router as vision_router
 from app.pathways.explain_router import router as explain_router
 from app.recyclables.recyclables_router import router as recyclables_router
@@ -78,6 +79,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Recyclables: /recyclables/buyers, /recyclables/prices
     app.include_router(recyclables_router)
 
+    # ML yield model: /ml/yield, /ml/models
+    app.include_router(ml_router)
+    
     return app
 
 

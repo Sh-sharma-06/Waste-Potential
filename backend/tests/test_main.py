@@ -77,6 +77,8 @@ def test_expected_routes_are_mounted():
 
         ("POST", "/vision/classify"),
         ("POST", "/vision/advice"),
+        ("POST", "/ml/yield"),
+        ("GET", "/ml/models"),
 
         ("GET", "/pathways/catalog/{process_id}"),
 
