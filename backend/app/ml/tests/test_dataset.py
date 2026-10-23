@@ -93,7 +93,7 @@ class TestDataset(unittest.TestCase):
         self.assertAlmostEqual(row0["y_biogas_nm3_per_kg_vs"], 0.55, places=5)
         self.assertAlmostEqual(row0["y_ch4_nm3_per_kg_vs"], 0.33, places=5)
 
-        row1 = clean_df.iloc[1]  # crop, 0.44 per_ts, vs_of_ts=0.88 -> 0.44 / 0.88 = 0.50
+        row1 = clean_df.iloc[1]  # crop_residue, 0.44 per_ts, vs_of_ts=0.88 -> 0.44 / 0.88 = 0.50
         self.assertAlmostEqual(row1["y_biogas_nm3_per_kg_vs"], 0.50, places=5)
         self.assertAlmostEqual(row1["y_ch4_nm3_per_kg_vs"], 0.30, places=5)
 
@@ -182,6 +182,31 @@ class TestDataset(unittest.TestCase):
             self.assertTrue(pd.isna(clean_df.iloc[0]["carb_share"]))
             self.assertTrue(pd.isna(clean_df.iloc[0]["protein_share"]))
             self.assertTrue(pd.isna(clean_df.iloc[0]["lipid_share"]))
+        finally:
+            if os.path.exists(temp_csv):
+                os.remove(temp_csv)
+
+    def test_unknown_feedstock_label_is_dropped(self):
+        """A feedstock label outside food/manure/crop_residue/mixed is dropped as invalid_feedstock."""
+        raw_csv = (
+            "study_id,feedstock,yield_value,yield_basis,ts_fraction,vs_of_ts,ch4_fraction,temperature_c,hrt_days,olr,c_n,method,source\n"
+            "study_1,food,0.55,per_vs,,,0.60,37.0,30.0,3.5,25.0,CSTR,LabA\n"
+            # Everything is valid except the label: "crop" instead of "crop_residue".
+            "study_9,crop,0.44,per_ts,,0.88,0.60,38.0,25.0,2.0,30.0,BMP,LabI\n"
+        )
+        temp_csv = os.path.join(os.path.dirname(__file__), "fixtures", "temp_bad_feedstock.csv")
+        try:
+            with open(temp_csv, "w") as f:
+                f.write(raw_csv)
+            clean_df, report = load_bmp_dataset(temp_csv)
+            self.assertEqual(report.total_input_rows, 2)
+            self.assertEqual(report.clean_rows, 1)
+            self.assertEqual(report.dropped_count, 1)
+            # The bad row is row 1 and the reason names the invalid label.
+            self.assertIn(1, report.dropped_rows)
+            self.assertTrue(any("invalid_feedstock" in r for r in report.dropped_rows[1]))
+            # Only the valid row survives, with a normalised label.
+            self.assertEqual(list(clean_df["feedstock"]), ["food"])
         finally:
             if os.path.exists(temp_csv):
                 os.remove(temp_csv)

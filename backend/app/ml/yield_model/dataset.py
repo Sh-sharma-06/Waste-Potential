@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 from app.ml.yield_model.units import convert_to_vs_yield
+from app.ml.yield_model.feedstocks import normalise_feedstock, FEEDSTOCK_NAMES
 
 # Columns that define duplicate observations (keeping first occurrence)
 DUPLICATE_KEY_COLUMNS = [
@@ -125,11 +126,23 @@ def audit_bmp_dataframe(
     converted_ch4 = []
     clean_source_types = []
     clean_carbs = []
+    clean_feedstocks = []
     clean_proteins = []
     clean_lipids = []
 
     for idx, row in df.iterrows():
         i = int(idx)
+        # Validate feedstock label
+        raw_feedstock = row.get("feedstock")
+        try:
+            norm_feedstock = normalise_feedstock(str(raw_feedstock))
+            if norm_feedstock not in FEEDSTOCK_NAMES:
+                raise ValueError
+
+        except Exception:
+            dropped_reasons[i].append(f"invalid_feedstock:{raw_feedstock}")
+            category_counts["invalid_feedstock"] += 1
+            continue
 
         # Check source_type (optional: real | synthetic | unknown)
         st_raw = row.get("source_type")
@@ -298,6 +311,7 @@ def audit_bmp_dataframe(
                     clean_carbs.append(row_c)
                     clean_proteins.append(row_p)
                     clean_lipids.append(row_l)
+                    clean_feedstocks.append(norm_feedstock)
             except Exception as e:
                 dropped_reasons[i].append(f"conversion_failed_{str(e)}")
                 category_counts["conversion_failed"] += 1
@@ -309,7 +323,8 @@ def audit_bmp_dataframe(
     clean_df["basis"] = "per kg VS"
     clean_df["source_type"] = clean_source_types
 
-    # Only include composition columns if they were present in input or populated
+    clean_df["feedstock"] = clean_feedstocks
+# Only include composition columns if they were present in input or populated
     if ("carb_share" in df.columns) or any(pd.notna(clean_carbs)):
         clean_df["carb_share"] = clean_carbs
         clean_df["protein_share"] = clean_proteins
