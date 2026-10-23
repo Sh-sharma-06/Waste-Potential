@@ -19,13 +19,13 @@ INTERVAL_WIDENING_EXTRAPOLATION: float = 2.5
 
 # Default stoichiometric Buswell theoretical limits
 DEFAULT_BUSWELL_CH4_BOUND: float = 0.551  # Nm3 CH4 / kg VS
-DEFAULT_CH4_FRACTION: float = 0.60        # Volumetric fraction
+
 
 # Fixed illustrative parameters (for explicit illustrative mode only; never automatic)
 ILLUSTRATIVE_Y0_NM3_PER_KG_VS: Dict[str, float] = {
     "food": 0.85,
     "manure": 0.35,
-    "crop": 0.50,
+    "crop_residue": 0.50,
     "mixed": 0.65,
 }
 ILLUSTRATIVE_MU: float = 0.4
@@ -88,7 +88,8 @@ def estimate(
     bundle: Optional[ModelBundle] = None,
     model_dir: Optional[Union[str, Path]] = None,
     buswell_ch4_bound: float = DEFAULT_BUSWELL_CH4_BOUND,
-    ch4_fraction: float = DEFAULT_CH4_FRACTION
+    *,
+    ch4_fraction: float,
 ) -> YieldEstimate:
     """Computes hybrid yield prediction for a given feedstock and operating conditions.
 
@@ -106,7 +107,7 @@ def estimate(
          Note: This interval is an empirical spread estimate, NOT a 95% statistical guarantee.
 
     Args:
-        feedstock: Feedstock name (e.g. 'food', 'manure', 'crop', 'mixed').
+        feedstock: Feedstock name (e.g. 'food', 'manure', 'crop_residue', 'mixed').
         operating: Dictionary containing 'hrt_days', 'temperature_c', and optionally 'olr', 'c_n'.
         bundle: Optional pre-loaded ModelBundle instance. If None, loads from model_dir.
         model_dir: Optional path to model storage directory.
@@ -239,7 +240,8 @@ def estimate_illustrative_l1(
     feedstock: str,
     operating: Dict[str, Any],
     buswell_ch4_bound: float = DEFAULT_BUSWELL_CH4_BOUND,
-    ch4_fraction: float = DEFAULT_CH4_FRACTION
+    *,
+    ch4_fraction: float,
 ) -> YieldEstimate:
     """Explicit illustrative L1 physics calculation using fixed reference Y0 values.
 

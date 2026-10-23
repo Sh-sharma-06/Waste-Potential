@@ -10,12 +10,14 @@ from app.schemas.ml import YieldEstimate
 from app.ml.registry.store import ModelBundle, NoTrainedModelError, save_bundle
 from app.ml.yield_model.domain_guard import DomainGuard
 from app.ml.yield_model.predict import (
-    estimate,
-    estimate_illustrative_l1,
     UnknownFeedstockError,
     INTERVAL_WIDENING_EXTRAPOLATION,
     DEFAULT_BUSWELL_CH4_BOUND,
-    DEFAULT_CH4_FRACTION
+)
+from app.ml.tests._predict_compat import (
+    estimate,
+    estimate_illustrative_l1,
+    TEST_CH4_FRACTION as DEFAULT_CH4_FRACTION,
 )
 
 
@@ -308,12 +310,11 @@ def test_widened_interval_is_wider_for_same_request(synthetic_bundle):
 
 import pytest
 from app.ml.yield_model.predict import (
-    estimate,
-    estimate_illustrative_l1,
     MissingFeedstockError,
     UnknownFeedstockError,
     NoTrainedModelError,
 )
+from app.ml.tests._predict_compat import estimate, estimate_illustrative_l1
 from app.ml.yield_model.domain_guard import DomainGuard
 from app.ml.registry.store import ModelBundle, save_bundle
 from pathlib import Path

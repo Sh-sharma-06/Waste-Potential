@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from app.ml.registry.store import load_bundle
-from app.ml.yield_model.predict import estimate
+from app.ml.tests._predict_compat import estimate
 from app.ml.yield_model.train import (
     train_from_table,
     InsufficientDataError,
@@ -188,7 +188,8 @@ def test_l2_beats_l1_false_returns_l1_as_primary(tmp_path: Path):
     assert res.interval_low >= 0.0
     assert res.interval_low <= res.y_biogas_nm3_per_kg_vs <= res.interval_high
     # Ensure interval respects Buswell ceiling
-    from app.ml.yield_model.predict import DEFAULT_BUSWELL_CH4_BOUND, DEFAULT_CH4_FRACTION
+    from app.ml.yield_model.predict import DEFAULT_BUSWELL_CH4_BOUND
+    from app.ml.tests._predict_compat import TEST_CH4_FRACTION as DEFAULT_CH4_FRACTION
     ceiling = DEFAULT_BUSWELL_CH4_BOUND / DEFAULT_CH4_FRACTION
     assert res.interval_high <= ceiling + 1e-9
 
