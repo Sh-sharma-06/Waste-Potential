@@ -1,0 +1,2317 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Waste-Potential API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "Platform"
+        ],
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pathways/compare": {
+      "post": {
+        "tags": [
+          "Pathways Screening"
+        ],
+        "summary": "Screen and compare waste treatment pathways",
+        "description": "Runs a coarse feasibility screening pass followed by a Monte Carlo uncertainty analysis for each requested pathway. Returns one PathwayResult per pathway. Rejected pathways have feasible=False with populated reasons. Does NOT perform LP allocation — use POST /decision/optimize for strict physical allocation.",
+        "operationId": "compare_pathways_pathways_compare_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PathwayCompareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PathwayResult"
+                  },
+                  "type": "array",
+                  "title": "Response Compare Pathways Pathways Compare Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/decision/optimize": {
+      "post": {
+        "tags": [
+          "Decision Engine"
+        ],
+        "summary": "Optimize",
+        "description": "Run the LP allocation optimizer, then apply the Pareto filter.\n\nRaises HTTP 422 if:\n- The LP is infeasible (no valid allocation exists).\n- Weight triplets in pareto_weight_sweep do not each sum to 1.0.\n- Any key in compatibility_matrix or objective_coefficients is malformed.",
+        "operationId": "optimize_decision_optimize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptimizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptimizeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/decision/costs": {
+      "post": {
+        "tags": [
+          "Decision Engine"
+        ],
+        "summary": "Compute Costs",
+        "description": "Compute CRF-based annualised cost coefficients for a list of technologies.\n\nRaises HTTP 422 if any technology parameter violates physical constraints\n(e.g. capex < 0, throughput ≤ 0).",
+        "operationId": "compute_costs_decision_costs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/TechParamsIn"
+                },
+                "type": "array",
+                "title": "Technologies"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/decision/carbon/package": {
+      "post": {
+        "tags": [
+          "Decision Engine"
+        ],
+        "summary": "Carbon Package",
+        "description": "Compute itemized GHG delta for a proposed vs. baseline waste scenario.\n\nRaises HTTP 422 if:\n- IPCC boundary-matching rules are violated (BoundaryMismatchError).\n- An unknown baseline_type or emission factor key is supplied.\n- Any physical constraint on input values is violated.",
+        "operationId": "carbon_package_decision_carbon_package_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarbonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarbonResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/decision/marketplace/match": {
+      "post": {
+        "tags": [
+          "Decision Engine"
+        ],
+        "summary": "Marketplace Match",
+        "description": "Match a facility's product output to eligible buyers.\n\nRaises HTTP 422 if:\n- facility.available_volume ≤ 0.\n- Any buyer bid_price < 0.",
+        "operationId": "marketplace_match_decision_marketplace_match_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_marketplace_match_decision_marketplace_match_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketMatchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/simulations": {
+      "post": {
+        "tags": [
+          "Platform"
+        ],
+        "summary": "Run a simulation",
+        "description": "Identical requests return the same stored run (same id and audit_hash).",
+        "operationId": "create_simulation_simulations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (detail is a list), or the inputs cannot be simulated (detail is a string): missing waste mass, invalid or non-finite parameters, unsupported process, or use_ml_yield=true (ML yield not yet supported)."
+          }
+        }
+      }
+    },
+    "/runs": {
+      "get": {
+        "tags": [
+          "Platform"
+        ],
+        "summary": "List stored runs",
+        "operationId": "list_runs_runs_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Maximum runs to return.",
+              "default": 20,
+              "title": "Limit"
+            },
+            "description": "Maximum runs to return."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SimResponse"
+                  },
+                  "title": "Response List Runs Runs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "Platform"
+        ],
+        "summary": "Get a stored run",
+        "operationId": "get_run_runs__run_id__get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Run not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/parameters": {
+      "get": {
+        "summary": "List parameter registry entries",
+        "description": "Returns rows from docs/parameter_registry.csv. Pass `?status=illustrative_estimate` (or any status string) to filter.",
+        "operationId": "list_parameters_parameters_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ParameterEntryModel"
+                  },
+                  "title": "Response List Parameters Parameters Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/simulations/{run_id}/uncertainty": {
+      "post": {
+        "summary": "Monte Carlo uncertainty for a stored run",
+        "description": "Loads the stored run, rebuilds Params from run['params'], calls run_mc(params, n=..., seed=...) and returns the result. Returns 404 for an unknown run_id.",
+        "operationId": "run_uncertainty_simulations__run_id__uncertainty_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UncertaintyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UncertaintyResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/validation/summary": {
+      "get": {
+        "summary": "Parameter validation summary",
+        "description": "Returns parameter counts by status, number of unvalidated defaults, the fixed limitations list, and an empirical-validation placeholder.",
+        "operationId": "validation_summary_validation_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Validation Summary Validation Summary Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assistant/parse": {
+      "post": {
+        "tags": [
+          "AI Assistant"
+        ],
+        "summary": "Parse Waste",
+        "description": "Extract structured waste information from a free-form description.",
+        "operationId": "parse_waste_api_v1_assistant_parse_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assistant/advise": {
+      "post": {
+        "tags": [
+          "AI Assistant"
+        ],
+        "summary": "Advise",
+        "description": "Explain a question using context supplied by the caller.",
+        "operationId": "advise_api_v1_assistant_advise_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdvisorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assistant/audit": {
+      "post": {
+        "tags": [
+          "AI Assistant"
+        ],
+        "summary": "Audit",
+        "description": "Generate a narrative grounded in supplied results and limitations.",
+        "operationId": "audit_api_v1_assistant_audit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AdvisorRequest": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 5000,
+            "minLength": 3,
+            "title": "Question"
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "AdvisorRequest"
+      },
+      "AuditRequest": {
+        "properties": {
+          "results": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Results"
+          },
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assumptions"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Limitations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "title": "AuditRequest"
+      },
+      "Body_marketplace_match_decision_marketplace_match_post": {
+        "properties": {
+          "facility": {
+            "$ref": "#/components/schemas/FacilityOutputIn"
+          },
+          "buyers": {
+            "items": {
+              "$ref": "#/components/schemas/BuyerProfileIn"
+            },
+            "type": "array",
+            "title": "Buyers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "facility",
+          "buyers"
+        ],
+        "title": "Body_marketplace_match_decision_marketplace_match_post"
+      },
+      "BuyerMatchOut": {
+        "properties": {
+          "buyer_id": {
+            "type": "string",
+            "title": "Buyer Id"
+          },
+          "allocated_volume": {
+            "type": "number",
+            "title": "Allocated Volume"
+          },
+          "road_distance_km": {
+            "type": "number",
+            "title": "Road Distance Km"
+          },
+          "match_score": {
+            "type": "number",
+            "title": "Match Score"
+          },
+          "bid_price": {
+            "type": "number",
+            "title": "Bid Price"
+          }
+        },
+        "type": "object",
+        "required": [
+          "buyer_id",
+          "allocated_volume",
+          "road_distance_km",
+          "match_score",
+          "bid_price"
+        ],
+        "title": "BuyerMatchOut"
+      },
+      "BuyerProfileIn": {
+        "properties": {
+          "buyer_id": {
+            "type": "string",
+            "title": "Buyer Id"
+          },
+          "product_type": {
+            "type": "string",
+            "title": "Product Type"
+          },
+          "demand_volume": {
+            "type": "number",
+            "title": "Demand Volume"
+          },
+          "min_spec_thresholds": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Min Spec Thresholds"
+          },
+          "bid_price": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Bid Price"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude"
+          },
+          "max_road_distance_km": {
+            "type": "number",
+            "title": "Max Road Distance Km"
+          }
+        },
+        "type": "object",
+        "required": [
+          "buyer_id",
+          "product_type",
+          "demand_volume",
+          "bid_price",
+          "latitude",
+          "longitude"
+        ],
+        "title": "BuyerProfileIn"
+      },
+      "CarbonRequest": {
+        "properties": {
+          "waste_streams": {
+            "items": {
+              "$ref": "#/components/schemas/WasteStreamIn"
+            },
+            "type": "array",
+            "title": "Waste Streams"
+          },
+          "proposed_technologies": {
+            "items": {
+              "$ref": "#/components/schemas/ProposedTechIn"
+            },
+            "type": "array",
+            "title": "Proposed Technologies"
+          },
+          "allocation": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Allocation",
+            "description": "Flat dict: key = 'stream_id|tech_id', value = tonnes/year."
+          },
+          "include_transport": {
+            "type": "boolean",
+            "title": "Include Transport",
+            "default": true
+          },
+          "gwp_period": {
+            "type": "string",
+            "title": "Gwp Period",
+            "default": "GWP100"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "operator_overrides": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Operator Overrides"
+          }
+        },
+        "type": "object",
+        "required": [
+          "waste_streams",
+          "proposed_technologies",
+          "allocation"
+        ],
+        "title": "CarbonRequest"
+      },
+      "CarbonResponse": {
+        "properties": {
+          "total_delta": {
+            "type": "number",
+            "title": "Total Delta"
+          },
+          "baseline_total": {
+            "type": "number",
+            "title": "Baseline Total"
+          },
+          "proposed_total": {
+            "type": "number",
+            "title": "Proposed Total"
+          },
+          "breakdown": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Breakdown"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_delta",
+          "baseline_total",
+          "proposed_total",
+          "breakdown"
+        ],
+        "title": "CarbonResponse"
+      },
+      "CostsResponse": {
+        "properties": {
+          "coefficients": {
+            "items": {
+              "$ref": "#/components/schemas/LPCostCoeffOut"
+            },
+            "type": "array",
+            "title": "Coefficients"
+          }
+        },
+        "type": "object",
+        "required": [
+          "coefficients"
+        ],
+        "title": "CostsResponse"
+      },
+      "ErrorBody": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "Human-readable error message."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorBody",
+        "description": "Standard error response body: {\"detail\": str}."
+      },
+      "FacilityOutputIn": {
+        "properties": {
+          "facility_id": {
+            "type": "string",
+            "title": "Facility Id"
+          },
+          "product": {
+            "$ref": "#/components/schemas/ProductSpecIn"
+          },
+          "available_volume": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Available Volume"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude"
+          }
+        },
+        "type": "object",
+        "required": [
+          "facility_id",
+          "product",
+          "available_volume",
+          "latitude",
+          "longitude"
+        ],
+        "title": "FacilityOutputIn"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "environment"
+        ],
+        "title": "HealthResponse"
+      },
+      "LPCostCoeffOut": {
+        "properties": {
+          "tech_id": {
+            "type": "string",
+            "title": "Tech Id"
+          },
+          "cost_per_tonne": {
+            "type": "number",
+            "title": "Cost Per Tonne"
+          },
+          "gate_fee_per_tonne": {
+            "type": "number",
+            "title": "Gate Fee Per Tonne"
+          },
+          "electricity_revenue_per_tonne": {
+            "type": "number",
+            "title": "Electricity Revenue Per Tonne"
+          },
+          "grid_import_cost_per_tonne": {
+            "type": "number",
+            "title": "Grid Import Cost Per Tonne"
+          },
+          "net_cost_per_tonne": {
+            "type": "number",
+            "title": "Net Cost Per Tonne"
+          },
+          "cost_per_kwh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Per Kwh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tech_id",
+          "cost_per_tonne",
+          "gate_fee_per_tonne",
+          "electricity_revenue_per_tonne",
+          "grid_import_cost_per_tonne",
+          "net_cost_per_tonne",
+          "cost_per_kwh"
+        ],
+        "title": "LPCostCoeffOut"
+      },
+      "MarketMatchResponse": {
+        "properties": {
+          "facility_id": {
+            "type": "string",
+            "title": "Facility Id"
+          },
+          "total_available": {
+            "type": "number",
+            "title": "Total Available"
+          },
+          "total_allocated": {
+            "type": "number",
+            "title": "Total Allocated"
+          },
+          "remaining_volume": {
+            "type": "number",
+            "title": "Remaining Volume"
+          },
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/BuyerMatchOut"
+            },
+            "type": "array",
+            "title": "Matches"
+          },
+          "n_eligible_buyers": {
+            "type": "integer",
+            "title": "N Eligible Buyers"
+          },
+          "n_filtered_buyers": {
+            "type": "integer",
+            "title": "N Filtered Buyers"
+          },
+          "filter_reasons": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Filter Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "facility_id",
+          "total_available",
+          "total_allocated",
+          "remaining_volume",
+          "matches",
+          "n_eligible_buyers",
+          "n_filtered_buyers",
+          "filter_reasons"
+        ],
+        "title": "MarketMatchResponse"
+      },
+      "OptimizeRequest": {
+        "properties": {
+          "supply": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Supply",
+            "description": "stream_id (str) → available supply tonnes/year"
+          },
+          "capacity": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Capacity",
+            "description": "tech_id (str) → treatment capacity tonnes/year"
+          },
+          "compatibility_matrix": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Compatibility Matrix",
+            "description": "JSON-safe flat dict: key = 'stream_id|tech_id' (e.g. 'stream_1|tech_A'), value = 1 (compatible) or 0 (incompatible)."
+          },
+          "objective_coefficients": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Objective Coefficients",
+            "description": "Flat dict: key = 'stream_id|tech_id', value = pre-computed per-tonne LP objective coefficient."
+          },
+          "w_cost": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "W Cost",
+            "default": 1.0
+          },
+          "w_carbon": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "W Carbon",
+            "default": 0.0
+          },
+          "w_transport": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "W Transport",
+            "default": 0.0
+          },
+          "pareto_weight_sweep": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": {
+                    "type": "number"
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pareto Weight Sweep",
+            "description": "Optional list of weight dicts for a Pareto sweep. Each dict must contain w_cost, w_carbon, w_transport summing to 1.0."
+          }
+        },
+        "type": "object",
+        "required": [
+          "supply",
+          "capacity",
+          "compatibility_matrix",
+          "objective_coefficients"
+        ],
+        "title": "OptimizeRequest",
+        "description": "Request body for POST /optimize.\n\nsupply and capacity are flat dicts keyed by string IDs.\nComposite keys use the pipe '|' delimiter: 'stream_id|tech_id'."
+      },
+      "OptimizeResponse": {
+        "properties": {
+          "is_feasible": {
+            "type": "boolean",
+            "title": "Is Feasible"
+          },
+          "solver_status": {
+            "type": "string",
+            "title": "Solver Status"
+          },
+          "objective_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objective Value"
+          },
+          "allocation": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Allocation"
+          },
+          "pareto_front": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ParetoCandidateOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pareto Front"
+          },
+          "n_pareto": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Pareto"
+          }
+        },
+        "type": "object",
+        "required": [
+          "is_feasible",
+          "solver_status",
+          "objective_value",
+          "allocation"
+        ],
+        "title": "OptimizeResponse"
+      },
+      "ParameterEntryModel": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "mass_basis": {
+            "type": "string",
+            "title": "Mass Basis"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "uncertainty": {
+            "type": "string",
+            "title": "Uncertainty"
+          },
+          "model_version": {
+            "type": "string",
+            "title": "Model Version"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "value",
+          "unit",
+          "mass_basis",
+          "status",
+          "source",
+          "uncertainty",
+          "model_version",
+          "description"
+        ],
+        "title": "ParameterEntryModel",
+        "description": "One row of docs/parameter_registry.csv."
+      },
+      "ParetoCandidateOut": {
+        "properties": {
+          "scenario_id": {
+            "type": "string",
+            "title": "Scenario Id"
+          },
+          "norm_cost": {
+            "type": "number",
+            "title": "Norm Cost"
+          },
+          "norm_carbon": {
+            "type": "number",
+            "title": "Norm Carbon"
+          },
+          "norm_transport": {
+            "type": "number",
+            "title": "Norm Transport"
+          },
+          "composite_score": {
+            "type": "number",
+            "title": "Composite Score"
+          },
+          "raw_cost": {
+            "type": "number",
+            "title": "Raw Cost"
+          },
+          "raw_carbon": {
+            "type": "number",
+            "title": "Raw Carbon"
+          },
+          "raw_transport": {
+            "type": "number",
+            "title": "Raw Transport"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scenario_id",
+          "norm_cost",
+          "norm_carbon",
+          "norm_transport",
+          "composite_score",
+          "raw_cost",
+          "raw_carbon",
+          "raw_transport"
+        ],
+        "title": "ParetoCandidateOut"
+      },
+      "ParseRequest": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 5000,
+            "minLength": 3,
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "description"
+        ],
+        "title": "ParseRequest"
+      },
+      "PathwayCompareRequest": {
+        "properties": {
+          "farm_id": {
+            "type": "string",
+            "title": "Farm Id",
+            "description": "Unique identifier of the source farm / waste stream."
+          },
+          "waste_tpd": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Waste Tpd",
+            "description": "Available waste feedstock in tonnes per day."
+          },
+          "pathways": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Pathways",
+            "description": "Ordered list of pathway IDs to evaluate."
+          },
+          "capex_inr": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Capex Inr",
+            "description": "Total capital expenditure in INR per pathway."
+          },
+          "opex_inr_yr": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Opex Inr Yr",
+            "description": "Annual operating expenditure in INR per pathway."
+          },
+          "asset_life_yr": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Asset Life Yr",
+            "description": "Asset life in years per pathway (default: 20)."
+          },
+          "discount_rate": {
+            "type": "number",
+            "maximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Discount Rate",
+            "description": "Shared discount rate for CAPEX annualisation (default 7 %).",
+            "default": 0.07
+          },
+          "electricity_price_inr_kwh": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Electricity Price Inr Kwh",
+            "description": "INR per kWh for electricity export (revenue) or import (cost).",
+            "default": 0.0
+          },
+          "gate_fee_inr_t": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Gate Fee Inr T",
+            "description": "Tipping / gate fee received per tonne of waste (INR/tonne)."
+          },
+          "net_kwh_per_tonne": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Net Kwh Per Tonne",
+            "description": "Net kWh exported per tonne of waste processed (per pathway)."
+          },
+          "direct_ghg_kg_per_tonne": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Direct Ghg Kg Per Tonne",
+            "description": "Direct GHG emissions in kgCO2e per tonne processed."
+          },
+          "capacity_tpd": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Capacity Tpd",
+            "description": "Maximum treatment capacity in tonnes/day per pathway."
+          },
+          "distance_km": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Distance Km",
+            "description": "One-way road distance from the waste source to the facility (km).",
+            "default": 0.0
+          },
+          "max_distance_km": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Max Distance Km",
+            "description": "Hard upper-limit: pathways whose nearest facility exceeds this distance are rejected as infeasible (default 200 km).",
+            "default": 200.0
+          },
+          "mc_runs": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 10.0,
+            "title": "Mc Runs",
+            "description": "Number of Monte Carlo iterations for uncertainty quantification.",
+            "default": 500
+          },
+          "mc_cost_cv": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Mc Cost Cv",
+            "description": "Coefficient of variation applied to annualised cost in MC runs.",
+            "default": 0.15
+          },
+          "mc_yield_cv": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Mc Yield Cv",
+            "description": "Coefficient of variation applied to electricity yield in MC runs.",
+            "default": 0.1
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region",
+            "description": "ISO 3166-1 alpha-2 region code for regional grid emission factors."
+          },
+          "operator_overrides": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Operator Overrides",
+            "description": "Operator-supplied emission factor overrides (factor_key → kgCO2e/unit)."
+          },
+          "location_id": {
+            "type": "string",
+            "title": "Location Id",
+            "description": "Site identifier used to look up feedstock and location context from the P3 data service layer.",
+            "default": "default"
+          },
+          "crop_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Type",
+            "description": "Crop type for ML-based yield prediction via YieldPredictor. When provided together with area_ha, overrides waste_tpd with the predicted daily biomass."
+          },
+          "area_ha": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area Ha",
+            "description": "Cultivated area in hectares. Required when crop_type is set."
+          },
+          "soil_index": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soil Index",
+            "description": "Soil quality index in [0, 1]. Used by YieldPredictor when crop_type and area_ha are provided (default 0.75 if omitted)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "farm_id",
+          "waste_tpd",
+          "pathways"
+        ],
+        "title": "PathwayCompareRequest",
+        "description": "Request body for POST /pathways/compare.\n\nAll monetary values are in INR (Indian Rupees) to align with the India\npilot farm context. Energy in kWh. Mass in tonnes."
+      },
+      "PathwayResult": {
+        "properties": {
+          "pathway": {
+            "type": "string",
+            "title": "Pathway",
+            "description": "Pathway identifier (mirrors request)."
+          },
+          "feasible": {
+            "type": "boolean",
+            "title": "Feasible",
+            "description": "True iff the pathway passed all coarse checks."
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "description": "Rejection reasons (populated when feasible=False)."
+          },
+          "outputs": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Outputs",
+            "description": "Key technical outputs, e.g. {'biogas_m3_d': 420.0, 'compost_t_d': 2.1}."
+          },
+          "revenue_inr_y": {
+            "type": "number",
+            "title": "Revenue Inr Y",
+            "description": "Estimated annual revenue in INR.",
+            "default": 0.0
+          },
+          "cost_inr_y": {
+            "type": "number",
+            "title": "Cost Inr Y",
+            "description": "Estimated annual cost in INR (annualised CAPEX + OPEX).",
+            "default": 0.0
+          },
+          "annual_net_value_inr": {
+            "type": "number",
+            "title": "Annual Net Value Inr",
+            "description": "Net annual value: revenue_inr_y − cost_inr_y.",
+            "default": 0.0
+          },
+          "e_net_kwh_d": {
+            "type": "number",
+            "title": "E Net Kwh D",
+            "description": "Net kWh/day exported (negative = net electricity consumer).",
+            "default": 0.0
+          },
+          "model_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Status",
+            "description": "Optional status tag from the ML model or simulation engine, e.g. 'converged', 'fallback', 'extrapolated'."
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "One of: 'feasible', 'rejected', 'uncertain'."
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "description": "Non-fatal caveats, e.g. parameter assumptions or data gaps."
+          }
+        },
+        "type": "object",
+        "required": [
+          "pathway",
+          "feasible",
+          "status"
+        ],
+        "title": "PathwayResult",
+        "description": "Screening result for a single evaluated pathway.\n\nFrontend contract — field names and types are fixed."
+      },
+      "ProductSpecIn": {
+        "properties": {
+          "product_type": {
+            "type": "string",
+            "title": "Product Type"
+          },
+          "parameters": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Parameters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_type"
+        ],
+        "title": "ProductSpecIn"
+      },
+      "ProposedTechIn": {
+        "properties": {
+          "tech_id": {
+            "type": "string",
+            "title": "Tech Id"
+          },
+          "direct_emission_factor": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Direct Emission Factor"
+          },
+          "net_electricity_kwh_per_tonne": {
+            "type": "number",
+            "title": "Net Electricity Kwh Per Tonne",
+            "default": 0.0
+          },
+          "aux_energy_kwh_per_tonne": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Aux Energy Kwh Per Tonne",
+            "default": 0.0
+          },
+          "distances_to_facility_km": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Distances To Facility Km"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tech_id",
+          "direct_emission_factor"
+        ],
+        "title": "ProposedTechIn"
+      },
+      "RuleWarningModel": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "stage": {
+            "type": "string",
+            "title": "Stage"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "basis": {
+            "type": "string",
+            "title": "Basis"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "stage",
+          "message",
+          "basis"
+        ],
+        "title": "RuleWarningModel",
+        "description": "Mirrors risk_rules.RuleWarning."
+      },
+      "SimRequest": {
+        "properties": {
+          "process": {
+            "type": "string",
+            "title": "Process",
+            "default": "anaerobic_digestion"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "waste_mass_kg_day": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waste Mass Kg Day"
+          },
+          "organic_fraction": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organic Fraction"
+          },
+          "suitable_fraction": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suitable Fraction"
+          },
+          "use_ml_yield": {
+            "type": "boolean",
+            "title": "Use Ml Yield",
+            "default": false
+          },
+          "operating": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operating"
+          },
+          "overrides": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Overrides"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SimRequest",
+        "description": "Incoming simulation request."
+      },
+      "SimResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "inputs": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Inputs"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params"
+          },
+          "results": {
+            "$ref": "#/components/schemas/SimResults"
+          },
+          "notes": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Notes"
+          },
+          "model_version": {
+            "type": "string",
+            "title": "Model Version"
+          },
+          "audit_hash": {
+            "type": "string",
+            "title": "Audit Hash"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "defaults_used_unvalidated": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Defaults Used Unvalidated"
+          },
+          "warnings_detail": {
+            "items": {
+              "$ref": "#/components/schemas/RuleWarningModel"
+            },
+            "type": "array",
+            "title": "Warnings Detail"
+          },
+          "missing_inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Inputs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "inputs",
+          "params",
+          "results",
+          "model_version",
+          "audit_hash",
+          "status",
+          "defaults_used_unvalidated"
+        ],
+        "title": "SimResponse",
+        "description": "Full simulation response envelope."
+      },
+      "SimResults": {
+        "properties": {
+          "organic_kg_d": {
+            "type": "number",
+            "title": "Organic Kg D"
+          },
+          "suitable_kg_d": {
+            "type": "number",
+            "title": "Suitable Kg D"
+          },
+          "rejected_kg_d": {
+            "type": "number",
+            "title": "Rejected Kg D"
+          },
+          "water_added_kg_d": {
+            "type": "number",
+            "title": "Water Added Kg D"
+          },
+          "feed_kg_d": {
+            "type": "number",
+            "title": "Feed Kg D"
+          },
+          "vs_kg_d": {
+            "type": "number",
+            "title": "Vs Kg D"
+          },
+          "biogas_kg_d": {
+            "type": "number",
+            "title": "Biogas Kg D"
+          },
+          "digestate_kg_d": {
+            "type": "number",
+            "title": "Digestate Kg D"
+          },
+          "digester_m3": {
+            "type": "number",
+            "title": "Digester M3"
+          },
+          "biogas_nm3_d": {
+            "type": "number",
+            "title": "Biogas Nm3 D"
+          },
+          "ch4_nm3_d": {
+            "type": "number",
+            "title": "Ch4 Nm3 D"
+          },
+          "ch4_nm3_per_kg_vs": {
+            "type": "number",
+            "title": "Ch4 Nm3 Per Kg Vs"
+          },
+          "buswell_bound": {
+            "type": "number",
+            "title": "Buswell Bound"
+          },
+          "vs_destruction": {
+            "type": "number",
+            "title": "Vs Destruction"
+          },
+          "mass_residual_kg": {
+            "type": "number",
+            "title": "Mass Residual Kg"
+          },
+          "e_chem_kwh_d": {
+            "type": "number",
+            "title": "E Chem Kwh D"
+          },
+          "flared_kwh_d": {
+            "type": "number",
+            "title": "Flared Kwh D"
+          },
+          "q_demand_kwh_d": {
+            "type": "number",
+            "title": "Q Demand Kwh D"
+          },
+          "q_feed_kwh_d": {
+            "type": "number",
+            "title": "Q Feed Kwh D"
+          },
+          "q_loss_kwh_d": {
+            "type": "number",
+            "title": "Q Loss Kwh D"
+          },
+          "boiler_chem_kwh_d": {
+            "type": "number",
+            "title": "Boiler Chem Kwh D"
+          },
+          "chp_chem_kwh_d": {
+            "type": "number",
+            "title": "Chp Chem Kwh D"
+          },
+          "e_gross_kwh_d": {
+            "type": "number",
+            "title": "E Gross Kwh D"
+          },
+          "aux_kwh_d": {
+            "type": "number",
+            "title": "Aux Kwh D"
+          },
+          "e_net_kwh_d": {
+            "type": "number",
+            "title": "E Net Kwh D"
+          },
+          "heat_surplus_kwh_d": {
+            "type": "number",
+            "title": "Heat Surplus Kwh D"
+          },
+          "heat_deficit": {
+            "type": "boolean",
+            "title": "Heat Deficit"
+          },
+          "out_of_range_inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Out Of Range Inputs"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "organic_kg_d",
+          "suitable_kg_d",
+          "rejected_kg_d",
+          "water_added_kg_d",
+          "feed_kg_d",
+          "vs_kg_d",
+          "biogas_kg_d",
+          "digestate_kg_d",
+          "digester_m3",
+          "biogas_nm3_d",
+          "ch4_nm3_d",
+          "ch4_nm3_per_kg_vs",
+          "buswell_bound",
+          "vs_destruction",
+          "mass_residual_kg",
+          "e_chem_kwh_d",
+          "flared_kwh_d",
+          "q_demand_kwh_d",
+          "q_feed_kwh_d",
+          "q_loss_kwh_d",
+          "boiler_chem_kwh_d",
+          "chp_chem_kwh_d",
+          "e_gross_kwh_d",
+          "aux_kwh_d",
+          "e_net_kwh_d",
+          "heat_surplus_kwh_d",
+          "heat_deficit",
+          "out_of_range_inputs",
+          "warnings",
+          "status"
+        ],
+        "title": "SimResults",
+        "description": "All keys returned by engine.simulate()."
+      },
+      "TechParamsIn": {
+        "properties": {
+          "tech_id": {
+            "type": "string",
+            "title": "Tech Id"
+          },
+          "capex": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Capex"
+          },
+          "opex_annual": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Opex Annual"
+          },
+          "throughput_tonnes_yr": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Throughput Tonnes Yr"
+          },
+          "net_electricity_kwh_yr": {
+            "type": "number",
+            "title": "Net Electricity Kwh Yr",
+            "default": 0.0
+          },
+          "gate_fee_per_tonne": {
+            "type": "number",
+            "title": "Gate Fee Per Tonne",
+            "default": 0.0
+          },
+          "discount_rate": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discount Rate"
+          },
+          "asset_life_years": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Life Years"
+          },
+          "grid_import_price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Import Price"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tech_id",
+          "capex",
+          "opex_annual",
+          "throughput_tonnes_yr"
+        ],
+        "title": "TechParamsIn"
+      },
+      "UncertaintyRequest": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "maximum": 20000.0,
+            "minimum": 10.0,
+            "title": "N",
+            "default": 2000
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed",
+            "default": 42
+          },
+          "distribution_overrides": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distribution Overrides"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "UncertaintyRequest",
+        "description": "Parameters for a Monte Carlo uncertainty run.\n\nAttributes\n----------\nn:\n    Number of Monte Carlo iterations [dimensionless]. Must be 10–20 000.\nseed:\n    Random seed for reproducibility.\ndistribution_overrides:\n    Optional dict mapping Params field names to distribution-spec dicts.\n    Each spec must have at least ``\"kind\"`` and ``\"args\"`` keys (matching\n    the ``Dist`` dataclass in montecarlo.py). When None the engine uses\n    ``montecarlo.default_dists()``."
+      },
+      "UncertaintyResult": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "title": "N"
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed"
+          },
+          "median": {
+            "type": "number",
+            "title": "Median"
+          },
+          "p2_5": {
+            "type": "number",
+            "title": "P2 5"
+          },
+          "p97_5": {
+            "type": "number",
+            "title": "P97 5"
+          },
+          "p_net_nonpositive": {
+            "type": "number",
+            "title": "P Net Nonpositive"
+          },
+          "runs_with_warnings": {
+            "type": "integer",
+            "title": "Runs With Warnings"
+          },
+          "sensitivity": {
+            "items": {
+              "$ref": "#/components/schemas/_SensitivityItem"
+            },
+            "type": "array",
+            "title": "Sensitivity"
+          },
+          "distributions": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Distributions"
+          },
+          "assumptions_note": {
+            "type": "string",
+            "title": "Assumptions Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "seed",
+          "median",
+          "p2_5",
+          "p97_5",
+          "p_net_nonpositive",
+          "runs_with_warnings",
+          "sensitivity",
+          "distributions",
+          "assumptions_note"
+        ],
+        "title": "UncertaintyResult",
+        "description": "Mirrors the dict returned by montecarlo.run_mc()."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WasteStreamIn": {
+        "properties": {
+          "stream_id": {
+            "type": "string",
+            "title": "Stream Id"
+          },
+          "supply_tonnes_yr": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Supply Tonnes Yr"
+          },
+          "baseline_type": {
+            "type": "string",
+            "title": "Baseline Type"
+          },
+          "distance_to_baseline_km": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Distance To Baseline Km",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "stream_id",
+          "supply_tonnes_yr",
+          "baseline_type"
+        ],
+        "title": "WasteStreamIn"
+      },
+      "_SensitivityItem": {
+        "properties": {
+          "input": {
+            "type": "string",
+            "title": "Input"
+          },
+          "abs_spearman": {
+            "type": "number",
+            "title": "Abs Spearman"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "input",
+          "abs_spearman"
+        ],
+        "title": "_SensitivityItem"
+      }
+    }
+  }
+}
