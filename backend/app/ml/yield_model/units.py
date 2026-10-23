@@ -18,6 +18,21 @@ class ConvertedYield:
     y_ch4_nm3_per_kg_vs: float
     basis: str = "per kg VS"
 
+def ch4_to_biogas(y_ch4: float, ch4_fraction: float) -> float:
+    """Convert a methane yield to a biogas yield: y_biogas = y_ch4 / ch4_fraction.
+
+    The single place where methane is converted to biogas. There is deliberately
+    no default: the caller supplies the fraction (request value, or
+    Params().ch4_fraction at the API layer).
+
+    Raises:
+        ValueError: if ch4_fraction is not in (0, 1] or y_ch4 is negative or NaN.
+    """
+    if not (0.0 < ch4_fraction <= 1.0):
+        raise ValueError(f"ch4_fraction must be in (0, 1.0], got {ch4_fraction}")
+    if not (y_ch4 >= 0.0):
+        raise ValueError(f"y_ch4 must be non-negative, got {y_ch4}")
+    return y_ch4 / ch4_fraction
 
 def convert_to_vs_yield(
     yield_value: float,
@@ -93,7 +108,7 @@ def convert_to_vs_yield(
         y_ch4 = y_biogas * ch4_fraction
     elif gas_type.lower() == "ch4":
         y_ch4 = y_norm
-        y_biogas = y_ch4 / ch4_fraction
+        y_biogas = ch4_to_biogas(y_ch4, ch4_fraction)
     else:
         raise ValueError(f"Unrecognized gas_type: '{gas_type}'. Must be 'biogas' or 'ch4'.")
 
