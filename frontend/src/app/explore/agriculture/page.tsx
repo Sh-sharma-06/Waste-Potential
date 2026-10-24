@@ -46,6 +46,7 @@ interface Detection {
 type PipelineStage = "idle" | "detecting" | "advising" | "complete" | "error";
 
 export default function AgricultureWasteClassifierPage() {
+  const router = useRouter();
   const [pin] = useState<string>(() => {
     try {
       return localStorage.getItem("wp_location") || "110001";
@@ -772,4 +773,22 @@ export default function AgricultureWasteClassifierPage() {
       </div>
     </main>
   );
+}
+
+
+import { useRouter } from "next/navigation"; // Add to your imports at the top
+
+// Inside your main function:
+const router = useRouter();
+
+// Below your Gemini Advice section:
+{
+  detectedItem && (
+    <button
+      onClick={() => router.push(`/market/energy?pincode=324005&output=${encodeURIComponent(detectedItem)}&mass=1000`)}
+      className="mt-6 w-full py-3 bg-green-500 text-[#070a0f] font-bold rounded-lg hover:bg-green-400 transition-all shadow-[0_0_15px_rgba(74,222,128,0.4)]"
+    >
+      Find Industrial Buyers for {detectedItem}
+    </button>
+  )
 }

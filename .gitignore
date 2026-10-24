@@ -28,3 +28,6 @@ Thumbs.db
 
 # TypeScript generated files
 frontend/tsconfig.tsbuildinfo
+
+# Ignore local ML models
+*.safetensors
