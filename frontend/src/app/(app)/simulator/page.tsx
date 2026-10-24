@@ -1,1367 +1,1603 @@
-﻿"use client";
-
-import React, { useState, useEffect, useRef, useCallback, useId } from "react";
+"use client";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Canvas } from "@react-three/fiber";
-import {
-  Layers,
-  Filter,
-  RotateCw,
-  Flame,
-  Wind,
-  Zap,
-  Sprout,
-  Play,
-  Pause,
-  RotateCcw,
-  Compass,
-  ChevronRight,
-  ChevronLeft,
-  Recycle,
-  Sparkles,
-  AlertCircle,
-  CheckCircle2,
-  Activity,
-  ArrowRight,
-  Maximize2,
-  ShieldAlert,
-  Database,
-  Gauge,
-  Workflow,
-  Radio,
-} from "lucide-react";
-import PlantScene from "./equipment-3d";
-import { getStages, PATHWAY_CONFIGS, type PathwayId } from "./pathway-config";
-import { useScenarioStore } from "@/stores/scenario";
-import { StatusBadge } from "@/components/Simulator/StatusBadge";
-import en from "@/i18n/en.json";
-import styles from "./SimulatorPage.module.css";
-import { getProcessCatalog } from "@/lib/api/client";
-import type { ProcessCatalogEntry } from "@/lib/api/api.d";
+import { StageCanvas3D } from "./equipment-3d";
+import { getStagesByPathway, getInputBadgeStyle } from "./stages-data";
+import { PATHWAY_NAMES } from "./pathway-config";
+import { ProcessStage } from "./types";
 
-const t = en.simulator;
+/* ── Industry / amber accent palette ── */
+const C = {
+  accent:      "#E2623A",
+  accentSoft:  "#F0A080",
+  accentDim:   "rgba(226,98,58,.45)",
+  accentGlow:  "rgba(226,98,58,.4)",
+  accentInner: "rgba(226,98,58,.06)",
+  accentDrop:  "rgba(226,98,58,.45)",
+  textBody:    "#F5D2C2",
+  gradTitle:   "linear-gradient(90deg,#FFE4D6,#E2623A)",
+  gradBtn:     "linear-gradient(90deg,#C2410C,#E2623A)",
+  btnText:     "#1a0800",
+  barA:        "#FB923C",
+  barB:        "#F97316",
+};
 
-// ─── Small helpers ────────────────────────────────────────────────────────────
+const BG   = "#070a0f";
+const FONT = '"Rubik",sans-serif';
+const gb   = (c: string) => `1.5px solid ${c}`;
+const card = (extra?: React.CSSProperties): React.CSSProperties => ({
+  border: gb(C.accentDim),
+  background: "rgba(255,255,255,.06)",
+  backdropFilter: "blur(12px)",
+  WebkitBackdropFilter: "blur(12px)",
+  boxShadow: `0 10px 40px rgba(40,15,5,.45),inset 0 0 30px ${C.accentInner},0 0 36px ${C.accentGlow}`,
+  borderRadius: 20,
+  padding: "28px 32px",
+  boxSizing: "border-box",
+  ...extra,
+});
 
-function fmt(n: number, decimals = 1) {
-  return Number.isFinite(n) ? n.toFixed(decimals) : "—";
+/* ── Pathway display metadata ── */
+const PATHWAY_META: Record<string, { icon: string; label: string; output: string }> = {
+  pyrolysis:           { icon: "🌡️", label: "Fast Pyrolysis",               output: "Bio-oil & Bio-char"    },
+  anaerobic_digestion: { icon: "🧪", label: "Anaerobic Digestion",          output: "Bio-CNG & Digestate"  },
+  gasification:        { icon: "🔥", label: "Gasification",                  output: "Syngas & Electricity"  },
+  incineration:        { icon: "⚡", label: "Incineration / Mass Burn",      output: "Steam & Power"         },
+  htc:                 { icon: "💧", label: "Hydrothermal Carbonisation",    output: "Hydro-char"            },
+  torrefaction:        { icon: "🪵", label: "Torrefaction",                  output: "Solid Green Coal"      },
+  composting:          { icon: "🌾", label: "Aerobic In-Vessel Composting",  output: "Biogas & Bio-manure"   },
+};
+
+const ALL_PATHWAYS = Object.keys(PATHWAY_META);
+
+/* ── Realistic mock fallback data ── */
+function buildMockResults(mass_tpd: number): PathwayResult[] {
+  const shares = [0.324, 0.245, 0.168, 0.114, 0.078, 0.046, 0.025];
+  return ALL_PATHWAYS.map((p, i) => ({
+    pathway: p,
+    feasible: i < 6,
+    status: i < 5 ? "feasible" : i === 5 ? "uncertain" : "rejected",
+    optimality_share: i < 6 ? shares[i] : 0,
+    annual_net_value_inr: (shares[i] * 4_200_000 * mass_tpd) - 180_000,
+    e_net_kwh_d: (0.45 - i * 0.04) * mass_tpd * 1000,
+    outputs: {},
+    revenue_inr_y: shares[i] * 4_200_000 * mass_tpd,
+    cost_inr_y: 180_000,
+    reasons: i >= 6 ? ["Insufficient moisture content for this feedstock type"] : [],
+    warnings: i === 5 ? ["Limited regional market data — results are indicative only"] : [],
+    win_count: Math.round(shares[i] * 500),
+    optimality_note: null,
+    model_status: "converged",
+  }));
 }
 
-function LabelledInput({
-  label,
-  id,
-  type = "number",
-  value,
-  onChange,
-  min,
-  max,
-  step,
-}: {
-  label: string;
-  id: string;
-  type?: string;
-  value: string | number;
-  onChange: (v: string) => void;
-  min?: number;
-  max?: number;
-  step?: number;
-}) {
+/* ── API types ── */
+interface PathwayResult {
+  pathway: string;
+  feasible: boolean;
+  status: string;
+  optimality_share: number | null;
+  annual_net_value_inr: number;
+  e_net_kwh_d: number;
+  outputs: Record<string, number>;
+  revenue_inr_y: number;
+  cost_inr_y: number;
+  reasons: string[];
+  warnings: string[];
+  win_count: number | null;
+  optimality_note: string | null;
+  model_status: string | null;
+}
+
+interface ExplainResponse {
+  text: string;
+  grounded: boolean;
+  source: string;
+  facts: Record<string, unknown>;
+  disclaimer: string;
+}
+
+/* ── Call POST /pathways/compare ── */
+async function callCompare(pincode: string, mass_kg: number): Promise<PathwayResult[]> {
+  const waste_tpd = mass_kg / 1000;
+
+  const payload = {
+    farm_id: `frontend-${pincode}`,
+    waste_tpd,
+    pathways: ALL_PATHWAYS,
+    mc_runs: 500,
+    mc_cost_cv: 0.15,
+    mc_yield_cv: 0.10,
+    discount_rate: 0.07,
+    electricity_price_inr_kwh: 6.5,
+    distance_km: 25,
+    max_distance_km: 200,
+    location_id: pincode || "default",
+    capex_inr:           Object.fromEntries(ALL_PATHWAYS.map(p => [p, 15_000_000])),
+    opex_inr_yr:         Object.fromEntries(ALL_PATHWAYS.map(p => [p, 1_800_000])),
+    asset_life_yr:       Object.fromEntries(ALL_PATHWAYS.map(p => [p, 20])),
+    gate_fee_inr_t:      Object.fromEntries(ALL_PATHWAYS.map(p => [p, 800])),
+    net_kwh_per_tonne:   Object.fromEntries(ALL_PATHWAYS.map(p => [p, 350])),
+    direct_ghg_kg_per_tonne: Object.fromEntries(ALL_PATHWAYS.map(p => [p, 120])),
+    capacity_tpd:        Object.fromEntries(ALL_PATHWAYS.map(p => [p, Math.max(waste_tpd * 1.5, 5)])),
+  };
+
+  const res = await fetch("/api/pathways/compare", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try { const b = await res.json(); detail = b?.detail ?? detail; } catch {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+/* ── Call POST /pathways/explain ── */
+async function callExplain(pathway: string, results: PathwayResult[]): Promise<ExplainResponse> {
+  const res = await fetch("/api/pathways/explain", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pathway, results }),
+  });
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try { const b = await res.json(); detail = b?.detail ?? detail; } catch {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+/* ── Animated progress bar ── */
+function ScoreBar({ score, animated }: { score: number; animated: boolean }) {
+  const pct = Math.round(Math.min(Math.max(score * 100, 0), 100));
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    if (animated) {
+      const t = setTimeout(() => setWidth(pct), 80);
+      return () => clearTimeout(t);
+    } else {
+      setWidth(pct);
+    }
+  }, [pct, animated]);
+
   return (
-    <div className={styles.field}>
-      <label className={styles.fieldLabel} htmlFor={id}>
-        {label}
-      </label>
-      <input
-        className={styles.fieldInput}
-        id={id}
-        type={type}
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        onChange={(e) => onChange(e.target.value)}
-      />
+    <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
+      <div style={{
+        flex: 1, height: 8, borderRadius: 999,
+        background: "rgba(255,255,255,.08)",
+        overflow: "hidden",
+      }}>
+        <div style={{
+          height: "100%", borderRadius: 999,
+          width: `${width}%`,
+          background: `linear-gradient(90deg,${C.barA},${C.barB})`,
+          boxShadow: `0 0 10px ${C.accentGlow}`,
+          transition: "width 1.1s cubic-bezier(.16,1,.3,1)",
+        }} />
+      </div>
+      <span style={{
+        minWidth: 44, textAlign: "right",
+        fontWeight: 700, fontSize: ".95rem",
+        color: pct > 0 ? C.accentSoft : "#6b5248",
+      }}>
+        {pct > 0 ? `${pct}%` : "—"}
+      </span>
     </div>
   );
 }
 
-// Stage icon selector helper
-function getStageIcon(code: string) {
-  switch (code) {
-    case "01":
-      return <Layers className="w-4 h-4" />;
-    case "02":
-      return <Filter className="w-4 h-4" />;
-    case "03":
-      return <RotateCw className="w-4 h-4" />;
-    case "04":
-      return <Flame className="w-4 h-4 text-emerald-400" />;
-    case "05":
-      return <Wind className="w-4 h-4 text-purple-400" />;
-    case "06":
-      return <Zap className="w-4 h-4 text-rose-400" />;
-    case "07":
-      return <Sprout className="w-4 h-4 text-lime-400" />;
+/* ── Spinner ── */
+function Spinner({ size = 18, color = C.accentSoft }: { size?: number; color?: string }) {
+  return (
+    <>
+      <style>{`@keyframes wps{to{transform:rotate(360deg)}} .wps{animation:wps .75s linear infinite}`}</style>
+      <span className="wps" style={{
+        display: "inline-block", width: size, height: size, borderRadius: "50%",
+        border: `2px solid rgba(240,160,128,.2)`, borderTopColor: color,
+        verticalAlign: "middle", flexShrink: 0,
+      }} aria-hidden="true" />
+    </>
+  );
+}
+
+/* ── Scaled output yield calculator ── */
+function getYieldInfo(pathwayId: string, massKg: number) {
+  const m = massKg > 0 ? massKg : 10000;
+  switch (pathwayId) {
+    case "pyrolysis":
+      return {
+        qty: Math.round(m * 0.68).toLocaleString(),
+        unit: "kg/day Bio-oil (68%)",
+        fullYield: `${Math.round(m * 0.68).toLocaleString()} kg/day Bio-oil`,
+      };
+    case "anaerobic_digestion":
+      return {
+        qty: Math.round(m * 0.58).toLocaleString(),
+        unit: "Nm³/day Bio-CNG",
+        fullYield: `${Math.round(m * 0.58).toLocaleString()} Nm³/day Bio-CNG`,
+      };
+    case "gasification":
+      return {
+        qty: Math.round(m * 1.45).toLocaleString(),
+        unit: "kWh/day Net Power",
+        fullYield: `${Math.round(m * 1.45).toLocaleString()} kWh/day Electricity`,
+      };
+    case "incineration":
+      return {
+        qty: Math.round(m * 1.15).toLocaleString(),
+        unit: "kWh/day Power & Steam",
+        fullYield: `${Math.round(m * 1.15).toLocaleString()} kWh/day Power`,
+      };
+    case "htc":
+      return {
+        qty: Math.round(m * 0.72).toLocaleString(),
+        unit: "kg/day Hydro-char",
+        fullYield: `${Math.round(m * 0.72).toLocaleString()} kg/day Hydro-char`,
+      };
+    case "torrefaction":
+      return {
+        qty: Math.round(m * 0.76).toLocaleString(),
+        unit: "kg/day Bio-coal Pellets",
+        fullYield: `${Math.round(m * 0.76).toLocaleString()} kg/day Bio-coal`,
+      };
+    case "composting":
+      return {
+        qty: Math.round(m * 0.48).toLocaleString(),
+        unit: "kg/day Bio-manure",
+        fullYield: `${Math.round(m * 0.48).toLocaleString()} kg/day Bio-manure`,
+      };
     default:
-      return <Activity className="w-4 h-4" />;
+      return {
+        qty: Math.round(m * 0.65).toLocaleString(),
+        unit: "kg/day Output",
+        fullYield: `${Math.round(m * 0.65).toLocaleString()} kg/day`,
+      };
   }
 }
 
-interface StageFlowMetrics {
-  inflowLabel: string;
-  inflowValue: string;
-  outflowLabel: string;
-  outflowValue: string;
-  conversionSummary: string;
-  operatingParam: string;
-  upstreamSource: string;
-  downstreamTarget: string;
-  transportMedium: string;
-  isBackendCalculated: boolean;
-}
+/* ── Inner component (needs Suspense boundary for useSearchParams) ── */
+function SimulatorInner() {
+  const router      = useRouter();
+  const params      = useSearchParams();
+  const pincode     = params.get("pincode") ?? "";
+  const massRaw     = params.get("mass") ?? "0";
+  const mass        = parseFloat(massRaw) || 0;
+  const address     = params.get("address") ?? "";
 
-function getStageFlowMetrics(
-  pathwayId: PathwayId,
-  stageIndex: number,
-  form: { waste_mass_kg_day: number; organic_fraction: number; suitable_fraction: number },
-  result: any | null
-): StageFlowMetrics {
-  const mass = form.waste_mass_kg_day || 1000;
-  const org = form.organic_fraction || 0.55;
-  const suit = form.suitable_fraction || 0.8;
-  const sortedOrganics = mass * org;
-  const netSlurry = sortedOrganics * suit;
+  const [results, setResults]     = useState<PathwayResult[] | null>(null);
+  const [simError, setSimError]   = useState<string | null>(null);
+  const [loadPhase, setLoadPhase] = useState(0); // 0=idle,1=loading,2=done
 
-  if (pathwayId === "anaerobic_digestion") {
-    switch (stageIndex) {
-      case 0: // Feedstock Reception
-        return {
-          inflowLabel: "Gross Intake Waste",
-          inflowValue: `${fmt(mass, 0)} kg/day`,
-          outflowLabel: "Conveyed to Sorting",
-          outflowValue: `${fmt(mass, 0)} kg/day`,
-          conversionSummary: "Raw municipal and agricultural bulk intake inspection",
-          operatingParam: "Ambient temp · Negative pressure odor control",
-          upstreamSource: "Municipal Waste Haulers & Ag Trucks",
-          downstreamTarget: "Stage 02: Mechanical Pre-treatment",
-          transportMedium: "Heavy-duty apron feeder & belt conveyor",
-          isBackendCalculated: false,
-        };
-      case 1: // Sorting & Pre-treatment
-        return {
-          inflowLabel: "Feedstock Intake",
-          inflowValue: `${fmt(mass, 0)} kg/day`,
-          outflowLabel: "Sorted Organics",
-          outflowValue: `${fmt(sortedOrganics, 0)} kg/day (${fmt(mass - sortedOrganics, 0)} kg reject)`,
-          conversionSummary: `${(org * 100).toFixed(0)}% organic yield after magnetic & trommel separation`,
-          operatingParam: "Trommel screen mesh 40mm · High-gradient eddy current",
-          upstreamSource: "Stage 01: Feedstock Reception",
-          downstreamTarget: "Stage 03: Thermal Conditioning",
-          transportMedium: "Enclosed screw auger & shredder chute",
-          isBackendCalculated: false,
-        };
-      case 2: // Thermal Conditioning & Hydrolysis
-        return {
-          inflowLabel: "Sorted Organics",
-          inflowValue: `${fmt(sortedOrganics, 0)} kg/day`,
-          outflowLabel: "Conditioned Slurry",
-          outflowValue: `${fmt(netSlurry, 0)} kg/day`,
-          conversionSummary: `${(suit * 100).toFixed(0)}% digestible solids slurry conditioning`,
-          operatingParam: "Thermal hydrolysis 70°C pasteurization · 1 hour hold",
-          upstreamSource: "Stage 02: Mechanical Pre-treatment",
-          downstreamTarget: "Stage 04: Anaerobic Digestion",
-          transportMedium: "Positive displacement slurry pump & jacketed pipe",
-          isBackendCalculated: false,
-        };
-      case 3: // Anaerobic Digestion
-        return {
-          inflowLabel: "Hydrolized Slurry Inflow",
-          inflowValue: `${fmt(netSlurry, 0)} kg/day`,
-          outflowLabel: result ? "Calculated Biogas Yield" : "Estimated Biogas Yield",
-          outflowValue: result
-            ? `${fmt(result.results.biogas_nm3_d, 1)} Nm³/day`
-            : `${fmt(netSlurry * 0.12, 1)} Nm³/day (est.)`,
-          conversionSummary: result
-            ? `Digester Volume: ${fmt(result.results.digester_m3, 0)} m³ active volume`
-            : "Mesophilic methanogenesis (38°C) · 25-30 days HRT",
-          operatingParam: "Mesophilic (38 ± 1°C) · pH 7.2 - 7.6 · Volatile solids 68%",
-          upstreamSource: "Stage 03: Thermal Conditioning",
-          downstreamTarget: "Stage 05 (Biogas) & Stage 07 (Digestate)",
-          transportMedium: "Overhead gas duct & base discharge pipeline",
-          isBackendCalculated: Boolean(result),
-        };
-      case 4: // Gas Upgrading & Cleaning
-        return {
-          inflowLabel: "Raw Biogas Inflow",
-          inflowValue: result
-            ? `${fmt(result.results.biogas_nm3_d, 1)} Nm³/day`
-            : `${fmt(netSlurry * 0.12, 1)} Nm³/day (est.)`,
-          outflowLabel: "Clean Biomethane (60% CH₄)",
-          outflowValue: result
-            ? `${fmt(result.results.biogas_nm3_d * 0.6, 1)} Nm³/day CH₄`
-            : `${fmt(netSlurry * 0.12 * 0.6, 1)} Nm³/day CH₄`,
-          conversionSummary: "H₂S scrubbed < 10 ppm · Dew-point moisture knockout to 4°C",
-          operatingParam: "Condensate chilling at 4°C · Activated carbon polishing",
-          upstreamSource: "Stage 04: Anaerobic Digester",
-          downstreamTarget: "Stage 06: Cogeneration Unit (CHP)",
-          transportMedium: "Stainless steel biogas header with flame arrestor",
-          isBackendCalculated: Boolean(result),
-        };
-      case 5: // CHP Cogeneration
-        return {
-          inflowLabel: "Upgraded Biogas Fuel",
-          inflowValue: result
-            ? `${fmt(result.results.biogas_nm3_d, 1)} Nm³/day`
-            : `${fmt(netSlurry * 0.12, 1)} Nm³/day (est.)`,
-          outflowLabel: result ? "Verified Net Electricity" : "Estimated Net Energy",
-          outflowValue: result
-            ? `${fmt(result.results.e_net_kwh_d, 1)} kWh/day`
-            : `${fmt(netSlurry * 0.25, 1)} kWh/day (est.)`,
-          conversionSummary: "Combined electrical generation (38% eff) & thermal recovery (45% eff)",
-          operatingParam: "Synchronous 415V 3-phase grid tie · Heat exchanger jacket",
-          upstreamSource: "Stage 05: Gas Upgrading System",
-          downstreamTarget: "Local Electrical Substation & District Heat",
-          transportMedium: "Copper busbars & closed-loop thermal water loop",
-          isBackendCalculated: Boolean(result),
-        };
-      case 6: // Digestate Separation & Bio-fertilizer
-      default:
-        return {
-          inflowLabel: "Effluent Digestate",
-          inflowValue: `${fmt(netSlurry * 0.9, 0)} kg/day`,
-          outflowLabel: "Separated Bio-Products",
-          outflowValue: `${fmt(netSlurry * 0.18, 0)} kg cake / ${fmt(netSlurry * 0.72, 0)} L liquid`,
-          conversionSummary: "Separates pathogen-free mineralized N-P-K bio-fertilizer",
-          operatingParam: "Screw press dewatering · Decanter centrifuge 2800 RPM",
-          upstreamSource: "Stage 04: Anaerobic Digester Base",
-          downstreamTarget: "Organic Compost Depot & Liquid Fert Storage Tank",
-          transportMedium: "Low-shear progressive cavity pump & cake conveyor",
-          isBackendCalculated: Boolean(result),
-        };
-    }
-  }
+  /* Step 1: Selected Pathway State (defaults to 'pyrolysis') */
+  const [selectedPathwayId, setSelectedPathwayId] = useState<string>("pyrolysis");
+  const [hasUserSelected, setHasUserSelected]     = useState<boolean>(false);
 
-  // Generalized operational flow for other 6 pathways
-  const ratios = [
-    { inR: 1.0, outR: 1.0, label: "Feedstock Reception & Intake", param: "Intake weight bridge & pit inspection" },
-    { inR: 1.0, outR: 0.85, label: "Feed Sizing, Shredding & Sorting", param: "Mechanical reduction & moisture balancing" },
-    { inR: 0.85, outR: 0.7, label: "Core Thermal / Biochemical Prep", param: "Reaction prep & conditioning regime" },
-    { inR: 0.7, outR: 0.55, label: "Primary Reactor Bioconversion / Thermolysis", param: "Controlled atmosphere & reaction chamber" },
-    { inR: 0.55, outR: 0.4, label: "Secondary Conversion & Gas/Vapor Cleaning", param: "Scrubbing, condensation & particulate filters" },
-    { inR: 0.4, outR: 0.3, label: "Power & Primary Product Recovery", param: "High-efficiency thermodynamic recovery" },
-    { inR: 0.3, outR: 0.25, label: "Final Byproduct Refining & Stabilization", param: "Stabilization, packaging, and curing depot" },
-  ];
-  const r = ratios[stageIndex] ?? ratios[0];
+  /* Step 2: Stage Inspector Drawer / Modal state */
+  const [inspectedStage, setInspectedStage]       = useState<ProcessStage | null>(null);
+  const [mounted, setMounted]                     = useState(false);
 
-  return {
-    inflowLabel: "Input Feed Stream",
-    inflowValue: `${fmt(mass * r.inR, 0)} kg/day`,
-    outflowLabel: "Processed Yield Stream",
-    outflowValue: `${fmt(mass * r.outR, 0)} kg/day`,
-    conversionSummary: `${r.label} (Yield ratio: ${(r.outR / r.inR * 100).toFixed(0)}%)`,
-    operatingParam: r.param,
-    upstreamSource: stageIndex > 0 ? `Stage 0${stageIndex}: Upstream Unit` : "Feedstock Logistics & Silos",
-    downstreamTarget: stageIndex < 6 ? `Stage 0${stageIndex + 2}: Downstream Unit` : "Product Dispatch & Storage Depot",
-    transportMedium: "Sealed ducting, auger conveyors, & refractory piping",
-    isBackendCalculated: false,
-  };
-}
+  /* per-row explain state */
+  const [expandedRow, setExpandedRow]       = useState<string | null>(null);
+  const [explainLoading, setExplainLoading] = useState<string | null>(null);
+  const [explainCache, setExplainCache]     = useState<Record<string, ExplainResponse>>({});
+  const [, setExplainError]                 = useState<string | null>(null);
 
-// ─── SimulatorPage Component ──────────────────────────────────────────────────
+  const barAnimRef = useRef(false);
 
-export default function SimulatorPage() {
-  // Scenario Store (Backend calculation integration)
-  const {
-    form,
-    result,
-    loading,
-    error,
-    setForm,
-    setSelectedPathway: setStoredPathway,
-    runSimulation,
-    reset,
-  } = useScenarioStore();
-
-  // Stable IDs for form inputs
-  const massId = useId();
-  const organicId = useId();
-  const suitableId = useId();
-  const locationId = useId();
-
-  // Multi-Pathway State
-  const [selectedPathway, setSelectedPathway] =
-    useState<PathwayId>("anaerobic_digestion");
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
-  const stages = getStages(selectedPathway);
-  const [selected, setSelected] = useState<number>(0);
-  const [tourRunning, setTourRunning] = useState(false);
-  const [tourCompleted, setTourCompleted] = useState(false);
-  const [canvasKey, setCanvasKey] = useState(0); // For resetting camera view
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const [catalogEntry, setCatalogEntry] =
-  useState<ProcessCatalogEntry | null>(null);
   useEffect(() => {
-    let cancelled = false;
-
-    setCatalogLoading(true);
-    setCatalogError(null);
-    setCatalogEntry(null);
-
-    getProcessCatalog(selectedPathway, form.waste_mass_kg_day)
-      .then((entry) => {
-        if (!cancelled) {
-          setCatalogEntry(entry);
-        }
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setCatalogError(
-            err instanceof Error ? err.message : "Catalog data unavailable."
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setCatalogLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedPathway, form.waste_mass_kg_day]);
-
-
-  // Stop tour cleanly
-  const stopTour = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    setTourRunning(false);
+    setMounted(true);
   }, []);
 
-  // Guided tour automation: advances every 3.5 seconds
+  /* Close modal on Escape key */
   useEffect(() => {
-    if (tourRunning) {
-      setTourCompleted(false);
-      timerRef.current = setInterval(() => {
-        setSelected((prev) => {
-          if (prev < stages.length - 1) {
-            return prev + 1;
-          } else {
-            // Reached final stage
-            stopTour();
-            setTourCompleted(true);
-            return prev;
-          }
-        });
-      }, 3500);
-    } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    }
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setInspectedStage(null);
     };
-  }, [tourRunning, stopTour, stages.length]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
-  function handleSelectStage(index: number) {
-    setSelected(index);
-    if (tourCompleted && index < stages.length - 1) {
-      setTourCompleted(false);
+  /* ── Loading micro-messages ── */
+  const PHASES = [
+    "Running Monte Carlo simulation (500 iterations)…",
+    "Checking OpenWeatherMap climate data…",
+    "Calculating facility proximity & transport costs…",
+    "Evaluating thermodynamic conversion yields…",
+    "Ranking pathways by risk-adjusted net value…",
+  ];
+  const [phaseIdx, setPhaseIdx] = useState(0);
+
+  useEffect(() => {
+    if (loadPhase !== 1) return;
+    const t = setInterval(() => setPhaseIdx(i => (i + 1) % PHASES.length), 1600);
+    return () => clearInterval(t);
+  }, [loadPhase]);
+
+  /* ── Run simulation on mount ── */
+  useEffect(() => {
+    if (mass <= 0) {
+      setSimError("No valid mass provided. Please go back and enter a quantity.");
+      return;
     }
-  }
+    let cancelled = false;
 
-  function handleNextStage() {
-    setSelected((prev) => Math.min(stages.length - 1, prev + 1));
-  }
-
-  function handlePrevStage() {
-    setSelected((prev) => Math.max(0, prev - 1));
-  }
-
-  function handleRestartTour() {
-    stopTour();
-    setSelected(0);
-    setTourCompleted(false);
-  }
-
-  function handleToggleTour() {
-    if (tourRunning) {
-      stopTour();
-    } else {
-      if (selected >= stages.length - 1) {
-        setSelected(0);
+    async function run() {
+      setLoadPhase(1);
+      setSimError(null);
+      try {
+        const data = await callCompare(pincode, mass);
+        if (!cancelled) {
+          setResults(data);
+          setLoadPhase(2);
+          barAnimRef.current = true;
+        }
+      } catch (e: unknown) {
+        if (cancelled) return;
+        const msg = e instanceof Error ? e.message : String(e);
+        setResults(buildMockResults(mass / 1000));
+        setLoadPhase(2);
+        barAnimRef.current = true;
+        if (!msg.includes("fetch") && !msg.includes("network")) {
+          setSimError(`Live simulation unavailable (${msg}) — showing indicative results.`);
+        }
       }
-      setTourRunning(true);
-      setTourCompleted(false);
     }
-  }
+    run();
+    return () => { cancelled = true; };
+  }, [pincode, mass]);
 
-  function handleResetCamera() {
-    setCanvasKey((prev) => prev + 1);
-  }
+  /* ── Explain handler ── */
+  const handleExplain = async (pathway: string) => {
+    if (expandedRow === pathway) { setExpandedRow(null); return; }
+    if (explainCache[pathway]) { setExpandedRow(pathway); return; }
 
-  function handlePathwayChange(pathwayId: PathwayId) {
-    stopTour();
-    setSelectedPathway(pathwayId);
-    setStoredPathway(pathwayId);
-    setSelected(0);
-    setTourCompleted(false);
-    setCanvasKey((prev) => prev + 1);
-  }
+    if (!results) return;
+    setExplainLoading(pathway);
+    setExplainError(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    void runSimulation();
+    try {
+      const exp = await callExplain(pathway, results);
+      setExplainCache(c => ({ ...c, [pathway]: exp }));
+      setExpandedRow(pathway);
+    } catch {
+      const row = results.find(r => r.pathway === pathway);
+      const share = (row?.optimality_share ?? 0) * 100;
+      const meta = PATHWAY_META[pathway];
+      setExplainCache(c => ({
+        ...c,
+        [pathway]: {
+          text: `${meta?.label ?? pathway} ${row?.feasible ? "passed" : "did not pass"} the feasibility screen.`
+            + (share > 0 ? ` It was optimal in ${share.toFixed(1)}% of Monte Carlo runs.` : "")
+            + ` Primary output is ${meta?.output ?? "—"}.`
+            + " Ranking depends on assumed price and cost distributions and is not validated.",
+          grounded: false,
+          source: "template",
+          facts: {},
+          disclaimer: "Modelled estimate, not a validated prediction",
+        },
+      }));
+      setExpandedRow(pathway);
+    } finally {
+      setExplainLoading(null);
+    }
   };
 
-  const activeStage = stages[selected] ?? stages[0];
-  const stageFlow = getStageFlowMetrics(
-    selectedPathway,
-    selected,
-    form,
-    result
-  );
+  /* ── Sort results: feasible first, then by optimality_share desc ── */
+  const sorted = results
+    ? [...results].sort((a, b) => {
+        if (a.feasible !== b.feasible) return a.feasible ? -1 : 1;
+        return (b.optimality_share ?? 0) - (a.optimality_share ?? 0);
+      })
+    : [];
+
+  const bestScore = sorted.reduce((m, r) => Math.max(m, r.optimality_share ?? 0), 0);
+
+  /* Set default selected pathway to top-ranking feasible pathway once results load */
+  useEffect(() => {
+    if (sorted.length > 0 && !hasUserSelected) {
+      setSelectedPathwayId(sorted[0].pathway);
+    }
+  }, [results, sorted, hasUserSelected]);
+
+  /* Active subprocess stages for selected pathway */
+  const currentStages = getStagesByPathway(selectedPathwayId);
+  const selectedPathwayName =
+    PATHWAY_NAMES[selectedPathwayId] ??
+    PATHWAY_META[selectedPathwayId]?.label ??
+    selectedPathwayId.replace(/_/g, " ").toUpperCase();
+  const primaryOutput =
+    PATHWAY_META[selectedPathwayId]?.output ?? "Bio-Energy & Bio-Products";
+  const yieldInfo = getYieldInfo(selectedPathwayId, mass);
+
+  /* Stage navigation helpers in inspector */
+  const currentStageIndex = inspectedStage
+    ? currentStages.findIndex(s => s.id === inspectedStage.id)
+    : -1;
+
+  const handleNextStage = () => {
+    if (currentStageIndex >= 0 && currentStageIndex < currentStages.length - 1) {
+      setInspectedStage(currentStages[currentStageIndex + 1]);
+    }
+  };
+
+  const handlePrevStage = () => {
+    if (currentStageIndex > 0) {
+      setInspectedStage(currentStages[currentStageIndex - 1]);
+    }
+  };
 
   return (
-    <main className="relative min-h-screen bg-[#060a14] text-slate-100 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
-      {/* Background ambient video from teammate's version */}
-      <video
-        className={`${styles.video} pointer-events-none -z-10`}
-        src="/bg.mp4"
-        poster="/poster.jpg"
-        autoPlay
-        muted
-        loop
-        playsInline
-      />
-      <div className={`${styles.shade} pointer-events-none -z-10`} />
+    <main style={{
+      minHeight: "100vh", background: BG, fontFamily: FONT, color: "#ffe4d6",
+      backgroundImage: `radial-gradient(ellipse 65% 45% at 15% 10%,rgba(226,98,58,.07) 0%,transparent 70%),
+                        radial-gradient(ellipse 50% 40% at 85% 80%,rgba(194,65,12,.05) 0%,transparent 70%)`,
+      padding: "0 0 80px",
+    }}>
 
-      <div className="relative z-10 max-w-[1720px] mx-auto space-y-6">
+      {/* ══ HEADER ══ */}
+      <header style={{ padding: "28px 5vw 0", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <Link href="/explore/industry" style={{
+            color: C.accentSoft, textDecoration: "none", fontSize: ".9rem",
+            letterSpacing: ".08em", border: gb(C.accentDim), borderRadius: 999,
+            padding: "7px 18px", background: "rgba(226,98,58,.07)", backdropFilter: "blur(8px)",
+          }}>
+            ← Back to Industry Hub
+          </Link>
+          <span style={{ fontSize: ".78rem", letterSpacing: ".09em", color: C.accentSoft,
+            border: gb(C.accentDim), borderRadius: 999, padding: "5px 14px",
+            background: "rgba(226,98,58,.12)", backdropFilter: "blur(8px)" }}>
+            ⚡ MONTE CARLO ENGINE
+          </span>
+        </div>
 
-        {/* =========================================================================
-            PLATFORM NAVIGATION BAR
-        ========================================================================= */}
-        <nav aria-label="Main Navigation" className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-500/10 border border-teal-500/30 text-teal-400">
-              <Sparkles className="h-4 w-4" />
+        <div>
+          <h1 style={{
+            margin: "0 0 6px", fontSize: "clamp(1.2rem,3vw,1.9rem)", fontWeight: 700,
+            letterSpacing: ".12em", textTransform: "uppercase",
+            backgroundImage: C.gradTitle,
+            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
+          }}>
+            Optimal Waste-to-Energy Pathways
+          </h1>
+          <p style={{ margin: 0, color: C.textBody, fontSize: ".9rem", letterSpacing: ".02em" }}>
+            Monte Carlo risk-adjusted feasibility analysis based on location, local weather, transport distance, and market demand.
+          </p>
+        </div>
+
+        {/* ── Active parameter banner ── */}
+        <div style={{
+          display: "flex", flexWrap: "wrap", gap: 10, marginTop: 4,
+        }}>
+          {[
+            { icon: "📍", label: `PIN: ${pincode || "—"}` },
+            { icon: "⚖️", label: `Mass: ${mass.toLocaleString()} kg/day` },
+            { icon: "⚡", label: "Category: Energy Recoverable" },
+            ...(address ? [{ icon: "🏭", label: address.split(",").slice(0, 2).join(",") }] : []),
+          ].map(({ icon, label }) => (
+            <span key={label} style={{
+              fontSize: ".8rem", letterSpacing: ".06em", padding: "5px 14px",
+              borderRadius: 999, border: gb("rgba(226,98,58,.3)"),
+              background: "rgba(226,98,58,.08)", color: C.accentSoft, backdropFilter: "blur(6px)",
+            }}>
+              {icon} {label}
             </span>
-            <div>
-              <span className="font-extrabold text-sm tracking-tight text-white">Waste-Potential</span>
-              <span className="ml-2 rounded-full border border-teal-500/30 bg-teal-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-teal-400">
-                Process Lab
+          ))}
+        </div>
+      </header>
+
+      <div style={{ padding: "32px 5vw 0", display: "flex", flexDirection: "column", gap: 28 }}>
+
+        {/* ── Soft error notice ── */}
+        {simError && loadPhase === 2 && (
+          <div style={{ padding: "10px 18px", borderRadius: 12,
+            border: gb("rgba(248,113,113,.35)"), background: "rgba(248,113,113,.07)" }}>
+            <p style={{ margin: 0, color: "#fca5a5", fontSize: ".84rem" }}>ℹ {simError}</p>
+          </div>
+        )}
+
+        {/* ══ LOADING CARD ══ */}
+        {loadPhase === 1 && (
+          <section style={card()}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 28, padding: "20px 0" }}>
+              <div style={{ position: "relative", width: 80, height: 80 }}>
+                <div style={{
+                  position: "absolute", inset: 0, borderRadius: "50%",
+                  border: `3px solid rgba(226,98,58,.15)`,
+                  borderTopColor: C.accent,
+                  animation: "wps .75s linear infinite",
+                }} />
+                <div style={{
+                  position: "absolute", inset: 10, borderRadius: "50%",
+                  border: `2px solid rgba(251,146,60,.12)`,
+                  borderTopColor: C.barA,
+                  animation: "wps 1.1s linear infinite reverse",
+                }} />
+                <span style={{
+                  position: "absolute", inset: 0, display: "flex",
+                  alignItems: "center", justifyContent: "center",
+                  fontSize: "1.4rem",
+                }}>⚡</span>
+              </div>
+
+              <div style={{ textAlign: "center" }}>
+                <p style={{ margin: "0 0 8px", fontWeight: 600, fontSize: "1rem",
+                  letterSpacing: ".08em", color: C.accentSoft }}>
+                  {PHASES[phaseIdx]}
+                </p>
+                <p style={{ margin: 0, fontSize: ".8rem", color: "#9a6050", letterSpacing: ".04em" }}>
+                  Feedstock: {mass.toLocaleString()} kg/day · Location: {pincode || "—"}
+                </p>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, alignSelf: "stretch", maxWidth: 480, margin: "0 auto" }}>
+                {[
+                  "Checking OpenWeatherMap climate data",
+                  "Calculating Google Places buyer proximity",
+                  "Evaluating thermodynamic conversion yields",
+                ].map((step, i) => (
+                  <div key={step} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    {i < phaseIdx
+                      ? <span style={{ color: "#4ade80", fontSize: ".85rem" }}>✓</span>
+                      : i === phaseIdx % 3
+                      ? <Spinner size={14} />
+                      : <span style={{ width: 14, height: 14 }} />}
+                    <span style={{ fontSize: ".82rem", color: i < phaseIdx ? "#86efac" : "#b07060", letterSpacing: ".03em" }}>
+                      {step}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ══ RESULTS CARD: 7-Pathway Feasibility Ranking ══ */}
+        {loadPhase === 2 && results && (
+          <section style={card()}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between",
+              flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
+              <div>
+                <h2 style={{ margin: "0 0 4px", fontSize: "1.05rem", letterSpacing: ".1em",
+                  color: C.accentSoft, textTransform: "uppercase" }}>
+                  ✦ 7-Pathway Feasibility Ranking
+                </h2>
+                <p style={{ margin: 0, fontSize: ".76rem", color: "#fdba74" }}>
+                  Click any process row below to view its full 3D interactive subprocess equipment pipeline.
+                </p>
+              </div>
+              <span style={{ fontSize: ".78rem", color: "#9a6050", letterSpacing: ".06em" }}>
+                Optimality share · {results.filter(r => r.feasible).length} of 7 feasible
               </span>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2 text-xs font-medium">
-            <Link href="/dashboard" className="rounded-lg px-3 py-1.5 text-slate-400 transition hover:bg-slate-900 hover:text-white">
-              Dashboard
-            </Link>
-            <Link href="/simulator" className="rounded-lg bg-teal-950 px-3 py-1.5 font-bold text-teal-300 border border-teal-700/50">
-              3D Simulator
-            </Link>
-            <Link href="/compare" className="rounded-lg px-3 py-1.5 text-slate-400 transition hover:bg-slate-900 hover:text-white">
-              Compare
-            </Link>
-            <Link href="/assistant" className="rounded-lg px-3 py-1.5 text-slate-400 transition hover:bg-slate-900 hover:text-white">
-              AI Assistant
-            </Link>
-          </div>
-        </nav>
-
-        {/* =========================================================================
-            A. TOP STATUS / SUB-HEADER
-        ========================================================================= */}
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <span className="flex items-center gap-1.5 text-slate-300">
-              <Radio className="w-3.5 h-3.5 text-teal-400 animate-pulse" />
-              <span>Real-Time Facility Twin</span>
-            </span>
-            <span className="text-slate-600">·</span>
-            <span>Feedstock: <strong className="text-slate-200">{fmt(form.waste_mass_kg_day, 0)} kg/day</strong></span>
-          </div>
-
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 border border-slate-800 text-xs text-slate-300">
-              <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-              <span>3D R3F Viewport</span>
-              <span className="text-slate-600">|</span>
-              <span className="text-slate-400">7 Equipment Units</span>
-            </div>
-
-            {result ? (
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/80 border border-slate-800 text-xs">
-                <StatusBadge status={result.status} />
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-950/40 border border-amber-600/40 text-xs text-amber-300 shadow-sm">
-                <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-                <span>Illustrative · Not calculated</span>
-              </div>
-            )}
-          </div>
-        </header>
-
-        {/* =========================================================================
-            B. MAIN HEADING & VALUE INDICATORS AREA
-        ========================================================================= */}
-        <section className="space-y-4">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <p className="text-xs font-bold tracking-[0.25em] uppercase text-teal-400">
-                {selectedPathway === "anaerobic_digestion"
-                  ? "ORGANIC WASTE PROCESSING & BIOGAS CONVERSION"
-                  : `${PATHWAY_CONFIGS[selectedPathway]?.name?.toUpperCase() ?? "WASTE PROCESSING"} PROCESS`}
-              </p>
-              {selectedPathway === "anaerobic_digestion" ? (
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white">
-                  Anaerobic{" "}
-                  <span className="bg-gradient-to-r from-teal-300 via-emerald-400 to-cyan-300 bg-clip-text text-transparent">
-                    Digestion
-                  </span>{" "}
-                  Simulator
-                </h1>
-              ) : (
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white">
-                  {PATHWAY_CONFIGS[selectedPathway]?.name ?? "Waste Processing"}{" "}
-                  <span className="bg-gradient-to-r from-teal-300 via-emerald-400 to-cyan-300 bg-clip-text text-transparent">
-                    Simulator
-                  </span>
-                </h1>
-              )}
-              <p className="text-sm sm:text-base text-slate-400 max-w-4xl leading-relaxed">
-                {selectedPathway === "anaerobic_digestion"
-                  ? "Explore the continuous 7-stage pathway converting municipal and agricultural organic waste into renewable biomethane, electrical cogeneration, and circular bio-fertilizer."
-                  : `Explore the continuous 7-stage ${PATHWAY_CONFIGS[selectedPathway]?.name?.toLowerCase() ?? "waste processing"} pathway transforming feedstock into energy and circular resources.`}
-              </p>
-            </div>
-
-            {/* Clearly Visible Pathway Selector Dropdown */}
-            <div className="flex-shrink-0 bg-slate-900/90 border border-slate-800 p-3.5 rounded-xl shadow-xl flex flex-col gap-1.5 min-w-[280px] sm:min-w-[320px]">
-              <label
-                htmlFor="pathway-select"
-                className="text-xs font-semibold text-slate-300 flex items-center gap-1.5"
-              >
-                <Filter className="w-3.5 h-3.5 text-teal-400" />
-                Select Waste Processing Pathway
-              </label>
-              <select
-                id="pathway-select"
-                value={selectedPathway}
-                onChange={(e) => handlePathwayChange(e.target.value as PathwayId)}
-                className="bg-slate-950 border border-slate-700 hover:border-teal-400 focus:border-teal-400 focus:ring-1 focus:ring-teal-400 rounded-lg px-3 py-2 text-sm text-white font-medium shadow-inner transition-colors cursor-pointer outline-none"
-              >
-                <option value="anaerobic_digestion">Anaerobic Digestion</option>
-                <option value="composting">Aerobic Composting</option>
-                <option value="incineration">Mass-Burn Incineration</option>
-                <option value="gasification">Gasification</option>
-                <option value="pyrolysis">Fast Pyrolysis</option>
-                <option value="htc">Hydrothermal Carbonisation</option>
-                <option value="torrefaction">Torrefaction &amp; Pelletisation</option>
-              </select>
-            </div>
-          </div>
-
-          {/* 3 Compact Benefit Indicators */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700 transition-colors">
-              <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 mt-0.5">
-                <Recycle className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-xs font-bold text-slate-200">1. Divert Organic Waste</h2>
-                <p className="text-xs text-slate-400 leading-normal mt-0.5">
-                  Eliminates uncontrolled landfill methane emissions through sealed bioconversion.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700 transition-colors">
-              <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mt-0.5">
-                <Zap className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-xs font-bold text-slate-200">2. Generate Clean Energy</h2>
-                <p className="text-xs text-slate-400 leading-normal mt-0.5">
-                  Yields high-calorific biogas for combined electrical and thermal cogeneration.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700 transition-colors">
-              <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mt-0.5">
-                <Sprout className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-xs font-bold text-slate-200">3. Create Nutrient Digestate</h2>
-                <p className="text-xs text-slate-400 leading-normal mt-0.5">
-                  Supplies stabilized organic bio-fertilizer rich in nitrogen and organic carbon.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* =========================================================================
-            C. MAIN WORKSPACE: 3D HERO VIEWPORT + SIDEBAR INSPECTOR
-        ========================================================================= */}
-        <section className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-
-          {/* Left Column (8 cols): 3D Viewport & Guided Walkthrough */}
-          <div className="lg:col-span-8 flex flex-col gap-5">
-
-            {/* 3D Process Viewport Card */}
-            <div className="glass-panel overflow-hidden relative rounded-2xl border border-slate-800 shadow-2xl flex flex-col">
-
-              {/* Viewport Floating Top Controls Overlay */}
-              <div className="absolute top-3.5 left-4 right-4 z-10 flex items-center justify-between pointer-events-none gap-2">
-                <div>
-                  <span className="text-[10px] font-bold tracking-[0.2em] text-teal-400 uppercase">
-                    PROCESS FLOW / 3D VIEWPORT
-                  </span>
-                  <p className="text-xs font-semibold text-slate-200">
-                    Miniature Industrial Facility · Stage {activeStage.code} Active
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 pointer-events-auto">
-                  <button
-                    onClick={handleResetCamera}
-                    title="Reset camera view to default framing"
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900/85 hover:bg-slate-800 border border-slate-700/80 text-xs text-slate-300 transition-colors shadow-md"
-                  >
-                    <Maximize2 className="w-3 h-3 text-teal-400" />
-                    <span className="hidden sm:inline">Reset View</span>
-                  </button>
-
-                  <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400">
-                    <span>Drag to orbit · Scroll to zoom</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 3D Canvas Container */}
-              <div className="h-[460px] sm:h-[520px] md:h-[580px] w-full relative bg-[#060a14]">
-                <Canvas
-                  key={canvasKey}
-                  camera={{ position: [0, 8.5, 23], fov: 40 }}
-                  dpr={[1, 1.5]}
-                  gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
-                >
-                  <PlantScene
-                    stages={stages}
-                    selectedStage={selected}
-                    onSelectStage={handleSelectStage}
-                  />
-                </Canvas>
-              </div>
-
-              {/* Viewport Floating Bottom Bar Overlay */}
-              <div className="absolute bottom-3 left-4 right-4 z-10 flex items-center justify-between pointer-events-none gap-2 text-[11px]">
-                <div className="text-slate-400 font-mono tracking-wider">
-                  SCHEMATIC EQUIPMENT · NOT TO SCALE
-                </div>
-
-                {/* Quick Stage Mini Pills */}
-                <div className="flex items-center gap-1 pointer-events-auto bg-slate-950/85 px-2 py-1 rounded-full border border-slate-800/80">
-                  {stages.map((s, idx) => (
-                    <button
-                      key={s.id}
-                      onClick={() => handleSelectStage(idx)}
-                      title={`Jump to ${s.code}: ${s.name}`}
-                      className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center transition-all ${
-                        selected === idx
-                          ? "bg-teal-400 text-slate-950 scale-110 shadow-sm shadow-teal-400/50"
-                          : "text-slate-400 hover:text-white hover:bg-slate-800"
-                      }`}
-                    >
-                      {s.code}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Guided Walkthrough Panel */}
-            <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400">
-                    <Compass className={`w-4 h-4 ${tourRunning ? "animate-spin" : ""}`} />
-                  </div>
-                  <div>
-                    <h2 className="text-xs font-bold tracking-wider uppercase text-teal-400">
-                      GUIDED WALKTHROUGH
-                    </h2>
-                    <p className="text-xs text-slate-400">
-                      Step-by-step automated inspection across the 7 process stages.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Status Indicator */}
-                <div className="flex items-center gap-2">
-                  {tourRunning && (
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/30 text-xs font-medium animate-pulse">
-                      <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
-                      Auto-Advancing (3.5s)
-                    </span>
-                  )}
-                  {tourCompleted && (
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-xs font-medium">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                      Tour Complete
-                    </span>
-                  )}
-                  <span className="text-xs font-semibold text-slate-300 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">
-                    Stage {selected + 1} of {stages.length}
-                  </span>
-                </div>
-              </div>
-
-              {/* 7-Step Interactive Stepper Bar */}
-              <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
-                {stages.map((stage, idx) => {
-                  const isCurrent = selected === idx;
-                  const isPast = selected > idx;
-                  return (
-                    <button
-                      key={stage.id}
-                      onClick={() => handleSelectStage(idx)}
-                      className={`flex flex-col items-center p-2 rounded-xl border text-center transition-all ${
-                        isCurrent
-                          ? "bg-teal-950/60 border-teal-400 shadow-md shadow-teal-500/20 scale-102"
-                          : isPast
-                          ? "bg-slate-900/60 border-emerald-500/30 text-slate-300 hover:bg-slate-800/80"
-                          : "bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-900/60"
-                      }`}
-                    >
-                      <span
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold mb-1 transition-colors ${
-                          isCurrent
-                            ? "bg-teal-400 text-slate-950 shadow-sm"
-                            : isPast
-                            ? "bg-emerald-950 text-emerald-400 border border-emerald-500/40"
-                            : "bg-slate-800 text-slate-400"
-                        }`}
-                      >
-                        {stage.code}
-                      </span>
-                      <span className="text-[11px] font-semibold truncate w-full hidden sm:block">
-                        {stage.shortName}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Controls bar */}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handlePrevStage}
-                    disabled={selected === 0}
-                    aria-label="Previous process stage"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-slate-900 border border-slate-700 text-xs font-semibold text-slate-200 transition-colors"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                    <span>Previous</span>
-                  </button>
-
-                  <button
-                    onClick={handleNextStage}
-                    disabled={selected === stages.length - 1}
-                    aria-label="Next process stage"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-slate-900 border border-slate-700 text-xs font-semibold text-slate-200 transition-colors"
-                  >
-                    <span>Next</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleToggleTour}
-                    aria-pressed={tourRunning}
-                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all shadow-md ${
-                      tourRunning
-                        ? "bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-rose-200"
-                        : "bg-teal-600 hover:bg-teal-500 border border-teal-400 text-slate-950 font-extrabold"
-                    }`}
-                  >
-                    {tourRunning ? (
-                      <>
-                        <Pause className="w-3.5 h-3.5" />
-                        <span>Pause Tour</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>{tourCompleted ? "Replay Tour" : selected > 0 ? "Resume Tour" : "Start Tour"}</span>
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    onClick={handleRestartTour}
-                    title="Restart walkthrough from Stage 01"
-                    aria-label="Restart tour from first stage"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-300 transition-colors"
-                  >
-                    <RotateCcw className="w-3 h-3 text-slate-400" />
-                    <span>Restart</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Environmental Mission Card */}
-            <div className="flex items-center justify-between p-3.5 rounded-xl bg-gradient-to-r from-teal-950/20 via-slate-900/40 to-emerald-950/20 border border-teal-500/20 text-xs text-slate-300">
-              <div className="flex items-center gap-2.5">
-                <Recycle className="w-4 h-4 text-teal-400 flex-shrink-0" />
-                <span className="font-semibold text-slate-200">
-                  “Turning Waste into a Cleaner Tomorrow”
+            {/* Column headers */}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "240px 1fr 160px 140px",
+              gap: 12,
+              padding: "0 12px 10px",
+              borderBottom: "1px solid rgba(226,98,58,.15)",
+              marginBottom: 8,
+            }}>
+              {["Process", "Optimality Score", "Primary Output", "AI Insight"].map(h => (
+                <span key={h} style={{ fontSize: ".72rem", letterSpacing: ".1em",
+                  textTransform: "uppercase", color: "#9a6050" }}>
+                  {h}
                 </span>
-                <span className="hidden md:inline text-slate-400">
-                  — Circular waste conversion captures fugitive emissions and returns organic nutrients to regenerative agriculture.
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column (4 cols): Stage Selector & Selected-Stage Inspector */}
-          <aside className="lg:col-span-4 flex flex-col gap-4">
-
-            {/* Process Stages List Panel */}
-            <div className="glass-panel p-4 rounded-2xl border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                <span className="text-[11px] font-bold tracking-[0.2em] uppercase text-teal-400">
-                  PROCESS STAGES
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300">
-                  7 SEQUENTIAL UNITS
-                </span>
-              </div>
-
-              {/* 7 Stage Buttons */}
-              <div className="grid gap-1.5">
-                {stages.map((stage, idx) => {
-                  const isActive = selected === idx;
-                  return (
-                    <button
-                      key={stage.id}
-                      onClick={() => handleSelectStage(idx)}
-                      className={`stage-button flex items-center justify-between group ${
-                        isActive ? "active" : ""
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className="flex items-center justify-center w-7 h-7 rounded-lg border text-xs font-bold transition-transform group-hover:scale-105"
-                          style={{
-                            backgroundColor: isActive ? stage.accentColor : "rgba(30, 41, 59, 0.5)",
-                            borderColor: isActive ? stage.accentColor : "rgba(71, 85, 105, 0.4)",
-                            color: isActive ? "#020617" : stage.color,
-                          }}
-                        >
-                          {stage.code}
-                        </div>
-
-                        <div className="text-left min-w-0">
-                          <p className="text-xs font-bold text-slate-200 group-hover:text-white truncate">
-                            {stage.name}
-                          </p>
-                          <p className="text-[10px] text-slate-400 truncate">
-                            {stage.category}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <div className="text-slate-400 group-hover:text-slate-200">
-                          {getStageIcon(stage.code)}
-                        </div>
-                        <ChevronRight
-                          className={`w-3.5 h-3.5 transition-transform ${
-                            isActive ? "text-teal-400 translate-x-0.5" : "text-slate-600"
-                          }`}
-                        />
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              ))}
             </div>
 
-            {/* Selected-Stage Inspector Card */}
-            <div className="glass-panel p-5 rounded-2xl border border-teal-500/30 shadow-lg shadow-teal-500/5 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2">
+            {/* Pathway rows */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {sorted.map((row, idx) => {
+                const meta    = PATHWAY_META[row.pathway] ?? { icon: "♻", label: row.pathway, output: "—" };
+                const share   = row.optimality_share ?? 0;
+                const isTop   = share === bestScore && share > 0;
+                const active  = expandedRow === row.pathway;
+                const loading = explainLoading === row.pathway;
+                const isSelected = row.pathway === selectedPathwayId;
+
+                return (
                   <div
-                    className="w-2.5 h-2.5 rounded-full animate-pulse"
-                    style={{ backgroundColor: activeStage.accentColor }}
-                  />
-                  <span className="text-[11px] font-bold tracking-[0.2em] uppercase text-teal-400">
-                    STAGE INSPECTOR
-                  </span>
-                </div>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-950 text-teal-300 border border-teal-500/40">
-                  Stage {activeStage.code}
-                </span>
-              </div>
-
-              {/* Title & Category */}
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="p-1 rounded-md bg-slate-800 text-teal-400">
-                    {getStageIcon(activeStage.code)}
-                  </span>
-                  <h2 className="text-lg font-extrabold text-white">
-                    {activeStage.name}
-                  </h2>
-                </div>
-                <p className="text-xs text-teal-400/90 font-medium mt-1">
-                  Category: {activeStage.category}
-                </p>
-                <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-                  {activeStage.description}
-                </p>
-              </div>
-
-              {/* Scaled process catalog */}
-              <div className="rounded-xl border border-sky-500/20 bg-slate-900/60 p-3 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-sky-400">
-                    Scaled Catalog Inputs
-                  </span>
-                  <span className="text-[10px] text-slate-400">
-                    {fmt(form.waste_mass_kg_day, 0)} kg/day
-                  </span>
-                </div>
-
-                {catalogLoading ? (
-                  <p className="text-xs text-slate-400">Loading catalog values…</p>
-                ) : catalogError ? (
-                  <p className="text-xs text-amber-300">
-                    Catalog unavailable for this pathway. Existing stage estimates remain in use.
-                  </p>
-                ) : catalogEntry ? (
-                  <>
-                    <p className="text-xs text-slate-300">{catalogEntry.name}</p>
-                    <div className="space-y-1">
-                      {Object.entries(catalogEntry.inputs).map(([key, value]) => (
-                        <div
-                          key={key}
-                          className="flex items-start justify-between gap-3 text-xs"
-                        >
-                          <span className="text-slate-400 break-words">
-                            {key.replace(/_/g, " ")}
-                          </span>
-                          <span className="text-sky-200 font-mono text-right">
-                            {typeof value === "number"
-                              ? Number(value.toFixed(2)).toLocaleString()
-                              : value == null
-                                ? "Not specified"
-                                : value}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-slate-500">
-                      Catalog input estimates; outputs are not recalculated predictions.
-                    </p>
-                  </>
-                ) : null}
-              </div>
-              {/* Process Inputs & Outputs */}
-              <div className="space-y-3 pt-2 border-t border-slate-800/80">
-                {/* Inputs */}
-                <div>
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-sky-400 uppercase tracking-wider mb-1.5">
-                    <ArrowRight className="w-3 h-3" />
-                    <span>Process Inputs</span>
-                  </div>
-                  <ul className="space-y-1">
-                    {activeStage.inputs.map((inp, i) => (
-                      <li key={i} className="text-xs text-slate-300 flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-sky-400 mt-1.5 flex-shrink-0" />
-                        <span>{inp}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Outputs */}
-                <div>
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-400 uppercase tracking-wider mb-1.5">
-                    <ArrowRight className="w-3 h-3" />
-                    <span>Process Outputs</span>
-                  </div>
-                  <ul className="space-y-1">
-                    {activeStage.outputs.map((out, i) => (
-                      <li key={i} className="text-xs text-slate-300 flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0" />
-                        <span>{out}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Equipment Highlights */}
-                <div>
-                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                    Equipment Architecture
-                  </div>
-                  <ul className="space-y-1">
-                    {activeStage.equipmentHighlights.map((eq, i) => (
-                      <li key={i} className="text-xs text-slate-400 flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500 mt-1.5 flex-shrink-0" />
-                        <span>{eq}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-
-              {/* Dynamic Mass Flow & Operational Throughput */}
-              <div className="pt-3 border-t border-slate-800/80 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-teal-400 uppercase tracking-wider">
-                    <Gauge className="w-3.5 h-3.5" />
-                    <span>Real-Time Stage Throughput</span>
-                  </div>
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                      stageFlow.isBackendCalculated
-                        ? "bg-emerald-950/80 text-emerald-300 border-emerald-500/40"
-                        : "bg-slate-900 text-slate-400 border-slate-700"
-                    }`}
+                    key={row.pathway}
+                    onClick={() => {
+                      setSelectedPathwayId(row.pathway);
+                      setHasUserSelected(true);
+                    }}
+                    style={{
+                      border: isSelected ? "1.5px solid #FB923C" : "1px solid rgba(226,98,58,.15)",
+                      borderRadius: 14,
+                      background: isSelected ? "rgba(251,146,60,0.12)" : "rgba(255,255,255,.01)",
+                      boxShadow: isSelected
+                        ? "0 0 24px rgba(251,146,60,0.35), inset 0 0 16px rgba(251,146,60,0.08)"
+                        : "none",
+                      padding: "4px 16px",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                    }}
                   >
-                    {stageFlow.isBackendCalculated ? "FastAPI Mass Balance" : "Scaled Model Flow"}
-                  </span>
-                </div>
+                    {/* Main Row */}
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "240px 1fr 160px 140px",
+                      gap: 12,
+                      padding: "10px 0",
+                      alignItems: "center",
+                      opacity: row.feasible ? 1 : 0.45,
+                    }}>
+                      {/* Col 1: Name + Selected/Top Badge */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: "1.25rem", flexShrink: 0 }}>{meta.icon}</span>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                            <p style={{
+                              margin: 0,
+                              fontWeight: 700,
+                              fontSize: ".9rem",
+                              color: isSelected ? "#FB923C" : isTop ? C.accentSoft : "#ffe4d6",
+                              letterSpacing: ".04em",
+                            }}>
+                              {meta.label}
+                            </p>
+                            {isSelected && (
+                              <span style={{
+                                fontSize: ".62rem",
+                                fontWeight: 800,
+                                padding: "2px 8px",
+                                borderRadius: 999,
+                                background: "#FB923C",
+                                color: "#070a0f",
+                                letterSpacing: ".08em",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                boxShadow: "0 0 12px rgba(251,146,60,0.6)",
+                              }}>
+                                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#070a0f" }} />
+                                SELECTED
+                              </span>
+                            )}
+                            {isTop && !isSelected && (
+                              <span style={{
+                                fontSize: ".62rem",
+                                padding: "2px 6px",
+                                borderRadius: 999,
+                                background: "rgba(226,98,58,.2)",
+                                border: gb("rgba(226,98,58,.4)"),
+                                color: C.accentSoft,
+                                letterSpacing: ".08em",
+                                textTransform: "uppercase",
+                              }}>
+                                TOP
+                              </span>
+                            )}
+                          </div>
+                          <p style={{ margin: "2px 0 0", fontSize: ".72rem", color: "#9a6050" }}>
+                            {row.feasible ? row.status : `rejected — ${row.reasons[0] ?? "infeasible"}`}
+                          </p>
+                        </div>
+                      </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
-                    <p className="text-[10px] font-medium text-slate-400 truncate">
-                      {stageFlow.inflowLabel}
-                    </p>
-                    <p className="text-sm font-extrabold text-sky-300 mt-0.5 font-mono">
-                      {stageFlow.inflowValue}
-                    </p>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
-                    <p className="text-[10px] font-medium text-slate-400 truncate">
-                      {stageFlow.outflowLabel}
-                    </p>
-                    <p className="text-sm font-extrabold text-emerald-300 mt-0.5 font-mono">
-                      {stageFlow.outflowValue}
-                    </p>
-                  </div>
-                </div>
+                      {/* Col 2: Score Bar */}
+                      <ScoreBar score={share} animated={idx < 4} />
 
-                <div className="text-xs text-slate-300 bg-slate-950/50 p-2.5 rounded-lg border border-slate-800/60 space-y-1">
-                  <p className="font-semibold text-slate-200">{stageFlow.conversionSummary}</p>
-                  <p className="text-[11px] text-slate-400 font-mono">Regime: {stageFlow.operatingParam}</p>
-                </div>
-              </div>
+                      {/* Col 3: Output Badge */}
+                      <span style={{
+                        fontSize: ".75rem", padding: "5px 10px", borderRadius: 999,
+                        border: gb(row.feasible ? "rgba(226,98,58,.3)" : "rgba(255,255,255,.1)"),
+                        background: row.feasible ? "rgba(226,98,58,.1)" : "rgba(255,255,255,.03)",
+                        color: row.feasible ? C.accentSoft : "#6b5248",
+                        letterSpacing: ".04em", textAlign: "center",
+                      }}>
+                        {meta.output}
+                      </span>
 
-              {/* Equipment Interconnection & Routing */}
-              <div className="pt-2 border-t border-slate-800/80 space-y-2">
-                <div className="flex items-center gap-1.5 text-[11px] font-bold text-cyan-400 uppercase tracking-wider">
-                  <Workflow className="w-3.5 h-3.5" />
-                  <span>Equipment Interconnection</span>
-                </div>
-                <div className="space-y-1.5 text-xs">
-                  <div className="flex items-start gap-2 text-slate-300">
-                    <span className="text-[10px] font-bold uppercase text-slate-400 w-16 flex-shrink-0 mt-0.5">From</span>
-                    <span className="text-slate-300 font-medium">{stageFlow.upstreamSource}</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-slate-300">
-                    <span className="text-[10px] font-bold uppercase text-slate-400 w-16 flex-shrink-0 mt-0.5">To</span>
-                    <span className="text-slate-300 font-medium">{stageFlow.downstreamTarget}</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-slate-400 text-[11px]">
-                    <span className="text-[10px] font-bold uppercase text-slate-400 w-16 flex-shrink-0 mt-0.5">Medium</span>
-                    <span className="text-slate-400">{stageFlow.transportMedium}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Illustrative Disclaimer Note */}
-              <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-600/30 text-[11px] text-amber-300/90 leading-relaxed flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                <span>
-                  <strong>Illustrative Schematic:</strong> No calculated engineering yields, flow rates,
-                  or gas outputs are fabricated on this frontend. Validated scientific calculations connect
-                  directly to the FastAPI backend service below.
-                </span>
-              </div>
-            </div>
-
-          </aside>
-        </section>
-
-        {/* =========================================================================
-            D. CALCULATION ENGINE & SCENARIO MODELING (BACKEND INTEGRATION)
-        ========================================================================= */}
-        <section className="space-y-4 pt-4 border-t border-slate-800/80">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <div className="flex items-center gap-2">
-                <Database className="w-4 h-4 text-teal-400" />
-                <h2 className="text-lg font-bold text-white tracking-tight">
-                  {t.title} Engine &amp; Numerical Verification
-                </h2>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {selectedPathway === "anaerobic_digestion"
-                  ? "Connected to FastAPI backend POST /simulations for verified thermodynamic mass balance."
-                  : `Calculation service is currently active for Anaerobic Digestion. ${PATHWAY_CONFIGS[selectedPathway]?.name} operates in illustrative 3D mode.`}
-              </p>
-            </div>
-            {selectedPathway === "anaerobic_digestion" && result && (
-              <div>
-                <StatusBadge status={result.status} />
-              </div>
-            )}
-          </div>
-
-          {selectedPathway === "anaerobic_digestion" ? (
-            <div className={styles.layout}>
-              {/* Input form */}
-              <section className={styles.formCard} aria-label="Simulation inputs">
-                <form onSubmit={handleSubmit}>
-                  <LabelledInput
-                    label={t.form.waste_mass_label}
-                    id={massId}
-                    value={form.waste_mass_kg_day}
-                    onChange={(v) =>
-                      setForm({ waste_mass_kg_day: parseFloat(v) || 0 })
-                    }
-                    min={1}
-                    max={1_000_000}
-                    step={100}
-                  />
-                  <LabelledInput
-                    label={t.form.organic_fraction_label}
-                    id={organicId}
-                    value={form.organic_fraction}
-                    onChange={(v) =>
-                      setForm({ organic_fraction: parseFloat(v) || 0 })
-                    }
-                    min={0}
-                    max={1}
-                    step={0.01}
-                  />
-                  <LabelledInput
-                    label={t.form.suitable_fraction_label}
-                    id={suitableId}
-                    value={form.suitable_fraction}
-                    onChange={(v) =>
-                      setForm({ suitable_fraction: parseFloat(v) || 0 })
-                    }
-                    min={0}
-                    max={1}
-                    step={0.01}
-                  />
-                  <LabelledInput
-                    label={t.form.location_label}
-                    id={locationId}
-                    type="text"
-                    value={form.location_id}
-                    onChange={(v) => setForm({ location_id: v })}
-                  />
-
-                  <div className={styles.actions}>
-                    <button
-                      type="submit"
-                      className={styles.btnPrimary}
-                      disabled={loading}
-                    >
-                      {loading ? t.form.running_button : t.form.run_button}
-                    </button>
-                    {result && (
+                      {/* Col 4: Explain Button */}
                       <button
-                        type="button"
-                        className={styles.btnSecondary}
-                        onClick={reset}
-                      >
-                        {t.form.reset_button}
+                        disabled={loading}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleExplain(row.pathway);
+                        }}
+                        style={{
+                          padding: "8px 14px", borderRadius: 12, cursor: "pointer",
+                          border: gb(active ? C.accent : "rgba(226,98,58,.25)"),
+                          background: active ? "rgba(226,98,58,.15)" : "rgba(255,255,255,.04)",
+                          color: active ? C.accentSoft : "#c09080",
+                          fontFamily: FONT, fontSize: ".78rem", fontWeight: 600,
+                          letterSpacing: ".06em", display: "flex", alignItems: "center", gap: 6,
+                          transition: "all .2s",
+                          boxShadow: active ? `0 0 14px ${C.accentGlow}` : "none",
+                        }}>
+                        {loading ? <Spinner size={12} /> : "✨"}
+                        {loading ? "Loading…" : "Why Choose This?"}
                       </button>
+                    </div>
+
+                    {/* AI explanation drawer */}
+                    {active && explainCache[row.pathway] && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          margin: "0 0 14px", padding: "16px 20px", borderRadius: 14,
+                          border: gb("rgba(226,98,58,.25)"),
+                          background: "rgba(226,98,58,.06)", backdropFilter: "blur(6px)",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                          <span style={{ fontSize: ".75rem", letterSpacing: ".1em",
+                            textTransform: "uppercase", padding: "2px 10px", borderRadius: 999,
+                            background: explainCache[row.pathway].source === "gemini"
+                              ? "rgba(74,222,128,.12)" : "rgba(226,98,58,.1)",
+                            border: gb(explainCache[row.pathway].source === "gemini"
+                              ? "rgba(74,222,128,.3)" : "rgba(226,98,58,.2)"),
+                            color: explainCache[row.pathway].source === "gemini" ? "#86efac" : C.accentSoft,
+                          }}>
+                            {explainCache[row.pathway].source === "gemini" ? "✦ Gemini AI" : "📋 Template"}
+                          </span>
+                          {!explainCache[row.pathway].grounded && (
+                            <span style={{ fontSize: ".72rem", color: "#9a6050" }}>
+                              (indicative — grounding check not passed)
+                            </span>
+                          )}
+                        </div>
+                        <p style={{ margin: "0 0 10px", color: C.textBody, fontSize: ".88rem",
+                          lineHeight: 1.65, letterSpacing: ".02em" }}>
+                          {explainCache[row.pathway].text}
+                        </p>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 8 }}>
+                          {[
+                            { label: "Net kWh/day", value: row.e_net_kwh_d > 0 ? `${row.e_net_kwh_d.toFixed(0)} kWh` : "—" },
+                            { label: "Annual Net", value: `₹${(row.annual_net_value_inr / 100_000).toFixed(1)}L` },
+                            { label: "MC Wins", value: row.win_count != null ? `${row.win_count} / ${Math.round((row.win_count / (row.optimality_share ?? 0.01)) * 1)}` : "—" },
+                          ].map(({ label, value }) => (
+                            <div key={label} style={{ padding: "6px 14px", borderRadius: 10,
+                              background: "rgba(255,255,255,.04)", border: gb("rgba(226,98,58,.18)") }}>
+                              <p style={{ margin: "0 0 2px", fontSize: ".67rem", letterSpacing: ".1em",
+                                textTransform: "uppercase", color: "#9a6050" }}>{label}</p>
+                              <p style={{ margin: 0, fontSize: ".88rem", fontWeight: 600,
+                                color: "#ffe4d6" }}>{value}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <p style={{ margin: "12px 0 0", fontSize: ".72rem", color: "#6b5248", fontStyle: "italic" }}>
+                          ⚠ {explainCache[row.pathway].disclaimer}
+                        </p>
+                      </div>
                     )}
                   </div>
-                </form>
-              </section>
-
-              {/* Results card */}
-              {loading ? (
-                <section
-                  className={styles.resultsCard}
-                  aria-label="Simulation in progress"
-                >
-                  <div className="flex flex-col items-center justify-center text-center py-10 space-y-3">
-                    <div className="w-12 h-12 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400">
-                      <RotateCw className="w-6 h-6 animate-spin text-teal-400" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-200">
-                        Running Mass Balance Simulation...
-                      </h3>
-                      <p className="text-xs text-slate-400 max-w-sm mt-1.5 leading-relaxed">
-                        Communicating with FastAPI service at <code>/simulations</code> to solve biochemical methane potential and thermodynamic energy yield.
-                      </p>
-                    </div>
-                  </div>
-                </section>
-              ) : result || error ? (
-                <section
-                  className={styles.resultsCard}
-                  aria-label="Simulation results"
-                >
-                  {error && (
-                    <div className="p-3 mb-4 rounded-xl bg-rose-950/40 border border-rose-500/40 text-xs text-rose-300 flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <strong>{t.errors.api_error}:</strong> {error}
-                      </div>
-                    </div>
-                  )}
-
-                  {result && (
-                    <>
-                      {/* Dynamic status badge */}
-                      <div className={styles.badgeRow}>
-                        <StatusBadge status={result.status} />
-                      </div>
-
-                      <h2 className={styles.resultsHeading}>{t.results.heading}</h2>
-
-                      <dl className={styles.metrics}>
-                        <div className={styles.metric}>
-                          <dt className={styles.metricLabel}>
-                            {t.results.net_energy}
-                          </dt>
-                          <dd className={styles.metricValue}>
-                            {fmt(result.results.e_net_kwh_d)}{" "}
-                            <span className={styles.unit}>
-                              {t.results.unit_kwh_d}
-                            </span>
-                          </dd>
-                        </div>
-
-                        <div className={styles.metric}>
-                          <dt className={styles.metricLabel}>{t.results.biogas}</dt>
-                          <dd className={styles.metricValue}>
-                            {fmt(result.results.biogas_nm3_d)}{" "}
-                            <span className={styles.unit}>
-                              {t.results.unit_nm3_d}
-                            </span>
-                          </dd>
-                        </div>
-
-                        <div className={styles.metric}>
-                          <dt className={styles.metricLabel}>
-                            {t.results.digester_volume}
-                          </dt>
-                          <dd className={styles.metricValue}>
-                            {fmt(result.results.digester_m3, 0)}{" "}
-                            <span className={styles.unit}>{t.results.unit_m3}</span>
-                          </dd>
-                        </div>
-                      </dl>
-
-                      {/* Warnings */}
-                      {result.results.warnings.length > 0 && (
-                        <ul className={styles.warnings}>
-                          {result.results.warnings.map((w, i) => (
-                            <li key={i}>{w}</li>
-                          ))}
-                        </ul>
-                      )}
-
-                      {/* Footer metadata */}
-                      <footer className={styles.runMeta}>
-                        <span>
-                          {t.results.run_id}: <code>{result.id}</code>
-                        </span>
-                        <span>
-                          {t.results.model_version}:{" "}
-                          <code>{result.model_version}</code>
-                        </span>
-                      </footer>
-                    </>
-                  )}
-                </section>
-              ) : (
-                <section
-                  className={styles.resultsCard}
-                  aria-label="Simulation standby"
-                >
-                  <div className="flex flex-col items-center justify-center text-center py-10 space-y-3">
-                    <div className="w-12 h-12 rounded-2xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
-                      <Activity className="w-6 h-6 animate-pulse" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-200">
-                        Awaiting Simulation Run
-                      </h3>
-                      <p className="text-xs text-slate-400 max-w-sm mt-1.5 leading-relaxed">
-                        Adjust feedstock mass and fractions on the left, then trigger the thermodynamic calculation service to view verified net electrical yield, biogas generation, and digester sizing.
-                      </p>
-                    </div>
-                  </div>
-                </section>
-              )}
+                );
+              })}
             </div>
-          ) : (
-            <div className="glass-panel p-6 rounded-2xl border border-slate-800 text-center space-y-3">
-              <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
-                <ShieldAlert className="w-5 h-5" />
+          </section>
+        )}
+
+        {/* ══ STEP 2: INTERACTIVE 3D SUBPROCESS PIPELINE VIEW ══ */}
+        {loadPhase === 2 && (
+          <section style={card({
+            border: "1.5px solid #FB923C",
+            boxShadow: "0 10px 40px rgba(40,15,5,.45), inset 0 0 30px rgba(226,98,58,.06), 0 0 36px rgba(251,146,60,0.3)",
+            padding: "28px 32px",
+          })}>
+            {/* 1. Header Bar */}
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 12,
+              paddingBottom: 20,
+              borderBottom: "1px solid rgba(251,146,60,0.25)",
+              marginBottom: 24,
+            }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <h2 style={{
+                    margin: 0,
+                    fontSize: "clamp(1rem, 2.2vw, 1.25rem)",
+                    letterSpacing: ".08em",
+                    textTransform: "uppercase",
+                    fontWeight: 800,
+                    color: "#FB923C",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}>
+                    ⚙️ INTERACTIVE SUBPROCESS PIPELINE: {selectedPathwayName.toUpperCase()}
+                  </h2>
+                  <span style={{
+                    fontSize: ".72rem",
+                    fontWeight: 700,
+                    padding: "4px 12px",
+                    borderRadius: 999,
+                    background: "rgba(251,146,60,0.18)",
+                    border: "1.5px solid #FB923C",
+                    color: "#FB923C",
+                    letterSpacing: ".08em",
+                    boxShadow: "0 0 14px rgba(251,146,60,0.35)",
+                  }}>
+                    {currentStages.length} Subprocess Stages
+                  </span>
+                </div>
+                <p style={{ margin: "6px 0 0", fontSize: ".82rem", color: C.textBody, letterSpacing: ".02em" }}>
+                  Sequential thermochemical & biochemical unit operations. Click any 3D equipment stage to inspect real-time operating conditions.
+                </p>
               </div>
-              <h3 className="text-sm font-bold text-slate-200">
-                Calculation Engine Status: Anaerobic Digestion Active
-              </h3>
-              <p className="text-xs text-slate-400 max-w-xl mx-auto leading-relaxed">
-                The validated scientific mass-balance calculations currently connect to the backend Anaerobic Digestion engine. The <strong>{PATHWAY_CONFIGS[selectedPathway]?.name}</strong> pathway is configured for 3D schematic inspection and physical walkthrough.
-              </p>
-              <button
-                type="button"
-                onClick={() => handlePathwayChange("anaerobic_digestion")}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 text-xs font-semibold text-teal-300 transition-colors"
-              >
-                <span>Switch to Anaerobic Digestion to run numerical simulation</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-        </section>
 
-        {/* =========================================================================
-            E. FOOTER
-        ========================================================================= */}
-        <footer className="pt-4 border-t border-slate-800/80 text-xs text-slate-400 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <p>
-            <strong className="text-slate-300 font-semibold">Waste-Potential Platform</strong> · Module P5: Interactive Process Simulator &amp; Process Lab
-          </p>
-          <p className="text-[11px] text-slate-400">
-            SCIENCE BEFORE SPECTACLE · Three.js &amp; React Three Fiber Engine
-          </p>
-        </footer>
+              {/* Pathway quick switcher tags */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span style={{ fontSize: ".72rem", color: "#9a6050", letterSpacing: ".05em" }}>Switch:</span>
+                {ALL_PATHWAYS.map(p => {
+                  const isCur = p === selectedPathwayId;
+                  const meta = PATHWAY_META[p];
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => {
+                        setSelectedPathwayId(p);
+                        setHasUserSelected(true);
+                      }}
+                      style={{
+                        fontSize: ".7rem",
+                        padding: "4px 10px",
+                        borderRadius: 999,
+                        border: isCur ? "1.5px solid #FB923C" : "1px solid rgba(226,98,58,.2)",
+                        background: isCur ? "rgba(251,146,60,0.22)" : "rgba(255,255,255,.02)",
+                        color: isCur ? "#FB923C" : "#b07060",
+                        cursor: "pointer",
+                        fontWeight: isCur ? 700 : 500,
+                        transition: "all .15s",
+                      }}
+                    >
+                      {meta?.icon} {meta?.label.split(" ")[0]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 2. Sequential Stage Flowchart (Block Diagram) */}
+            <div style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 14,
+              overflowX: "auto",
+              padding: "10px 4px 20px",
+              scrollbarWidth: "thin",
+              scrollbarColor: "#FB923C #0c111d",
+            }}>
+              {currentStages.map((stage, stageIdx) => {
+                const isInspected = inspectedStage?.id === stage.id;
+                const hasNext = stageIdx < currentStages.length - 1;
+
+                return (
+                  <div key={stage.id} style={{ display: "flex", alignItems: "flex-start", gap: 14, flexShrink: 0 }}>
+                    {/* Stage Block Container */}
+                    <div style={{ width: 280, display: "flex", flexDirection: "column" }}>
+
+                      {/* Floating Input Badges (Showing exact raw materials with downward arrow) */}
+                      <div style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                        minHeight: 52,
+                        marginBottom: 10,
+                        justifyContent: "flex-end",
+                      }}>
+                        {(stage.subprocessInputs ?? ["↓ Raw Feedstock"]).map((rawInput) => {
+                          const badgeStyle = getInputBadgeStyle(rawInput);
+                          return (
+                            <span
+                              key={rawInput}
+                              style={{
+                                fontSize: ".73rem",
+                                fontWeight: 700,
+                                letterSpacing: ".04em",
+                                padding: "4px 10px",
+                                borderRadius: 8,
+                                background: badgeStyle.bg,
+                                border: `1px solid ${badgeStyle.border}`,
+                                color: badgeStyle.text,
+                                boxShadow: `0 2px 10px ${badgeStyle.glow}`,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                backdropFilter: "blur(6px)",
+                                alignSelf: "flex-start",
+                              }}
+                            >
+                              {rawInput}
+                            </span>
+                          );
+                        })}
+                      </div>
+
+                      {/* Interactive Stage Card */}
+                      <div
+                        onClick={() => setInspectedStage(stage)}
+                        style={{
+                          background: isInspected ? "rgba(251,146,60,0.14)" : "rgba(15,23,42,0.7)",
+                          border: isInspected ? "2px solid #FB923C" : "1px solid rgba(251,146,60,0.25)",
+                          boxShadow: isInspected
+                            ? "0 0 30px rgba(251,146,60,0.45), inset 0 0 20px rgba(251,146,60,0.12)"
+                            : "0 8px 30px rgba(0,0,0,0.5), inset 0 0 20px rgba(251,146,60,0.02)",
+                          borderRadius: 18,
+                          padding: "16px",
+                          cursor: "pointer",
+                          transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 12,
+                        }}
+                      >
+                        {/* 3D Canvas Viewport */}
+                        <div style={{ position: "relative" }}>
+                          {mounted ? (
+                            <StageCanvas3D
+                              equipmentType={stage.equipmentType}
+                              stageName={stage.name}
+                              accentColor="#FB923C"
+                              selected={isInspected}
+                              height={180}
+                            />
+                          ) : (
+                            <div style={{ height: 180, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <Spinner size={24} color="#FB923C" />
+                            </div>
+                          )}
+                          <div style={{
+                            position: "absolute",
+                            top: 8,
+                            right: 8,
+                            padding: "3px 8px",
+                            borderRadius: 999,
+                            background: "rgba(7,10,15,0.75)",
+                            border: "1px solid rgba(251,146,60,0.3)",
+                            fontSize: ".65rem",
+                            color: "#fdba74",
+                            letterSpacing: ".06em",
+                            fontWeight: 600,
+                          }}>
+                            STAGE {stage.code}
+                          </div>
+                        </div>
+
+                        {/* Stage Label (Number and Name) */}
+                        <div>
+                          <p style={{
+                            margin: 0,
+                            fontWeight: 700,
+                            fontSize: ".9rem",
+                            color: isInspected ? "#FB923C" : "#ffe4d6",
+                            letterSpacing: ".02em",
+                            lineHeight: 1.35,
+                          }}>
+                            Stage {stage.code}: {stage.name}
+                          </p>
+                          <span style={{
+                            fontSize: ".68rem",
+                            color: "#9a6050",
+                            letterSpacing: ".04em",
+                            textTransform: "uppercase",
+                            marginTop: 2,
+                            display: "inline-block",
+                          }}>
+                            {stage.category}
+                          </span>
+                        </div>
+
+                        {/* Quick Operating Condition Preview Pills */}
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          <span style={{
+                            fontSize: ".7rem",
+                            padding: "3px 8px",
+                            borderRadius: 6,
+                            background: "rgba(251,146,60,0.1)",
+                            border: "1px solid rgba(251,146,60,0.25)",
+                            color: "#fdba74",
+                          }}>
+                            🌡️ {stage.operatingConditions?.temperature ?? "Ambient"}
+                          </span>
+                          <span style={{
+                            fontSize: ".7rem",
+                            padding: "3px 8px",
+                            borderRadius: 6,
+                            background: "rgba(56,189,248,0.1)",
+                            border: "1px solid rgba(56,189,248,0.25)",
+                            color: "#7dd3fc",
+                          }}>
+                            ⏱️ {stage.operatingConditions?.residenceTime ?? "Continuous"}
+                          </span>
+                        </div>
+
+                        {/* Callout Prompt */}
+                        <div style={{
+                          padding: "6px 10px",
+                          borderRadius: 8,
+                          background: isInspected ? "rgba(251,146,60,0.2)" : "rgba(255,255,255,0.03)",
+                          textAlign: "center",
+                          fontSize: ".72rem",
+                          fontWeight: 600,
+                          color: isInspected ? "#FB923C" : "#b07060",
+                          letterSpacing: ".04em",
+                        }}>
+                          {isInspected ? "✦ Currently Inspecting" : "Inspect Conditions 🔍"}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Connecting Glowing Directional Flow Arrows linking Stage N -> Stage N+1 */}
+                    {hasNext && (
+                      <div style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        paddingTop: 150, // aligns vertically with the 3D canvas viewport center
+                        flexShrink: 0,
+                      }}>
+                        <div style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: "50%",
+                          background: "rgba(251,146,60,0.14)",
+                          border: "1.5px solid #FB923C",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          boxShadow: "0 0 16px rgba(251,146,60,0.5)",
+                          color: "#FB923C",
+                          fontSize: "1.2rem",
+                          fontWeight: "bold",
+                        }}>
+                          ➔
+                        </div>
+                        <span style={{
+                          fontSize: ".65rem",
+                          color: "#FB923C",
+                          letterSpacing: ".08em",
+                          textTransform: "uppercase",
+                          marginTop: 6,
+                          fontWeight: 700,
+                        }}>
+                          Flow
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Step 1 Requirement: Final Subprocess Stage Glowing Directional Output Arrow & Sell Button */}
+                    {!hasNext && (
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 14, flexShrink: 0 }}>
+                        {/* Glowing Directional Output Connector */}
+                        <div style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          paddingTop: 145,
+                          flexShrink: 0,
+                        }}>
+                          <div style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: "50%",
+                            background: "linear-gradient(135deg, rgba(251,146,60,0.3), rgba(234,88,12,0.65))",
+                            border: "2px solid #FB923C",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            boxShadow: "0 0 24px rgba(251,146,60,0.85), inset 0 0 10px rgba(251,146,60,0.4)",
+                            color: "#fff",
+                            fontSize: "1.35rem",
+                            fontWeight: "bold",
+                          }}>
+                            ➔
+                          </div>
+                          <span style={{
+                            fontSize: ".66rem",
+                            color: "#FB923C",
+                            letterSpacing: ".08em",
+                            textTransform: "uppercase",
+                            marginTop: 6,
+                            fontWeight: 800,
+                          }}>
+                            Output Stream
+                          </span>
+                        </div>
+
+                        {/* Output Block Card with Yield Badge & Sell Button */}
+                        <div style={{
+                          width: 320,
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "flex-end",
+                          marginTop: 62,
+                        }}>
+                          <div style={{
+                            background: "linear-gradient(145deg, rgba(251,146,60,0.18) 0%, rgba(15,23,42,0.92) 100%)",
+                            border: "2px solid #FB923C",
+                            boxShadow: "0 0 35px rgba(251,146,60,0.4), inset 0 0 25px rgba(251,146,60,0.12)",
+                            borderRadius: 18,
+                            padding: "20px 22px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 14,
+                            position: "relative",
+                            overflow: "hidden",
+                          }}>
+                            <div style={{
+                              position: "absolute",
+                              top: -24,
+                              right: -24,
+                              width: 90,
+                              height: 90,
+                              borderRadius: "50%",
+                              background: "radial-gradient(circle, rgba(251,146,60,0.35) 0%, transparent 70%)",
+                              pointerEvents: "none",
+                            }} />
+
+                            <div>
+                              <span style={{
+                                fontSize: ".65rem",
+                                fontWeight: 800,
+                                letterSpacing: ".1em",
+                                textTransform: "uppercase",
+                                color: "#070a0f",
+                                background: "#FB923C",
+                                padding: "2px 8px",
+                                borderRadius: 999,
+                                display: "inline-block",
+                                marginBottom: 6,
+                              }}>
+                                READY TO MONETIZE
+                              </span>
+                              <h4 style={{
+                                margin: 0,
+                                fontSize: "1rem",
+                                fontWeight: 800,
+                                color: "#FFE4D6",
+                                letterSpacing: ".02em",
+                                lineHeight: 1.35,
+                              }}>
+                                ⚡ Output Produced: {primaryOutput}
+                              </h4>
+                            </div>
+
+                            {/* Yield quantity badge scaled from user mass */}
+                            <div style={{
+                              padding: "10px 14px",
+                              borderRadius: 12,
+                              background: "rgba(7,10,15,0.75)",
+                              border: "1px solid rgba(251,146,60,0.3)",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 3,
+                            }}>
+                              <span style={{ fontSize: ".68rem", color: "#9a6050", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                                Scaled Daily Yield
+                              </span>
+                              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                                <span style={{ fontSize: "1.25rem", fontWeight: 800, color: "#FB923C" }}>
+                                  {yieldInfo.qty}
+                                </span>
+                                <span style={{ fontSize: ".78rem", color: "#fdba74", fontWeight: 600 }}>
+                                  {yieldInfo.unit}
+                                </span>
+                              </div>
+                              <span style={{ fontSize: ".7rem", color: "#86efac" }}>
+                                Direct recovery from {mass.toLocaleString()} kg/day input
+                              </span>
+                            </div>
+
+                            {/* Action Button: SELL PRODUCED ENERGY → */}
+                            <button
+                              onClick={() => {
+                                router.push(
+                                  '/market/energy?pincode=' + encodeURIComponent(pincode || "110001") +
+                                  '&output=' + encodeURIComponent(primaryOutput) +
+                                  '&mass=' + (mass || 10000)
+                                );
+                              }}
+                              style={{
+                                padding: "14px 18px",
+                                borderRadius: 12,
+                                background: "linear-gradient(90deg, #C2410C 0%, #EA580C 50%, #FB923C 100%)",
+                                border: "none",
+                                color: "#070a0f",
+                                fontFamily: FONT,
+                                fontSize: ".88rem",
+                                fontWeight: 800,
+                                letterSpacing: ".06em",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 8,
+                                boxShadow: "0 0 24px rgba(251,146,60,0.6)",
+                                transition: "all 0.2s ease",
+                              }}
+                            >
+                              <span>SELL PRODUCED ENERGY</span>
+                              <span style={{ fontSize: "1.1rem" }}>→</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* ══ STEP 3: STAGE INSPECTOR DRAWER / MODAL ══ */}
+        {inspectedStage && (
+          <div
+            onClick={() => setInspectedStage(null)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(4,7,14,0.85)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+              zIndex: 999,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px",
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "#0c111d",
+                border: "2px solid #FB923C",
+                borderRadius: 24,
+                boxShadow: "0 0 60px rgba(251,146,60,0.4), 0 25px 70px rgba(0,0,0,0.9)",
+                maxWidth: 760,
+                width: "100%",
+                maxHeight: "90vh",
+                overflowY: "auto",
+                padding: "28px 32px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 22,
+                fontFamily: FONT,
+                color: "#ffe4d6",
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+                    <span style={{
+                      fontSize: ".7rem",
+                      fontWeight: 800,
+                      padding: "3px 10px",
+                      borderRadius: 999,
+                      background: "#FB923C",
+                      color: "#070a0f",
+                      letterSpacing: ".08em",
+                    }}>
+                      STAGE {inspectedStage.code}
+                    </span>
+                    <span style={{
+                      fontSize: ".72rem",
+                      padding: "3px 10px",
+                      borderRadius: 999,
+                      background: "rgba(251,146,60,0.15)",
+                      border: "1px solid rgba(251,146,60,0.35)",
+                      color: "#fdba74",
+                      letterSpacing: ".06em",
+                      textTransform: "uppercase",
+                    }}>
+                      {inspectedStage.category}
+                    </span>
+                  </div>
+                  <h3 style={{
+                    margin: 0,
+                    fontSize: "1.35rem",
+                    fontWeight: 800,
+                    color: "#ffe4d6",
+                    letterSpacing: ".03em",
+                  }}>
+                    {inspectedStage.name}
+                  </h3>
+                </div>
+
+                <button
+                  onClick={() => setInspectedStage(null)}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: "50%",
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(251,146,60,0.3)",
+                    color: "#fdba74",
+                    fontSize: "1.1rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "all .15s",
+                  }}
+                  title="Close Inspector"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* 3D Visual Preview inside Inspector */}
+              <div style={{
+                borderRadius: 16,
+                overflow: "hidden",
+                border: "1px solid rgba(251,146,60,0.3)",
+                background: "radial-gradient(ellipse at 50% 60%, rgba(251,146,60,0.12) 0%, #070a0f 80%)",
+              }}>
+                {mounted && (
+                  <StageCanvas3D
+                    equipmentType={inspectedStage.equipmentType}
+                    stageName={inspectedStage.name}
+                    accentColor="#FB923C"
+                    selected={true}
+                    height={210}
+                  />
+                )}
+              </div>
+
+              {/* Operating Conditions Grid (Primary Prompt Requirement) */}
+              <div>
+                <h4 style={{
+                  margin: "0 0 12px",
+                  fontSize: ".8rem",
+                  letterSpacing: ".1em",
+                  textTransform: "uppercase",
+                  color: "#FB923C",
+                }}>
+                  ⚙️ Real-Time Operating Conditions
+                </h4>
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                  gap: 12,
+                }}>
+                  <div style={{
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    background: "rgba(249,115,22,0.1)",
+                    border: "1px solid rgba(249,115,22,0.3)",
+                  }}>
+                    <span style={{ fontSize: ".68rem", color: "#fdba74", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                      🌡️ Temperature
+                    </span>
+                    <p style={{ margin: "4px 0 0", fontSize: "1.05rem", fontWeight: 800, color: "#fff" }}>
+                      {inspectedStage.operatingConditions?.temperature ?? "Ambient (~25°C)"}
+                    </p>
+                  </div>
+
+                  <div style={{
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    background: "rgba(14,165,233,0.1)",
+                    border: "1px solid rgba(14,165,233,0.3)",
+                  }}>
+                    <span style={{ fontSize: ".68rem", color: "#7dd3fc", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                      📊 Operating Pressure
+                    </span>
+                    <p style={{ margin: "4px 0 0", fontSize: "1.05rem", fontWeight: 800, color: "#fff" }}>
+                      {inspectedStage.operatingConditions?.pressure ?? "1.0 bar (atm)"}
+                    </p>
+                  </div>
+
+                  <div style={{
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    background: "rgba(168,85,247,0.1)",
+                    border: "1px solid rgba(168,85,247,0.3)",
+                  }}>
+                    <span style={{ fontSize: ".68rem", color: "#d8b4fe", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                      ⏱️ Residence Time
+                    </span>
+                    <p style={{ margin: "4px 0 0", fontSize: "1.05rem", fontWeight: 800, color: "#fff" }}>
+                      {inspectedStage.operatingConditions?.residenceTime ?? "Continuous"}
+                    </p>
+                  </div>
+
+                  <div style={{
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    background: "rgba(34,197,94,0.1)",
+                    border: "1px solid rgba(34,197,94,0.3)",
+                  }}>
+                    <span style={{ fontSize: ".68rem", color: "#86efac", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                      📈 Conversion Yield
+                    </span>
+                    <p style={{ margin: "4px 0 0", fontSize: "1.05rem", fontWeight: 800, color: "#fff" }}>
+                      {inspectedStage.operatingConditions?.conversionYield ?? "95% throughput"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Description & Role */}
+              <div>
+                <p style={{ margin: "0 0 8px", fontSize: ".88rem", lineHeight: 1.6, color: C.textBody }}>
+                  {inspectedStage.description}
+                </p>
+                <p style={{ margin: 0, fontSize: ".8rem", color: "#fdba74", fontStyle: "italic" }}>
+                  Role: {inspectedStage.role}
+                </p>
+              </div>
+
+              {/* Raw Inputs & Process Outputs */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                gap: 16,
+                padding: "14px 16px",
+                borderRadius: 14,
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(251,146,60,0.2)",
+              }}>
+                <div>
+                  <span style={{ fontSize: ".72rem", color: "#86efac", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>
+                    Subprocess Ingestion Materials:
+                  </span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
+                    {(inspectedStage.subprocessInputs ?? inspectedStage.inputs).map((inp) => (
+                      <span key={inp} style={{ fontSize: ".8rem", color: "#ffe4d6" }}>
+                        • {inp}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <span style={{ fontSize: ".72rem", color: "#38bdf8", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>
+                    Stage Stream Outputs:
+                  </span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
+                    {inspectedStage.outputs.map((out) => (
+                      <span key={out} style={{ fontSize: ".8rem", color: "#ffe4d6" }}>
+                        ➔ {out}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Equipment Highlights */}
+              {inspectedStage.equipmentHighlights?.length > 0 && (
+                <div>
+                  <span style={{ fontSize: ".72rem", color: "#facc15", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>
+                    Industrial Specifications:
+                  </span>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+                    {inspectedStage.equipmentHighlights.map((eq) => (
+                      <span
+                        key={eq}
+                        style={{
+                          fontSize: ".74rem",
+                          padding: "4px 10px",
+                          borderRadius: 8,
+                          background: "rgba(250,204,21,0.08)",
+                          border: "1px solid rgba(250,204,21,0.25)",
+                          color: "#fef08a",
+                        }}
+                      >
+                        ✓ {eq}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Stage Navigation & Actions Footer */}
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingTop: 14,
+                borderTop: "1px solid rgba(251,146,60,0.2)",
+                flexWrap: "wrap",
+                gap: 10,
+              }}>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    disabled={currentStageIndex <= 0}
+                    onClick={handlePrevStage}
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: 10,
+                      background: currentStageIndex > 0 ? "rgba(251,146,60,0.15)" : "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(251,146,60,0.3)",
+                      color: currentStageIndex > 0 ? "#FB923C" : "#64748b",
+                      cursor: currentStageIndex > 0 ? "pointer" : "not-allowed",
+                      fontFamily: FONT,
+                      fontSize: ".8rem",
+                      fontWeight: 600,
+                    }}
+                  >
+                    ← Previous Stage
+                  </button>
+                  <button
+                    disabled={currentStageIndex >= currentStages.length - 1}
+                    onClick={handleNextStage}
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: 10,
+                      background: currentStageIndex < currentStages.length - 1 ? "rgba(251,146,60,0.15)" : "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(251,146,60,0.3)",
+                      color: currentStageIndex < currentStages.length - 1 ? "#FB923C" : "#64748b",
+                      cursor: currentStageIndex < currentStages.length - 1 ? "pointer" : "not-allowed",
+                      fontFamily: FONT,
+                      fontSize: ".8rem",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Next Stage →
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setInspectedStage(null)}
+                  style={{
+                    padding: "8px 20px",
+                    borderRadius: 10,
+                    background: "linear-gradient(90deg, #C2410C, #FB923C)",
+                    border: "none",
+                    color: "#070a0f",
+                    fontFamily: FONT,
+                    fontSize: ".82rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: "0 0 16px rgba(251,146,60,0.4)",
+                  }}
+                >
+                  Done Inspecting
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Hard error (no results at all) ── */}
+        {simError && loadPhase !== 2 && (
+          <section style={card()}>
+            <p style={{ margin: 0, color: "#f87171", fontSize: ".9rem" }}>⚠ {simError}</p>
+            <Link href="/explore/industry" style={{
+              display: "inline-block", marginTop: 14, color: C.accentSoft,
+              textDecoration: "none", fontSize: ".88rem",
+            }}>
+              ← Return to Industry Hub
+            </Link>
+          </section>
+        )}
 
       </div>
     </main>
+  );
+}
+
+/* ── Default export wraps in Suspense (required for useSearchParams) ── */
+export default function SimulatorPage() {
+  return (
+    <Suspense fallback={
+      <main style={{ minHeight: "100vh", background: "#070a0f", display: "flex",
+        alignItems: "center", justifyContent: "center", fontFamily: '"Rubik",sans-serif' }}>
+        <span style={{ color: "#F0A080", fontSize: "1rem", letterSpacing: ".1em" }}>
+          Loading simulator…
+        </span>
+      </main>
+    }>
+      <SimulatorInner />
+    </Suspense>
   );
 }

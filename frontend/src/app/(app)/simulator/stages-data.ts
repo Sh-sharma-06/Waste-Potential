@@ -1,195 +1,1046 @@
 import { ProcessStage } from "./types";
 
-export const STAGES: ProcessStage[] = [
-  {
-    id: "waste-receiving",
-    code: "01",
-    name: "Waste Receiving",
-    shortName: "Receiving",
-    category: "Feedstock Ingestion",
-    position: [-11.4, 0, 0],
-    color: "#94a3b8",
-    accentColor: "#38bdf8",
-    description:
-      "Municipal, commercial, and agricultural organic waste arrives at the enclosed reception bay for weighbridge verification, physical contamination screening, and odor-controlled pit unloading.",
-    role: "Intake, gross inspection, and odor-controlled buffering of raw organic waste.",
-    inputs: [
-      "Source-separated organic waste (SSOW)",
-      "Food market residuals & food waste",
-      "Agricultural manures & crop residues"
-    ],
-    outputs: [
-      "Batched raw feedstock stream",
-      "Controlled foul-air exhaust to biofilter"
-    ],
-    equipmentHighlights: [
-      "Enclosed hydraulic tipping hopper",
-      "Weighbridge & manifest logging",
-      "Negative-pressure biofilter air extraction"
-    ]
-  },
-  {
-    id: "sorting",
-    code: "02",
-    name: "Sorting",
-    shortName: "Sorting",
-    category: "Contaminant Removal",
-    position: [-7.6, 0, 0],
-    color: "#f59e0b",
-    accentColor: "#fbbf24",
-    description:
-      "Automated mechanical and magnetic separators remove non-biodegradable plastics, metals, and inert grit from the feed stream, followed by shredding to optimize surface area for microbial digestion.",
-    role: "Separation of contraries and mechanical size reduction of organic material.",
-    inputs: [
-      "Raw unrefined organic waste",
-      "Magnetic & mechanical screening feeds"
-    ],
-    outputs: [
-      "Purified organic fraction (<12 mm particle size)",
-      "Ferrous and non-ferrous metals for recycling",
-      "Inert residual debris for disposal"
-    ],
-    equipmentHighlights: [
-      "Overband cross-belt magnetic separator",
-      "Rotary drum trommel screen",
-      "Twin-shaft industrial shredder"
-    ]
-  },
-  {
-    id: "mixing-tank",
-    code: "03",
-    name: "Mixing Tank",
-    shortName: "Mixing",
-    category: "Slurry Conditioning",
-    position: [-3.8, 0, 0],
-    color: "#06b6d4",
-    accentColor: "#22d3ee",
-    description:
-      "The shredded organic fraction is blended with recirculated process liquid or dilution water to formulate a pumpable, homogeneous slurry with balanced total solids content and stable pH.",
-    role: "Slurry homogenization, moisture balancing, and thermal pre-conditioning.",
-    inputs: [
-      "Sorted organic pulp",
-      "Recirculated digestate centrate / dilution liquid",
-      "pH buffering agents (if necessary)"
-    ],
-    outputs: [
-      "Homogeneous pumpable feedstock slurry (10-15% TS)",
-      "Thermally pre-conditioned digester feed"
-    ],
-    equipmentHighlights: [
-      "High-torque vertical paddle agitator",
-      "Level and dry-matter density sensors",
-      "Heavy-duty progressive cavity feed pump"
-    ]
-  },
-  {
-    id: "anaerobic-digester",
-    code: "04",
-    name: "Anaerobic Digester",
-    shortName: "Digester",
-    category: "Biological Conversion (Core)",
-    position: [0, 0, 0],
-    color: "#10b981",
-    accentColor: "#2dd4bf",
-    description:
-      "The core reactor of the facility. Under strictly anaerobic (oxygen-free) and heated conditions, specialized microbial consortia break down organic compounds through hydrolysis, acidogenesis, acetogenesis, and methanogenesis to generate raw biogas.",
-    role: "Anaerobic biological degradation of volatile solids and production of methane-rich biogas.",
-    inputs: [
-      "Conditioned organic slurry from mixing tank",
-      "Parasitic thermal heating water to maintain temperature"
-    ],
-    outputs: [
-      "Raw biogas (approx. 55-65% CH₄, 35-45% CO₂, trace H₂S)",
-      "Degraded biological digestate slurry"
-    ],
-    equipmentHighlights: [
-      "Continuously stirred tank reactor (CSTR)",
-      "Flexible double-membrane gasholder dome",
-      "Internal heating grid & mechanical draft mixer",
-      "Over/under pressure safety relief valve"
-    ]
-  },
-  {
-    id: "gas-treatment",
-    code: "05",
-    name: "Gas Treatment",
-    shortName: "Gas Clean",
-    category: "Biogas Upgrading",
-    position: [3.8, 0, 0],
-    color: "#a855f7",
-    accentColor: "#c084fc",
-    description:
-      "Raw biogas leaving the digester is saturated with water vapor and contains corrosive hydrogen sulfide (H₂S) and siloxanes. The gas treatment unit cools, dehydrates, and desulfurizes the gas stream to protect downstream engines.",
-    role: "Dehydration, particulate filtration, and sulfur removal for equipment protection.",
-    inputs: [
-      "Raw saturated biogas from digester dome",
-      "Chilled cooling water loop",
-      "Activated carbon / desulfurizing media"
-    ],
-    outputs: [
-      "Dry, scrubbed biomethane fuel gas",
-      "Acidic condensation effluent (neutralized)"
-    ],
-    equipmentHighlights: [
-      "Biological trickling desulfurization scrubber",
-      "Chilled gas condensing demister",
-      "Dual lead-lag activated carbon filtration beds"
-    ]
-  },
-  {
-    id: "chp-generator",
-    code: "06",
-    name: "CHP Generator",
-    shortName: "CHP Unit",
-    category: "Energy Cogeneration",
-    position: [7.6, 0, 0],
-    color: "#f43f5e",
-    accentColor: "#fb7185",
-    description:
-      "The Combined Heat and Power (CHP) reciprocating gas engine converts clean biogas into electricity for grid export and captures jacket and exhaust heat to warm the digester tanks and support regional heating needs.",
-    role: "Simultaneous cogeneration of renewable electricity and reusable high-grade thermal heat.",
-    inputs: [
-      "Scrubbed biogas fuel line",
-      "Combustion air with oxygen sensor trim",
-      "Engine jacket cooling water loop"
-    ],
-    outputs: [
-      "Renewable electricity (grid export & plant load)",
-      "High-grade thermal hot water",
-      "Treated, low-emission exhaust flue gas"
-    ],
-    equipmentHighlights: [
-      "Lean-burn reciprocating gas engine & alternator",
-      "Acoustic weatherproof container enclosure",
-      "Exhaust gas heat recovery exchanger",
-      "Synchronous electrical switchgear and inverter"
-    ]
-  },
-  {
-    id: "digestate-output",
-    code: "07",
-    name: "Digestate Output",
-    shortName: "Digestate",
-    category: "Resource Recovery",
-    position: [11.4, 0, 0],
-    color: "#84cc16",
-    accentColor: "#a3e635",
-    description:
-      "The fully digested slurry is separated into dewatered solid bio-fertilizer and liquid nutrient effluent. Both streams are rich in plant-available nitrogen, phosphorus, and organic carbon, creating a complete circular agricultural loop.",
-    role: "Mechanical solid-liquid separation and storage of stabilized organic fertilizer.",
-    inputs: [
-      "Digested slurry discharged from reactor base",
-      "Polymer flocculant conditioning (if required)"
-    ],
-    outputs: [
-      "Dewatered solid organic compost / soil conditioner",
-      "Liquid bio-fertilizer rich in ammoniacal nitrogen",
-      "Recirculation liquid returned to Stage 03 mixing"
-    ],
-    equipmentHighlights: [
-      "Continuous screw-press or decanter centrifuge",
-      "Enclosed solid cake storage bay",
-      "Covered liquid digestate storage lagoon"
-    ]
+/**
+ * Visual badge styling helper for floating input arrows (e.g. ↓ Water, ↓ Chemicals, ↓ Heat, etc.)
+ */
+export function getInputBadgeStyle(input: string) {
+  const lower = input.toLowerCase();
+  if (lower.includes("biomass") || lower.includes("feedstock") || lower.includes("organic") || lower.includes("waste")) {
+    return {
+      bg: "rgba(34, 197, 94, 0.15)",
+      border: "rgba(34, 197, 94, 0.4)",
+      text: "#86efac",
+      glow: "rgba(34, 197, 94, 0.3)",
+    };
   }
-];
+  if (lower.includes("heat") || lower.includes("temperature") || lower.includes("flue")) {
+    return {
+      bg: "rgba(249, 115, 22, 0.18)",
+      border: "rgba(249, 115, 22, 0.5)",
+      text: "#fdba74",
+      glow: "rgba(249, 115, 22, 0.35)",
+    };
+  }
+  if (lower.includes("water") || lower.includes("coolant") || lower.includes("steam") || lower.includes("moisture")) {
+    return {
+      bg: "rgba(14, 165, 233, 0.15)",
+      border: "rgba(14, 165, 233, 0.45)",
+      text: "#7dd3fc",
+      glow: "rgba(14, 165, 233, 0.3)",
+    };
+  }
+  if (lower.includes("air") || lower.includes("oxygen") || lower.includes("nitrogen") || lower.includes("gas")) {
+    return {
+      bg: "rgba(168, 85, 247, 0.15)",
+      border: "rgba(168, 85, 247, 0.45)",
+      text: "#d8b4fe",
+      glow: "rgba(168, 85, 247, 0.3)",
+    };
+  }
+  if (lower.includes("chemical") || lower.includes("polymer") || lower.includes("stabilizer") || lower.includes("buffering")) {
+    return {
+      bg: "rgba(236, 72, 153, 0.15)",
+      border: "rgba(236, 72, 153, 0.45)",
+      text: "#f472b6",
+      glow: "rgba(236, 72, 153, 0.3)",
+    };
+  }
+  return {
+    bg: "rgba(251, 146, 60, 0.15)",
+    border: "rgba(251, 146, 60, 0.4)",
+    text: "#fdba74",
+    glow: "rgba(251, 146, 60, 0.25)",
+  };
+}
+
+export const PATHWAY_STAGES: Record<string, ProcessStage[]> = {
+  pyrolysis: [
+    {
+      id: "pyr-01",
+      code: "01",
+      name: "Feedstock Pre-Drying & Particle Sizing",
+      shortName: "Drying & Sizing",
+      category: "Feedstock Conditioning",
+      position: [-8, 0, 0],
+      color: "#94a3b8",
+      accentColor: "#f97316",
+      equipmentType: "dryer",
+      subprocessInputs: ["↓ Biomass Feedstock", "↓ Heat"],
+      operatingConditions: {
+        temperature: "105 - 120 °C",
+        pressure: "1.0 bar",
+        residenceTime: "15 - 30 min",
+        conversionYield: "95% dry solid (<8% moisture)",
+      },
+      description:
+        "High-moisture raw biomass undergoes rotary drum indirect drying and screening to bring moisture below 8% and particle size below 2 mm for rapid thermal transfer.",
+      role: "Moisture removal and high surface-area particle preparation.",
+      inputs: ["Raw organic biomass residues", "Low-grade waste process heat"],
+      outputs: ["Dehydrated uniform biomass fines (<2mm)", "Water vapor exhaust"],
+      equipmentHighlights: [
+        "Rotary drum triple-pass dryer",
+        "High-speed knife hammer mill",
+        "Vibratory particle classification screen",
+      ],
+    },
+    {
+      id: "pyr-02",
+      code: "02",
+      name: "Fast Pyrolysis Fluidized Reactor",
+      shortName: "Pyrolysis Reactor",
+      category: "Thermal Conversion (Core)",
+      position: [-4, 0, 0],
+      color: "#f97316",
+      accentColor: "#fb923c",
+      equipmentType: "pyrolysis_reactor",
+      subprocessInputs: ["↓ Heat", "↓ Air/Oxygen (Inert N₂)"],
+      operatingConditions: {
+        temperature: "480 - 520 °C",
+        pressure: "1.0 - 1.3 bar",
+        residenceTime: "1.0 - 2.0 seconds",
+        conversionYield: "65 - 75% bio-oil vapor",
+      },
+      description:
+        "In strictly anoxic conditions, biomass particles are rapidly heated in a bubbling fluidized sand bed, instantly vaporizing cellulose and lignin into condensable bio-oil vapors and bio-char.",
+      role: "Ultra-fast thermal cracking of lignocellulosic polymers into condensable vapors.",
+      inputs: ["Conditioned dry biomass meal", "Inert nitrogen fluidizing gas", "Thermal heat jacket (500°C)"],
+      outputs: ["Bio-oil vapor stream", "Micronized solid bio-char", "Non-condensable syngas"],
+      equipmentHighlights: [
+        "Bubbling fluidized bed quartz-lined reactor",
+        "Recirculating high-temp ceramic heating jacket",
+        "Variable-speed auger metering screw injector",
+      ],
+    },
+    {
+      id: "pyr-03",
+      code: "03",
+      name: "High-Efficiency Hot Gas Cyclone",
+      shortName: "Char Cyclone",
+      category: "Particulate Separation",
+      position: [0, 0, 0],
+      color: "#eab308",
+      accentColor: "#facc15",
+      equipmentType: "cyclone",
+      subprocessInputs: ["↓ Biomass Feedstock (Char Carrier)"],
+      operatingConditions: {
+        temperature: "420 - 460 °C",
+        pressure: "1.0 bar",
+        residenceTime: "0.5 - 1.0 seconds",
+        conversionYield: "98% particulate separation",
+      },
+      description:
+        "Vortex separation rapidly removes abrasive bio-char particles from the hot vapor stream before entering the condenser, preventing catalytic secondary cracking.",
+      role: "Centrifugal solids separation and high-purity bio-char extraction.",
+      inputs: ["Vapor and entrained solid char mixture"],
+      outputs: ["Char-free vapor stream", "Stabilized agricultural bio-char (15-20% yield)"],
+      equipmentHighlights: [
+        "Inconel-625 aerodynamic cyclone body",
+        "Rotary double-flap airlock valve",
+        "Inert-purged char quench canister",
+      ],
+    },
+    {
+      id: "pyr-04",
+      code: "04",
+      name: "Rapid Quench Condenser Coil",
+      shortName: "Condenser Coils",
+      category: "Phase Condensation",
+      position: [4, 0, 0],
+      color: "#06b6d4",
+      accentColor: "#38bdf8",
+      equipmentType: "condenser_coil",
+      subprocessInputs: ["↓ Water", "↓ Chilled Coolant"],
+      operatingConditions: {
+        temperature: "20 - 35 °C",
+        pressure: "1.0 bar",
+        residenceTime: "2.0 - 4.0 seconds",
+        conversionYield: "70 - 75% liquid bio-oil",
+      },
+      description:
+        "Hot pyrolytic vapors are flash-quenched with chilled cooling coils to prevent secondary oligomerization, condensing into high-density liquid crude bio-oil.",
+      role: "Flash cooling and aerosol coalescing of liquid bio-oil fractions.",
+      inputs: ["Hot purified bio-oil vapor", "Closed-loop chilled water (10°C)"],
+      outputs: ["Heavy & light crude bio-oil fractions", "Clean non-condensable combustible gas"],
+      equipmentHighlights: [
+        "Multi-stage helical stainless cooling coils",
+        "Electrostatic aerosol precipitator (ESP)",
+        "Duplex chilled condensation demister",
+      ],
+    },
+    {
+      id: "pyr-05",
+      code: "05",
+      name: "Bio-Oil Stabilization & Storage",
+      shortName: "Fractionation & Storage",
+      category: "Product Recovery",
+      position: [8, 0, 0],
+      color: "#10b981",
+      accentColor: "#34d399",
+      equipmentType: "digestate_output",
+      subprocessInputs: ["↓ Chemicals (Stabilizer)", "↓ Nitrogen Blanket"],
+      operatingConditions: {
+        temperature: "20 - 25 °C",
+        pressure: "1.0 bar",
+        residenceTime: "Continuous Buffer",
+        conversionYield: "99% product recovery",
+      },
+      description:
+        "The recovered liquid bio-oil is conditioned with mild alcohol stabilizers, pH buffered, and stored under nitrogen blanket to preserve energy density.",
+      role: "Viscosity stabilization, phase separation, and commercial storage.",
+      inputs: ["Crude condensed bio-oil", "Alcohol/methanol stabilizing additives"],
+      outputs: ["Commercial industrial bio-fuel oil", "Standardized bio-binder"],
+      equipmentHighlights: [
+        "Nitrogen-blanketed 316L stainless storage vessel",
+        "In-line viscosity & pH monitoring probe",
+        "Positive displacement gear transfer pump",
+      ],
+    },
+  ],
+
+  anaerobic_digestion: [
+    {
+      id: "ad-01",
+      code: "01",
+      name: "Feedstock Reception & Intake",
+      shortName: "Receiving",
+      category: "Feedstock Ingestion",
+      position: [-11.4, 0, 0],
+      color: "#94a3b8",
+      accentColor: "#38bdf8",
+      equipmentType: "waste_receiving",
+      subprocessInputs: ["↓ Biomass Feedstock", "↓ Water"],
+      operatingConditions: {
+        temperature: "20 - 25 °C",
+        pressure: "1.0 bar",
+        residenceTime: "2 - 4 hours",
+        conversionYield: "98% intake throughput",
+      },
+      description:
+        "Municipal, agricultural, and commercial organic residuals arrive at the enclosed reception bay for weighbridge verification, physical inspection, and odor-controlled pit unloading.",
+      role: "Intake, gross inspection, and odor-controlled buffering of raw organic waste.",
+      inputs: ["Source-separated organic waste (SSOW)", "Manures & crop residues"],
+      outputs: ["Batched raw feedstock stream", "Controlled foul-air exhaust to biofilter"],
+      equipmentHighlights: [
+        "Enclosed hydraulic tipping hopper",
+        "Weighbridge & manifest logging",
+        "Negative-pressure biofilter air extraction",
+      ],
+    },
+    {
+      id: "ad-02",
+      code: "02",
+      name: "Mechanical Sorting & Trommel Screen",
+      shortName: "Sorting",
+      category: "Contaminant Removal",
+      position: [-7.6, 0, 0],
+      color: "#f59e0b",
+      accentColor: "#fbbf24",
+      equipmentType: "sorting",
+      subprocessInputs: ["↓ Biomass Feedstock"],
+      operatingConditions: {
+        temperature: "20 °C",
+        pressure: "1.0 bar",
+        residenceTime: "10 - 20 min",
+        conversionYield: "92% organic pulp (<12mm)",
+      },
+      description:
+        "Automated mechanical and magnetic separators remove plastics, metals, and inert grit, followed by twin-shaft shredding to maximize microbial digestion surface area.",
+      role: "Separation of contraries and mechanical size reduction of organic material.",
+      inputs: ["Raw unrefined organic waste", "Magnetic & mechanical screening feeds"],
+      outputs: ["Purified organic fraction (<12 mm particle size)", "Ferrous and non-ferrous metals"],
+      equipmentHighlights: [
+        "Overband cross-belt magnetic separator",
+        "Rotary drum trommel screen",
+        "Twin-shaft industrial shredder",
+      ],
+    },
+    {
+      id: "ad-03",
+      code: "03",
+      name: "Slurry Mixing Tank & Thermal Conditioning",
+      shortName: "Mixing Tank",
+      category: "Slurry Conditioning",
+      position: [-3.8, 0, 0],
+      color: "#06b6d4",
+      accentColor: "#22d3ee",
+      equipmentType: "mixing_tank",
+      subprocessInputs: ["↓ Water", "↓ Chemicals (pH Buffer)", "↓ Heat"],
+      operatingConditions: {
+        temperature: "38 - 42 °C",
+        pressure: "1.0 bar",
+        residenceTime: "4 - 8 hours",
+        conversionYield: "12 - 15% TS slurry",
+      },
+      description:
+        "The shredded organic fraction is blended with recirculated centrate and dilution water to formulate a pumpable, homogeneous slurry with balanced total solids (12-15% TS).",
+      role: "Slurry homogenization, moisture balancing, and thermal pre-conditioning.",
+      inputs: ["Sorted organic pulp", "Recirculated digestate centrate", "pH buffering agents"],
+      outputs: ["Homogeneous pumpable feedstock slurry", "Thermally pre-conditioned digester feed"],
+      equipmentHighlights: [
+        "High-torque vertical paddle agitator",
+        "Level and dry-matter density sensors",
+        "Progressive cavity feed pump",
+      ],
+    },
+    {
+      id: "ad-04",
+      code: "04",
+      name: "Continuous Anaerobic Digester CSTR",
+      shortName: "Anaerobic Digester",
+      category: "Biological Conversion (Core)",
+      position: [0, 0, 0],
+      color: "#10b981",
+      accentColor: "#2dd4bf",
+      equipmentType: "anaerobic_digester",
+      subprocessInputs: ["↓ Heat"],
+      operatingConditions: {
+        temperature: "38 - 55 °C",
+        pressure: "1.02 - 1.08 bar",
+        residenceTime: "21 - 28 days",
+        conversionYield: "55 - 65% CH₄ biogas",
+      },
+      description:
+        "The centerpiece biological reactor. Anaerobic microbial consortia break down organic compounds through hydrolysis, acidogenesis, and methanogenesis to produce raw biogas.",
+      role: "Anaerobic biological degradation of volatile solids and production of methane-rich biogas.",
+      inputs: ["Conditioned organic slurry from mixing tank", "Internal heating water grid"],
+      outputs: ["Raw biogas (55-65% CH₄, 35-45% CO₂)", "Digested biological slurry"],
+      equipmentHighlights: [
+        "Continuously stirred tank reactor (CSTR)",
+        "Flexible double-membrane gasholder dome",
+        "Internal heating grid & mechanical draft mixer",
+      ],
+    },
+    {
+      id: "ad-05",
+      code: "05",
+      name: "Biogas Upgrading & Biological Desulfurization",
+      shortName: "Gas Treatment",
+      category: "Biogas Upgrading",
+      position: [3.8, 0, 0],
+      color: "#a855f7",
+      accentColor: "#c084fc",
+      equipmentType: "gas_treatment",
+      subprocessInputs: ["↓ Water", "↓ Chemicals (Activated Carbon)"],
+      operatingConditions: {
+        temperature: "5 - 12 °C",
+        pressure: "1.2 - 2.0 bar",
+        residenceTime: "30 - 60 seconds",
+        conversionYield: "98.5% H₂S removal (>96% biomethane)",
+      },
+      description:
+        "Raw biogas is cooled, condensed, and scrubbed through biological trickling filters and lead-lag activated carbon columns to remove corrosive H₂S and moisture.",
+      role: "Dehydration, particulate filtration, and sulfur removal for equipment protection.",
+      inputs: ["Raw saturated biogas from digester", "Chilled cooling water loop", "Activated carbon media"],
+      outputs: ["Dry, scrubbed biomethane fuel gas", "Acidic condensate effluent"],
+      equipmentHighlights: [
+        "Biological trickling desulfurization scrubber",
+        "Chilled gas condensing demister",
+        "Dual lead-lag activated carbon beds",
+      ],
+    },
+    {
+      id: "ad-06",
+      code: "06",
+      name: "Combined Heat & Power (CHP) Engine",
+      shortName: "CHP Generator",
+      category: "Energy Cogeneration",
+      position: [7.6, 0, 0],
+      color: "#f43f5e",
+      accentColor: "#fb7185",
+      equipmentType: "chp_generator",
+      subprocessInputs: ["↓ Air/Oxygen"],
+      operatingConditions: {
+        temperature: "480 - 520 °C exhaust",
+        pressure: "1.0 bar",
+        residenceTime: "Continuous",
+        conversionYield: "42% electrical / 46% thermal",
+      },
+      description:
+        "Lean-burn reciprocating gas engine converts clean biogas into electricity for grid export while capturing jacket and exhaust heat to warm the digester tanks.",
+      role: "Simultaneous cogeneration of renewable electricity and reusable high-grade thermal heat.",
+      inputs: ["Scrubbed biogas fuel line", "Combustion air with oxygen trim", "Jacket cooling loop"],
+      outputs: ["Renewable electricity (grid export & plant load)", "High-grade hot water", "Clean exhaust gas"],
+      equipmentHighlights: [
+        "Lean-burn reciprocating gas engine & alternator",
+        "Acoustic weatherproof container enclosure",
+        "Exhaust heat recovery exchanger",
+      ],
+    },
+    {
+      id: "ad-07",
+      code: "07",
+      name: "Digestate Solid-Liquid Separation",
+      shortName: "Digestate Output",
+      category: "Resource Recovery",
+      position: [11.4, 0, 0],
+      color: "#84cc16",
+      accentColor: "#a3e635",
+      equipmentType: "digestate_output",
+      subprocessInputs: ["↓ Chemicals (Polymer Flocculant)"],
+      operatingConditions: {
+        temperature: "28 - 32 °C",
+        pressure: "4.5 bar press",
+        residenceTime: "15 min",
+        conversionYield: "25% bio-fertilizer solids",
+      },
+      description:
+        "Screw-press centrifuge separates digested slurry into dewatered solid organic bio-fertilizer cake and liquid nutrient centrate rich in ammoniacal nitrogen.",
+      role: "Mechanical solid-liquid separation and storage of stabilized organic fertilizer.",
+      inputs: ["Digested slurry discharged from reactor", "Polymer flocculant conditioning"],
+      outputs: ["Dewatered solid organic compost", "Liquid bio-fertilizer", "Recirculation liquid"],
+      equipmentHighlights: [
+        "Continuous screw-press separator",
+        "Enclosed solid cake storage bay",
+        "Covered liquid digestate storage lagoon",
+      ],
+    },
+  ],
+
+  gasification: [
+    {
+      id: "gas-01",
+      code: "01",
+      name: "Biomass Drying & Densification",
+      shortName: "Pre-Drying",
+      category: "Feedstock Conditioning",
+      position: [-8, 0, 0],
+      color: "#94a3b8",
+      accentColor: "#f97316",
+      equipmentType: "dryer",
+      subprocessInputs: ["↓ Biomass Feedstock", "↓ Heat"],
+      operatingConditions: {
+        temperature: "105 - 125 °C",
+        pressure: "1.0 bar",
+        residenceTime: "20 - 40 min",
+        conversionYield: "<10% moisture content",
+      },
+      description:
+        "High-temperature drying removes free moisture to ensure thermal efficiency and prevent temperature drops inside the gasifier hearth.",
+      role: "Feedstock moisture reduction and particle sizing.",
+      inputs: ["High-moisture woody biomass", "Waste heat from syngas cooler"],
+      outputs: ["Uniform dried biomass pellets/chips", "Steam exhaust"],
+      equipmentHighlights: ["Rotary belt dryer", "Dual hammer mills", "Pelletizing die extruder"],
+    },
+    {
+      id: "gas-02",
+      code: "02",
+      name: "Downdraft Gasifier Reactor",
+      shortName: "Gasifier Reactor",
+      category: "Thermochemical Conversion (Core)",
+      position: [-4, 0, 0],
+      color: "#ea580c",
+      accentColor: "#fb923c",
+      equipmentType: "gasifier",
+      subprocessInputs: ["↓ Heat", "↓ Air/Oxygen", "↓ Water (Steam)"],
+      operatingConditions: {
+        temperature: "850 - 1050 °C",
+        pressure: "1.0 - 4.5 bar",
+        residenceTime: "5.0 - 10.0 seconds",
+        conversionYield: "82% syngas conversion",
+      },
+      description:
+        "Biomass reacts with sub-stoichiometric oxygen and steam at over 900°C to trigger partial oxidation and steam reforming into combustible synthesis gas (CO + H₂).",
+      role: "High-temperature thermochemical conversion of solid biomass into combustible syngas.",
+      inputs: ["Dry dense biomass", "Preheated air/oxygen blend", "Steam dosing"],
+      outputs: ["Crude synthesis gas (CO, H₂, CH₄, CO₂)", "Bottom vitrified ash/slag"],
+      equipmentHighlights: [
+        "Throat-type refractory downdraft gasifier",
+        "Oxygen/steam injection ring manifold",
+        "Automated water-quenched ash lockhopper",
+      ],
+    },
+    {
+      id: "gas-03",
+      code: "03",
+      name: "High-Efficiency Syngas Cyclone",
+      shortName: "Gas Cyclone",
+      category: "Particulate Removal",
+      position: [0, 0, 0],
+      color: "#eab308",
+      accentColor: "#fde047",
+      equipmentType: "cyclone",
+      subprocessInputs: ["↓ Syngas Stream"],
+      operatingConditions: {
+        temperature: "550 - 650 °C",
+        pressure: "1.1 bar",
+        residenceTime: "0.8 - 1.5 seconds",
+        conversionYield: "95% fly ash removal",
+      },
+      description:
+        "Hot crude syngas swirls through an aerodynamic cyclone that drops out 95% of abrasive char and fly ash particles at high velocity.",
+      role: "High-temperature gas-solid particulate separation.",
+      inputs: ["Hot crude particulate-laden syngas"],
+      outputs: ["De-dusted raw syngas", "Separated fly ash hopper discharge"],
+      equipmentHighlights: ["Ceramic-lined cyclone body", "High-temperature vortex finder", "Double rotary dust gate"],
+    },
+    {
+      id: "gas-04",
+      code: "04",
+      name: "Syngas Wet Scrubber & Tar Condenser",
+      shortName: "Scrubber & Cooler",
+      category: "Syngas Polishing",
+      position: [4, 0, 0],
+      color: "#0284c7",
+      accentColor: "#38bdf8",
+      equipmentType: "gas_treatment",
+      subprocessInputs: ["↓ Water", "↓ Chemicals (Scrubbing Reagents)"],
+      operatingConditions: {
+        temperature: "40 - 60 °C",
+        pressure: "1.0 bar",
+        residenceTime: "15 - 30 seconds",
+        conversionYield: "99% tar and halide reduction",
+      },
+      description:
+        "Packed bed wet scrubbers contact syngas with oil/water sprays to condense heavy hydrocarbons, scrub acid gases, and cool the stream for combustion.",
+      role: "Tar elimination, moisture condensing, and cooling.",
+      inputs: ["De-dusted hot syngas", "Chilled scrubbing liquid", "Neutralizing chemical wash"],
+      outputs: ["Clean engine-grade synthesis gas", "Recirculated tar oil emulsion"],
+      equipmentHighlights: ["Venturi liquid scrubber column", "Electrostatic tar precipitator", "Plate heat exchanger"],
+    },
+    {
+      id: "gas-05",
+      code: "05",
+      name: "Syngas Power Turbine & Heat Recovery",
+      shortName: "Power Turbine",
+      category: "Energy Generation",
+      position: [8, 0, 0],
+      color: "#f43f5e",
+      accentColor: "#fb7185",
+      equipmentType: "chp_generator",
+      subprocessInputs: ["↓ Air/Oxygen"],
+      operatingConditions: {
+        temperature: "520 - 560 °C exhaust",
+        pressure: "1.0 bar",
+        residenceTime: "Continuous",
+        conversionYield: "38% electrical efficiency",
+      },
+      description:
+        "High-efficiency industrial syngas turbine generates steady electricity while capturing high-grade exhaust heat to power the feedstock drying stage.",
+      role: "High-efficiency electrical generation and thermal heat integration.",
+      inputs: ["Cleaned syngas", "Combustion air"],
+      outputs: ["Grid electricity", "High-temperature exhaust flue gas"],
+      equipmentHighlights: ["Dual-fuel syngas turbine / generator", "Exhaust recuperator", "Continuous emissions monitor"],
+    },
+  ],
+
+  incineration: [
+    {
+      id: "inc-01",
+      code: "01",
+      name: "Bunker Crane & Hydraulic Feeding Bay",
+      shortName: "Feeding Bunker",
+      category: "Feedstock Ingestion",
+      position: [-8, 0, 0],
+      color: "#94a3b8",
+      accentColor: "#38bdf8",
+      equipmentType: "waste_receiving",
+      subprocessInputs: ["↓ Biomass Feedstock"],
+      operatingConditions: {
+        temperature: "25 °C",
+        pressure: "Negative 50 Pa",
+        residenceTime: "24 - 48 hours buffer",
+        conversionYield: "100% throughput",
+      },
+      description:
+        "Enclosed negative-pressure bunker with automated overhead orange-peel grab cranes that mix waste to balance calorific value and continuously feed hydraulic rams.",
+      role: "Waste buffering, calorific homogenization, and continuous feeding.",
+      inputs: ["Bulk municipal solid waste", "High-calorific refuse fuel"],
+      outputs: ["Homogenized charging stream", "Foul air ducted to combustion chamber"],
+      equipmentHighlights: ["Automated bridge crane with hydraulic grab", "Water-cooled feed chute", "Negative pressure biofilter"],
+    },
+    {
+      id: "inc-02",
+      code: "02",
+      name: "Moving Grate Combustion Furnace",
+      shortName: "Incineration Furnace",
+      category: "Combustion (Core)",
+      position: [-4, 0, 0],
+      color: "#dc2626",
+      accentColor: "#ef4444",
+      equipmentType: "furnace_fire",
+      subprocessInputs: ["↓ Air/Oxygen (Primary & Secondary)", "↓ Heat"],
+      operatingConditions: {
+        temperature: "850 - 1100 °C",
+        pressure: "-0.1 bar (negative draft)",
+        residenceTime: "45 - 90 min on grate (>2s at 850°C)",
+        conversionYield: "90% volume reduction",
+      },
+      description:
+        "Multi-stage reciprocating moving grate carries waste through drying, ignition, and complete combustion at over 850°C with primary and secondary air stages.",
+      role: "High-temperature mass burn and thermal mineral conversion.",
+      inputs: ["Refuse feedstock", "Preheated primary air under grate", "Secondary staging air nozzles"],
+      outputs: ["High-enthalpy flue gas stream", "Inert bottom ash clinker"],
+      equipmentHighlights: [
+        "Hydraulic reciprocating moving chrome-grate",
+        "Refractory-lined combustion vault",
+        "Automatic bottom ash water extractor",
+      ],
+    },
+    {
+      id: "inc-03",
+      code: "03",
+      name: "Waste Heat Recovery Steam Boiler",
+      shortName: "Steam Boiler",
+      category: "Heat Recovery",
+      position: [0, 0, 0],
+      color: "#ea580c",
+      accentColor: "#f97316",
+      equipmentType: "condenser_coil",
+      subprocessInputs: ["↓ Water (Demineralized Boiler Feed)"],
+      operatingConditions: {
+        temperature: "400 - 450 °C superheated steam",
+        pressure: "40 - 60 bar",
+        residenceTime: "Continuous",
+        conversionYield: "85% thermal recovery",
+      },
+      description:
+        "Multi-pass water tube radiation and convection boiler captures furnace thermal energy to generate high-pressure superheated steam.",
+      role: "Steam generation and flue gas cooling.",
+      inputs: ["Hot combustion flue gas (1000°C)", "Demineralized boiler feed water"],
+      outputs: ["Superheated high-pressure steam (42 bar, 400°C)", "Cooled flue gas (180°C)"],
+      equipmentHighlights: ["Membrane tube water walls", "Pendant superheaters", "Sonic soot blowers"],
+    },
+    {
+      id: "inc-04",
+      code: "04",
+      name: "Flue Gas Treatment (FGT) Scrubber",
+      shortName: "Gas Treatment",
+      category: "Emissions Control",
+      position: [4, 0, 0],
+      color: "#7c3aed",
+      accentColor: "#a855f7",
+      equipmentType: "gas_treatment",
+      subprocessInputs: ["↓ Chemicals (Hydrated Lime / Activated Carbon)", "↓ Water"],
+      operatingConditions: {
+        temperature: "140 - 180 °C",
+        pressure: "-0.05 bar",
+        residenceTime: "10 - 15 seconds",
+        conversionYield: "99.5% emission compliance",
+      },
+      description:
+        "Semi-dry scrubbing tower sprays lime slurry and injects activated carbon to neutralize acid gases (HCl, SOx) and capture dioxins, followed by fabric bag filters.",
+      role: "Acid gas neutralization, heavy metal capture, and particulate filtration.",
+      inputs: ["Cooled flue gas", "Hydrated lime slurry", "Powdered activated carbon"],
+      outputs: ["Cleaned exhaust gas", "Air pollution control (APC) filter residue"],
+      equipmentHighlights: ["Semi-dry spray reactor absorber", "Pulse-jet fabric baghouse filter", "Continuous emission monitoring system (CEMS)"],
+    },
+    {
+      id: "inc-05",
+      code: "05",
+      name: "High-Pressure Steam Turbine Generator",
+      shortName: "Steam Turbine",
+      category: "Energy Generation",
+      position: [8, 0, 0],
+      color: "#f43f5e",
+      accentColor: "#fb7185",
+      equipmentType: "chp_generator",
+      subprocessInputs: ["↓ Steam (Superheated Boiler Feed)"],
+      operatingConditions: {
+        temperature: "400 °C inlet",
+        pressure: "45 bar inlet -> 0.08 bar exhaust",
+        residenceTime: "Continuous",
+        conversionYield: "28 - 32% electrical efficiency",
+      },
+      description:
+        "Multi-stage condensing steam turbine drives synchronous electrical alternator, exporting bulk renewable power to the grid.",
+      role: "Power generation and district heating extraction.",
+      inputs: ["Superheated steam from boiler", "Cooling tower water"],
+      outputs: ["Renewable electricity to grid", "Low-pressure heating steam condensate"],
+      equipmentHighlights: ["Multi-stage reaction steam turbine", "Air-cooled condenser", "High-voltage substation switchgear"],
+    },
+  ],
+
+  htc: [
+    {
+      id: "htc-01",
+      code: "01",
+      name: "Wet Feedstock Slurry Intake",
+      shortName: "Slurry Intake",
+      category: "Feedstock Ingestion",
+      position: [-8, 0, 0],
+      color: "#94a3b8",
+      accentColor: "#38bdf8",
+      equipmentType: "waste_receiving",
+      subprocessInputs: ["↓ Biomass Feedstock", "↓ Water"],
+      operatingConditions: {
+        temperature: "25 °C",
+        pressure: "1.0 bar",
+        residenceTime: "30 min",
+        conversionYield: "15 - 20% dry matter",
+      },
+      description:
+        "Wet organic fractions, sewage sludge, and food residuals are pumped into an intake sump without requiring energy-intensive pre-drying.",
+      role: "Intake and coarse maceration of high-moisture organic feedstocks.",
+      inputs: ["Wet biowaste (75-85% moisture)", "Process recirculation liquid"],
+      outputs: ["Coarse pumpable organic slurry", "Debris rejects"],
+      equipmentHighlights: ["Submersible chopping pump", "Heavy debris stone trap", "Odor containment hood"],
+    },
+    {
+      id: "htc-02",
+      code: "02",
+      name: "High-Pressure Slurry Feed Pump",
+      shortName: "Slurry Injection",
+      category: "Pressurization",
+      position: [-4, 0, 0],
+      color: "#0891b2",
+      accentColor: "#22d3ee",
+      equipmentType: "mixing_tank",
+      subprocessInputs: ["↓ Water", "↓ Chemicals (Organic Acid Catalyst)"],
+      operatingConditions: {
+        temperature: "50 - 70 °C",
+        pressure: "25 - 35 bar",
+        residenceTime: "5 min",
+        conversionYield: "Continuous pressurized feed",
+      },
+      description:
+        "Hydraulic piston pumps pressurize the thickened slurry above saturation vapor pressure to prevent boiling inside the hydrothermal reactor.",
+      role: "Continuous high-pressure slurry pressurization.",
+      inputs: ["Conditioned biowaste slurry", "Organic acid catalyst dosing"],
+      outputs: ["High-pressure subcritical slurry stream"],
+      equipmentHighlights: ["Triplex hydraulic piston diaphragm pump", "Pulsation dampener", "High-pressure rated piping"],
+    },
+    {
+      id: "htc-03",
+      code: "03",
+      name: "Subcritical Hydrothermal Autoclave Reactor",
+      shortName: "HTC Autoclave",
+      category: "Hydrothermal Conversion (Core)",
+      position: [0, 0, 0],
+      color: "#0f766e",
+      accentColor: "#14b8a6",
+      equipmentType: "pyrolysis_reactor",
+      subprocessInputs: ["↓ Heat", "↓ Water (Subcritical Liquid State)"],
+      operatingConditions: {
+        temperature: "190 - 240 °C",
+        pressure: "20 - 32 bar (subcritical)",
+        residenceTime: "2.0 - 4.0 hours",
+        conversionYield: "65 - 80% hydro-char yield",
+      },
+      description:
+        "Under subcritical water conditions, water acts as an active catalyst. Organic biopolymers undergo dehydration, decarboxylation, and polymerization into energy-dense hydro-char.",
+      role: "Hydrothermal carbonisation and chemical deoxygenation of organic compounds.",
+      inputs: ["Pressurized aqueous biomass slurry", "Thermal oil heating circuit (220°C)"],
+      outputs: ["Hydro-char slurry (solid coal particles in water)", "Organic acid rich aqueous liquor"],
+      equipmentHighlights: ["Continuously stirred autoclave pressure vessel", "Internal thermal baffle coil", "Titanium-clad inner shell"],
+    },
+    {
+      id: "htc-04",
+      code: "04",
+      name: "Flash Vapor Heat Exchanger & Recovery",
+      shortName: "Flash Quench",
+      category: "Heat Recovery",
+      position: [4, 0, 0],
+      color: "#0284c7",
+      accentColor: "#38bdf8",
+      equipmentType: "condenser_coil",
+      subprocessInputs: ["↓ Water (Cooling Loop)"],
+      operatingConditions: {
+        temperature: "95 - 110 °C",
+        pressure: "1.0 - 2.5 bar",
+        residenceTime: "3 - 5 min",
+        conversionYield: "85% process heat returned",
+      },
+      description:
+        "Hydro-char slurry undergoes controlled pressure letdown, generating flash steam that preheats incoming feedstock in a counter-current heat exchanger.",
+      role: "Controlled depressurization and thermal energy recycling.",
+      inputs: ["High-pressure hot hydro-char slurry"],
+      outputs: ["Depressurized cooled slurry (90°C)", "Clean process steam to Stage 02 preheater"],
+      equipmentHighlights: ["High-wear ceramic letdown valve", "Cyclonic flash tank", "Tube-in-tube slurry heat exchanger"],
+    },
+    {
+      id: "htc-05",
+      code: "05",
+      name: "Hydro-Char Mechanical Dewatering Filter",
+      shortName: "Dewatering Press",
+      category: "Resource Recovery",
+      position: [8, 0, 0],
+      color: "#16a34a",
+      accentColor: "#4ade80",
+      equipmentType: "digestate_output",
+      subprocessInputs: ["↓ Chemicals (Flocculant)"],
+      operatingConditions: {
+        temperature: "50 - 65 °C",
+        pressure: "15 bar mechanical press",
+        residenceTime: "20 min",
+        conversionYield: "65% solid dry hydro-char (HHV ~24 MJ/kg)",
+      },
+      description:
+        "Because HTC completely destroys biomass cell walls, the slurry dewaters extremely easily under a membrane filter press, yielding water-repellent brown-coal substitute.",
+      role: "Solid-liquid separation and solid fuel cake cake extrusion.",
+      inputs: ["Depressurized hydro-char slurry", "Polyelectrolyte flocculant"],
+      outputs: ["High-calorific dry hydro-char cake (>65% DS)", "Process water to anaerobic treatment"],
+      equipmentHighlights: ["Automatic recessed chamber filter press", "Diaphragm squeeze plates", "Pneumatic cake scraper conveyor"],
+    },
+  ],
+
+  torrefaction: [
+    {
+      id: "tor-01",
+      code: "01",
+      name: "Biomass Debarking & Rotary Chipping",
+      shortName: "Chipping",
+      category: "Feedstock Preparation",
+      position: [-8, 0, 0],
+      color: "#94a3b8",
+      accentColor: "#38bdf8",
+      equipmentType: "sorting",
+      subprocessInputs: ["↓ Biomass Feedstock"],
+      operatingConditions: {
+        temperature: "20 °C",
+        pressure: "1.0 bar",
+        residenceTime: "15 min",
+        conversionYield: "Uniform 25mm chips",
+      },
+      description:
+        "Forestry residues, crop stalks, and wood chips are screened and cut into uniform chips to ensure even heat penetration in the torrefaction kiln.",
+      role: "Particle sizing and foreign object removal.",
+      inputs: ["Raw logs & woody residues"],
+      outputs: ["Uniform wood chips (25x25 mm)", "Bark mulch byproduct"],
+      equipmentHighlights: ["Drum chipper with carbide blades", "Vibrating deck screen", "Ferrous tramp metal detector"],
+    },
+    {
+      id: "tor-02",
+      code: "02",
+      name: "Rotary Drum Biomass Pre-Dryer",
+      shortName: "Pre-Dryer",
+      category: "Feedstock Conditioning",
+      position: [-4, 0, 0],
+      color: "#f59e0b",
+      accentColor: "#fbbf24",
+      equipmentType: "dryer",
+      subprocessInputs: ["↓ Heat"],
+      operatingConditions: {
+        temperature: "105 - 130 °C",
+        pressure: "1.0 bar",
+        residenceTime: "20 - 30 min",
+        conversionYield: "<5% moisture content",
+      },
+      description:
+        "Chips are dried using recycled flue gas to drive off unbound moisture, ensuring only mild thermal energy is required in the downstream kiln.",
+      role: "Moisture evaporation and thermal pre-conditioning.",
+      inputs: ["Moist wood chips (30-45% moisture)", "Flue gas from torgas combustor"],
+      outputs: ["Bone-dry wood chips (<5% moisture)", "Water vapor plume"],
+      equipmentHighlights: ["Triple-pass rotating drum dryer", "Internal lifter flights", "Cyclone dust collector"],
+    },
+    {
+      id: "tor-03",
+      code: "03",
+      name: "Torrefaction Rotary Kiln Reactor",
+      shortName: "Torrefaction Kiln",
+      category: "Mild Pyrolysis (Core)",
+      position: [0, 0, 0],
+      color: "#b45309",
+      accentColor: "#f59e0b",
+      equipmentType: "pyrolysis_reactor",
+      subprocessInputs: ["↓ Heat", "↓ Air/Oxygen (Inert Nitrogen Blanket)"],
+      operatingConditions: {
+        temperature: "250 - 300 °C",
+        pressure: "1.0 bar (oxygen-free)",
+        residenceTime: "30 - 45 min",
+        conversionYield: "75% mass / 90% energy retained",
+      },
+      description:
+        "Biomass is roasted at 250-300°C in an oxygen-free atmosphere. Hemicellulose decomposes into combustible torgas while cellulose and lignin form hydrophobic bio-coal.",
+      role: "Thermal depolymerization of hemicellulose and bio-coal roasting.",
+      inputs: ["Bone-dry biomass chips", "Inert nitrogen purge", "External heating jacket"],
+      outputs: ["Torrefied hydrophobic bio-coal chips", "Volatile combustible torgas"],
+      equipmentHighlights: ["Indirectly heated rotary kiln reactor", "Variable-angle kiln slope", "Graphite air-tight rotary seals"],
+    },
+    {
+      id: "tor-04",
+      code: "04",
+      name: "Torgas Combustor & Recirculation Unit",
+      shortName: "Torgas Burner",
+      category: "Thermal Integration",
+      position: [4, 0, 0],
+      color: "#dc2626",
+      accentColor: "#ef4444",
+      equipmentType: "furnace_fire",
+      subprocessInputs: ["↓ Air/Oxygen"],
+      operatingConditions: {
+        temperature: "800 - 950 °C",
+        pressure: "1.0 bar",
+        residenceTime: "2.0 seconds",
+        conversionYield: "100% self-sustaining heat",
+      },
+      description:
+        "Volatile gases produced in the kiln (torgas) are combusted at 900°C to generate all process heat required for the kiln and dryer, making the plant thermally autothermal.",
+      role: "Thermal recycling and energy self-sufficiency.",
+      inputs: ["Volatile torgas from kiln", "Combustion air"],
+      outputs: ["Hot flue gas recycled to kiln jacket", "Clean atmospheric exhaust"],
+      equipmentHighlights: ["Cyclonic torgas burner chamber", "High-temp recirculation fan", "Emergency thermal relief stack"],
+    },
+    {
+      id: "tor-05",
+      code: "05",
+      name: "High-Density Pellet Mill & Counterflow Cooler",
+      shortName: "Pelletizer & Silo",
+      category: "Resource Recovery",
+      position: [8, 0, 0],
+      color: "#15803d",
+      accentColor: "#22c55e",
+      equipmentType: "digestate_output",
+      subprocessInputs: ["↓ Water (Steam Conditioning)"],
+      operatingConditions: {
+        temperature: "70 °C cooling to 30 °C",
+        pressure: "1500 bar die pressure",
+        residenceTime: "10 min",
+        conversionYield: ">650 kg/m³ high density pellets (HHV ~21 MJ/kg)",
+      },
+      description:
+        "Because torrefied wood is brittle, grinding energy is cut by 85%. Fine bio-coal is conditioned with steam and pressed into black, water-resistant coal-replacement pellets.",
+      role: "Pellet extrusion, counterflow cooling, and weather-proof storage.",
+      inputs: ["Cooled torrefied meal", "Conditioning steam mist"],
+      outputs: ["Premium torrefied bio-coal pellets (water-resistant)", "Fines for recycle"],
+      equipmentHighlights: ["Heavy-duty ring die pellet press", "Counterflow ambient air pellet cooler", "Sealed bulk storage silo"],
+    },
+  ],
+
+  composting: [
+    {
+      id: "comp-01",
+      code: "01",
+      name: "Feedstock Intake & Coarse Inspection",
+      shortName: "Intake Bay",
+      category: "Feedstock Ingestion",
+      position: [-8, 0, 0],
+      color: "#94a3b8",
+      accentColor: "#38bdf8",
+      equipmentType: "waste_receiving",
+      subprocessInputs: ["↓ Biomass Feedstock"],
+      operatingConditions: {
+        temperature: "20 °C",
+        pressure: "1.0 bar",
+        residenceTime: "4 hours buffer",
+        conversionYield: "100% intake throughput",
+      },
+      description:
+        "Source-separated green waste, yard trimmings, and commercial food residues arrive in an enclosed intake bay for weighing and gross visual inspection.",
+      role: "Intake, manifest inspection, and buffering of raw compostable biomass.",
+      inputs: ["Municipal yard trimmings", "Food residuals & vegetable waste"],
+      outputs: ["Gross-sorted compostable stream", "Reject packaging debris"],
+      equipmentHighlights: ["Heavy-duty tipping bay", "Biofilter foul-air extraction", "Wheel loader feeding ramp"],
+    },
+    {
+      id: "comp-02",
+      code: "02",
+      name: "Shredding & C:N Carbon/Nitrogen Blending",
+      shortName: "Shred & Blend",
+      category: "Feedstock Conditioning",
+      position: [-4, 0, 0],
+      color: "#d97706",
+      accentColor: "#f59e0b",
+      equipmentType: "sorting",
+      subprocessInputs: ["↓ Biomass Feedstock (Bulking Carbon Chips)"],
+      operatingConditions: {
+        temperature: "25 °C",
+        pressure: "1.0 bar",
+        residenceTime: "30 min",
+        conversionYield: "Optimal C:N ratio (28:1 - 32:1)",
+      },
+      description:
+        "High-nitrogen food waste is shredded and blended with high-carbon wood chips to create porous matrix with 55-60% moisture and 30:1 C:N ratio.",
+      role: "Particle reduction, porosity creation, and biological nutrient balancing.",
+      inputs: ["Sorted green waste", "Bulking wood chips & tree bark"],
+      outputs: ["Blended compostable substrate (55% moisture)", "Ferrous metal scrap"],
+      equipmentHighlights: ["Twin-shaft slow-speed industrial shredder", "Automated batch mixing hopper", "Cross-belt magnet"],
+    },
+    {
+      id: "comp-03",
+      code: "03",
+      name: "Forced-Aeration Tunnel Windrow",
+      shortName: "Aeration Tunnel",
+      category: "Aerobic Biodegradation (Core)",
+      position: [0, 0, 0],
+      color: "#16a34a",
+      accentColor: "#4ade80",
+      equipmentType: "aeration_windrow",
+      subprocessInputs: ["↓ Air/Oxygen (Pressurized Blower)", "↓ Water (Moisture Dosing)"],
+      operatingConditions: {
+        temperature: "55 - 65 °C (thermophilic sanitization)",
+        pressure: "Atmospheric (positive pressure plenum)",
+        residenceTime: "21 - 28 days",
+        conversionYield: "100% weed seed & pathogen elimination",
+      },
+      description:
+        "Substrate is loaded into enclosed concrete tunnels with in-floor aeration spigots. Thermophilic bacteria reach 65°C to decompose volatile organics and sanitize pathogens.",
+      role: "High-rate thermophilic aerobic decomposition and biological sanitization.",
+      inputs: ["Blended compost substrate", "Pressurized fresh air from blower floor", "Moisture recirculation"],
+      outputs: ["Sanitized active compost mass", "Humid bio-exhaust air ducted to biofilter"],
+      equipmentHighlights: ["Spigot aeration floor with variable blowers", "Wireless temperature lance probes", "Automated roof misting nozzles"],
+    },
+    {
+      id: "comp-04",
+      code: "04",
+      name: "Aerobic Curing & Humification Pad",
+      shortName: "Curing Pad",
+      category: "Compost Maturation",
+      position: [4, 0, 0],
+      color: "#059669",
+      accentColor: "#10b981",
+      equipmentType: "mixing_tank",
+      subprocessInputs: ["↓ Air/Oxygen"],
+      operatingConditions: {
+        temperature: "35 - 45 °C (mesophilic maturation)",
+        pressure: "Atmospheric",
+        residenceTime: "30 - 45 days",
+        conversionYield: "Fully humified compost (Solvita index 7+)",
+      },
+      description:
+        "Compost is formed into covered curing windrows where mesophilic fungi convert remaining lignins into mature humus with high cation-exchange capacity.",
+      role: "Humification, phytotoxin degradation, and biological stabilization.",
+      inputs: ["Sanitized compost from tunnel", "Semi-permeable Gore-Tex cover"],
+      outputs: ["Stable, dark, earthy matured humus", "Leachate water returned to Stage 02"],
+      equipmentHighlights: ["Semi-permeable breathable membrane cover system", "Mechanical windrow turning machine", "Runoff leachate collection gutter"],
+    },
+    {
+      id: "comp-05",
+      code: "05",
+      name: "Trommel Screen Refining & Bulk Bagging",
+      shortName: "Screen & Bagging",
+      category: "Product Recovery",
+      position: [8, 0, 0],
+      color: "#65a30d",
+      accentColor: "#84cc16",
+      equipmentType: "digestate_output",
+      subprocessInputs: ["↓ Organic Compost"],
+      operatingConditions: {
+        temperature: "20 °C",
+        pressure: "1.0 bar",
+        residenceTime: "15 min",
+        conversionYield: "Grade-A certified organic bio-fertilizer",
+      },
+      description:
+        "Matured compost passes through rotary drum trommel screens with air classifiers to remove residual plastics and oversized wood chips, yielding premium soil amendment.",
+      role: "Fine screening, classification, and retail/bulk packaging.",
+      inputs: ["Matured compost mass"],
+      outputs: ["Grade-A organic compost (<10mm)", "Oversize wood chips returned as bulking agent"],
+      equipmentHighlights: ["Rotary drum trommel screen (10mm mesh)", "Air knife film plastic separator", "Automated bulk bag filling station"],
+    },
+  ],
+};
+
+/**
+ * Default AD stages for backward compatibility with existing imports
+ */
+export const STAGES: ProcessStage[] = PATHWAY_STAGES.anaerobic_digestion;
+
+/**
+ * Retrieve the sequential subprocess stages for any pathway ID.
+ */
+export function getStagesByPathway(pathwayId: string): ProcessStage[] {
+  const normalized = pathwayId?.toLowerCase().trim();
+  if (PATHWAY_STAGES[normalized]) {
+    return PATHWAY_STAGES[normalized];
+  }
+  // Alternate aliases
+  if (normalized.includes("pyro")) return PATHWAY_STAGES.pyrolysis;
+  if (normalized.includes("anaerobic") || normalized.includes("digestion")) return PATHWAY_STAGES.anaerobic_digestion;
+  if (normalized.includes("gasif")) return PATHWAY_STAGES.gasification;
+  if (normalized.includes("incin")) return PATHWAY_STAGES.incineration;
+  if (normalized.includes("htc") || normalized.includes("hydro")) return PATHWAY_STAGES.htc;
+  if (normalized.includes("torr")) return PATHWAY_STAGES.torrefaction;
+  if (normalized.includes("comp")) return PATHWAY_STAGES.composting;
+
+  return PATHWAY_STAGES.pyrolysis;
+}

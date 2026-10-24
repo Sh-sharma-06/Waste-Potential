@@ -1,3 +1,10 @@
+export interface OperatingConditions {
+  temperature: string;
+  pressure: string;
+  residenceTime: string;
+  conversionYield: string;
+}
+
 export interface ProcessStage {
   id: string;
   code: string;
@@ -13,4 +20,7 @@ export interface ProcessStage {
   outputs: string[];
   equipmentHighlights: string[];
   equipmentType?: string;
+  subprocessInputs?: string[];
+  operatingConditions?: OperatingConditions;
 }
+

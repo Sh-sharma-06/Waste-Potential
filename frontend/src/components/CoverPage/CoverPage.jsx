@@ -1,3 +1,4 @@
+"use client";
 import { useEffect, useState } from "react";
 import "./CoverPage.css";
 
@@ -12,8 +13,8 @@ export default function CoverPage({ onExplore }) {
   }, []);
 
   const handleExplore = () => {
-    if (onExplore) onExplore();          // e.g. navigate("/dashboard")
-    else window.location.href = "/dashboard";
+    if (onExplore) onExplore();          // e.g. navigate("/explore")
+    else window.location.href = "/explore";
   };
 
   return (

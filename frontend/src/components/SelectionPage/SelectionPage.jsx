@@ -1,4 +1,6 @@
+"use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import "./SelectionPage.css";
 
 // Put bg.mp4 and poster.jpg inside your /public folder.
@@ -18,6 +20,7 @@ const MODES = [
 ];
 
 export default function SelectionPage({ onSelect }) {
+  const router = useRouter();
   const [place, setPlace] = useState(() => {
     try { return localStorage.getItem("wp_location") || ""; } catch { return ""; }
   });
@@ -31,8 +34,10 @@ export default function SelectionPage({ onSelect }) {
   };
 
   const choose = (mode) => {
-    if (onSelect) onSelect(mode, place.trim());   // e.g. navigate(`/${mode}?loc=${place}`)
-    else window.location.href = `/${mode}?loc=${encodeURIComponent(place.trim())}`;
+    if (onSelect) { onSelect(mode, place.trim()); return; }
+    const routeMap = { agriculture: "/explore/agriculture", home: "/explore/home", industry: "/explore/industry" };
+    const path = routeMap[mode] ?? `/${mode}`;
+    router.push(`${path}?loc=${encodeURIComponent(place.trim())}`);
   };
 
   return (

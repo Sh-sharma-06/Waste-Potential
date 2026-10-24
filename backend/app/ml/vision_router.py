@@ -157,8 +157,9 @@ class ClassifyResponse(BaseModel):
 
 
 class AdviceRequest(BaseModel):
-    sector: Literal["urban", "rural"]
-    items: list[str] = Field(min_length=1)
+    sector: Literal["urban", "rural"] = "urban"
+    items: list[str] = Field(default_factory=list)
+    waste_type: str | None = None
 
 
 class AdviceResponse(BaseModel):
@@ -374,11 +375,13 @@ async def classify_waste(
 )
 def give_advice(request: AdviceRequest) -> AdviceResponse:
     """Return short, contextual waste-disposal guidance for the given sector."""
-    system_prompt = _ADVICE_PROMPTS[request.sector]
+    sector = request.sector or "urban"
+    system_prompt = _ADVICE_PROMPTS.get(sector, _ADVICE_SYSTEM_URBAN)
+    item_list = request.items if request.items else ([request.waste_type] if request.waste_type else ["waste item"])
     user_content = (
-        f"Sector: {request.sector}\n"
+        f"Sector: {sector}\n"
         f"Waste items identified:\n"
-        + "\n".join(f"- {label}" for label in request.items)
+        + "\n".join(f"- {label}" for label in item_list)
     )
 
     text = _gemini_generate(
@@ -387,3 +390,48 @@ def give_advice(request: AdviceRequest) -> AdviceResponse:
         [types.Part.from_text(text=user_content)],
     )
     return AdviceResponse(text=text)
+
+
+from fastapi import UploadFile, File, HTTPException
+from transformers import pipeline
+from PIL import Image
+import io
+import os
+
+# 1. Point to the local model folder
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODEL_PATH = os.path.join(BASE_DIR, "ml", "vision", "waste-classification-model")
+
+# 2. Load the Hugging Face model into memory when the server starts
+try:
+    local_classifier = pipeline("image-classification", model=MODEL_PATH, image_processor=MODEL_PATH)
+    print("✅ Local ML Model loaded successfully!")
+except Exception as e:
+    print(f"⚠️ Local model not loaded: {e}")
+    local_classifier = None
+
+# 3. Create the new endpoint
+@router.post("/classify-local")
+@router.post("/vision/classify-local")
+async def classify_local_image(file: UploadFile = File(...)):
+    if not local_classifier:
+        raise HTTPException(status_code=500, detail="Local ML model not loaded.")
+    
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Upload a valid image file.")
+
+    # Read and convert image
+    image_bytes = await file.read()
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+    # Run local inference
+    predictions = local_classifier(image)
+    
+    # Format the output for the frontend
+    results = [
+        {"class": p["label"], "confidence": round(p["score"] * 100, 2)}
+        for p in predictions
+    ]
+
+    return {"filename": file.filename, "detections": results}
+
