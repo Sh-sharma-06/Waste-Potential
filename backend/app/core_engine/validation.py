@@ -167,6 +167,70 @@ def load_observations(
     return real_rows, load_report
 
 
+# MODEL ASSUMPTION, tables printed to 0.1% and figure digitising.
+COMPOSITION_TOLERANCE_REPORTED: float = 0.002
+COMPOSITION_TOLERANCE_DIGITISED: float = 0.01
+TOLERANCE_REPORTED: float = COMPOSITION_TOLERANCE_REPORTED
+TOLERANCE_DIGITISED: float = COMPOSITION_TOLERANCE_DIGITISED
+
+
+class FittedAboveCeiling(tuple):
+    """Row whose observed value exceeds the ceiling for a fitted observation (study_id, feedstock, observed, ceiling)."""
+    __slots__ = ()
+
+    def __new__(cls, study_id: str, feedstock: str, observed: float, ceiling: float):
+        return super().__new__(cls, (study_id, feedstock, observed, ceiling))
+
+    @property
+    def study_id(self) -> str:
+        return self[0]
+
+    @property
+    def feedstock(self) -> str:
+        return self[1]
+
+    @property
+    def observed(self) -> float:
+        return self[2]
+
+    @property
+    def ceiling(self) -> float:
+        return self[3]
+
+    def __getitem__(self, item: Any) -> Any:
+        if isinstance(item, str):
+            mapping = {"study_id": 0, "feedstock": 1, "observed": 2, "ceiling": 3}
+            if item in mapping:
+                return super().__getitem__(mapping[item])
+            raise KeyError(item)
+        return super().__getitem__(item)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        mapping = {"study_id": 0, "feedstock": 1, "observed": 2, "ceiling": 3}
+        if key in mapping:
+            return self[mapping[key]]
+        return default
+
+    def keys(self) -> Tuple[str, ...]:
+        return ("study_id", "feedstock", "observed", "ceiling")
+
+    def values(self) -> Tuple[Any, ...]:
+        return (self[0], self[1], self[2], self[3])
+
+    def items(self) -> Tuple[Tuple[str, Any], ...]:
+        return (("study_id", self[0]), ("feedstock", self[1]), ("observed", self[2]), ("ceiling", self[3]))
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, dict):
+            return (
+                self[0] == other.get("study_id")
+                and self[1] == other.get("feedstock")
+                and math.isclose(self[2], float(other.get("observed", -999)), rel_tol=1e-7)
+                and math.isclose(self[3], float(other.get("ceiling", -999)), rel_tol=1e-7)
+            )
+        return super().__eq__(other)
+
+
 # ---------------------------------------------------------------------------
 # 3. BMP (Biochemical Methane Potential) validation
 # ---------------------------------------------------------------------------
@@ -195,16 +259,22 @@ def validate_bmp(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     -------
     dict with keys:
         n                   – total rows processed.
+        n_rows              – alias for n.
         n_errors            – rows skipped due to missing/invalid fields.
         errors              – list of error strings.
         ceiling_violations  – number of rows where observed > ceiling.
         overall_metrics     – output of :func:`metrics` (observed vs ceiling).
         per_feedstock       – dict keyed by feedstock label with sub-metrics.
         sample_sizes        – dict keyed by feedstock label → count.
+        fitted_excluded     – count of fitted rows excluded.
+        fitted_above_ceiling – list of (study_id, feedstock, observed, ceiling)
+                              for fitted rows exceeding ceiling.
+        composition_rounded – dict of counts per composition_method.
+        composition_rounded_counts – alias for composition_rounded.
         status              – "illustrative_estimate"
         notes               – disclaimer string.
     """
-    from app.core_engine.engine import buswell_bound
+    from app.core_engine.engine import BUSWELL
 
     obs_all: List[float] = []
     pred_all: List[float] = []
@@ -212,27 +282,103 @@ def validate_bmp(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     errors: List[str] = []
     n_errors = 0
     ceiling_violations = 0
+    fitted_excluded = 0
+    fitted_above_ceiling: List[FittedAboveCeiling] = []
+    composition_rounded_counts: Dict[str, int] = {
+        "reported": 0,
+        "digitised": 0,
+    }
 
     for i, row in enumerate(rows):
+        # 1. Fitted check: excluded from every check and every count
+        mf = str(row.get("measured_or_fitted", "")).strip().lower()
+        st = str(row.get("source_type", "")).strip().lower()
+        fit_val = row.get("fitted")
+        is_fitted = (
+            mf == "fitted"
+            or st == "fitted"
+            or (fit_val is True or str(fit_val).strip().lower() in ("true", "1"))
+        )
+
+        if is_fitted:
+            fitted_excluded += 1
+            try:
+                vs_kg = float(row["vs_kg"])
+                obs_ch4 = float(row["observed_ch4_nm3"])
+                carb = float(row["carb"])
+                protein = float(row["protein"])
+                lipid = float(row["lipid"])
+                feedstock_label = str(row.get("feedstock", f"row_{i}"))
+                study_id = str(row.get("study_id", f"row_{i}"))
+                ceiling_nm3 = (carb * BUSWELL["carb"] + protein * BUSWELL["protein"] + lipid * BUSWELL["lipid"]) * vs_kg
+                if obs_ch4 > ceiling_nm3:
+                    fitted_above_ceiling.append(
+                        FittedAboveCeiling(study_id, feedstock_label, obs_ch4, ceiling_nm3)
+                    )
+            except Exception:
+                pass
+            continue
+
+        # 2. Extract fields for regular rows
         try:
             vs_kg = float(row["vs_kg"])
             obs_ch4 = float(row["observed_ch4_nm3"])
             carb    = float(row["carb"])
             protein = float(row["protein"])
             lipid   = float(row["lipid"])
+            lignin  = float(row.get("lignin", 0.0) or 0.0) if "lignin" in row and row["lignin"] is not None and str(row["lignin"]).strip() != "" else 0.0
             feedstock_label = str(row.get("feedstock", f"row_{i}"))
         except (KeyError, TypeError, ValueError) as exc:
             n_errors += 1
             errors.append(f"row {i}: {exc}")
             continue
 
-        try:
-            ceiling_per_kg = buswell_bound((carb, protein, lipid))
-        except ValueError as exc:
+        if carb < 0 or protein < 0 or lipid < 0 or lignin < 0:
             n_errors += 1
-            errors.append(f"row {i} buswell_bound error: {exc}")
+            errors.append(f"row {i}: negative share in composition")
             continue
 
+        shares_sum = carb + protein + lipid + lignin
+        comp_diff = abs(shares_sum - 1.0)
+        comp_method = str(row.get("composition_method", "")).strip().lower()
+
+        # Composition sum tolerance check:
+        # If shares sum to 1 within 1e-6, accept as before.
+        # Otherwise accept the row, set composition_rounded = True and keep the exact sum when
+        # |sum - 1| <= 0.002 and composition_method is "reported", or when
+        # |sum - 1| <= 0.01 and composition_method is "digitised".
+        # Anything outside the tolerance is skipped and counted with the reason.
+        if comp_diff <= 1e-6:
+            try:
+                row["composition_rounded"] = False
+            except Exception:
+                pass
+        else:
+            is_reported = comp_method == "reported"
+            is_digitised = comp_method in ("digitised", "digitized")
+
+            if is_reported and comp_diff <= COMPOSITION_TOLERANCE_REPORTED:
+                try:
+                    row["composition_rounded"] = True
+                except Exception:
+                    pass
+                composition_rounded_counts["reported"] += 1
+            elif is_digitised and comp_diff <= COMPOSITION_TOLERANCE_DIGITISED:
+                try:
+                    row["composition_rounded"] = True
+                except Exception:
+                    pass
+                composition_rounded_counts["digitised"] += 1
+            else:
+                n_errors += 1
+                reason = f"row {i}: composition sum {shares_sum:.6g} outside tolerance"
+                if comp_method:
+                    reason += f" for composition_method '{comp_method}'"
+                errors.append(reason)
+                continue
+
+        # Ceiling uses shares exactly as given (never renormalise)
+        ceiling_per_kg = carb * BUSWELL["carb"] + protein * BUSWELL["protein"] + lipid * BUSWELL["lipid"]
         ceiling_nm3 = ceiling_per_kg * vs_kg
         obs_all.append(obs_ch4)
         pred_all.append(ceiling_nm3)
@@ -257,6 +403,7 @@ def validate_bmp(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     return {
         "n": len(obs_all),
+        "n_rows": len(obs_all),
         "n_errors": n_errors,
         "errors": errors,
         "ceiling_violations": ceiling_violations,
@@ -268,6 +415,10 @@ def validate_bmp(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
             "Buswell ceiling is a stoichiometric upper bound, not a fitted predictor. "
             "Metrics measure distance from ceiling, not model accuracy."
         ),
+        "fitted_excluded": fitted_excluded,
+        "fitted_above_ceiling": fitted_above_ceiling,
+        "composition_rounded": composition_rounded_counts,
+        "composition_rounded_counts": composition_rounded_counts,
     }
 
 

@@ -28,6 +28,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from app.core_engine.validation import (
+    COMPOSITION_TOLERANCE_DIGITISED,
+    COMPOSITION_TOLERANCE_REPORTED,
     load_observations,
     metrics,
     report,
@@ -523,6 +525,227 @@ class TestJSONSerialisable(unittest.TestCase):
     def test_validate_mass_loss_json(self):
         rows = _vsd_rows(n=3)
         json.dumps(validate_mass_loss(rows))
+
+
+# ---------------------------------------------------------------------------
+# 8. BMP composition sum tolerance and fitted rows
+# ---------------------------------------------------------------------------
+
+class TestBMPCompositionToleranceAndFittedRows(unittest.TestCase):
+    """Tests for composition sum tolerance and fitted-row exclusion/reporting in validate_bmp.
+
+    All rows used below are TEST FIXTURES — tiny synthetic rows crafted to exercise
+    specific code paths. They are NOT real measurements and carry no scientific meaning.
+    """
+
+    def test_composition_sum_1_001_accepted_reported_and_flagged(self):
+        # TEST FIXTURE — tiny row, shares sum = 0.601 + 0.2 + 0.2 = 1.001
+        row = {
+            "source_type": "real",
+            "study_id": "fixture_reported_1001",
+            "source": "test fixture",
+            "feedstock": "test_feedstock",
+            "vs_kg": "1.0",
+            "observed_ch4_nm3": "0.4",
+            "carb": "0.601",
+            "protein": "0.2",
+            "lipid": "0.2",
+            "composition_method": "reported",
+        }
+        result = validate_bmp([row])
+        self.assertEqual(result["n"], 1)
+        self.assertEqual(result["n_errors"], 0)
+        self.assertEqual(result["composition_rounded"]["reported"], 1)
+        self.assertTrue(row.get("composition_rounded"))
+
+    def test_composition_sum_1_003_rejected_reported(self):
+        # TEST FIXTURE — tiny row, shares sum = 0.603 + 0.2 + 0.2 = 1.003 (|1.003 - 1| > 0.002)
+        row = {
+            "source_type": "real",
+            "study_id": "fixture_reported_1003",
+            "source": "test fixture",
+            "feedstock": "test_feedstock",
+            "vs_kg": "1.0",
+            "observed_ch4_nm3": "0.4",
+            "carb": "0.603",
+            "protein": "0.2",
+            "lipid": "0.2",
+            "composition_method": "reported",
+        }
+        result = validate_bmp([row])
+        self.assertEqual(result["n"], 0)
+        self.assertEqual(result["n_errors"], 1)
+        self.assertEqual(result["composition_rounded"]["reported"], 0)
+
+    def test_composition_sum_1_003_accepted_digitised(self):
+        # TEST FIXTURE — tiny row, shares sum = 0.603 + 0.2 + 0.2 = 1.003 (|1.003 - 1| <= 0.01)
+        row = {
+            "source_type": "real",
+            "study_id": "fixture_digitised_1003",
+            "source": "test fixture",
+            "feedstock": "test_feedstock",
+            "vs_kg": "1.0",
+            "observed_ch4_nm3": "0.4",
+            "carb": "0.603",
+            "protein": "0.2",
+            "lipid": "0.2",
+            "composition_method": "digitised",
+        }
+        result = validate_bmp([row])
+        self.assertEqual(result["n"], 1)
+        self.assertEqual(result["n_errors"], 0)
+        self.assertEqual(result["composition_rounded"]["digitised"], 1)
+        self.assertTrue(row.get("composition_rounded"))
+
+    def test_composition_sum_1_02_rejected_digitised(self):
+        # TEST FIXTURE — tiny row, shares sum = 0.62 + 0.2 + 0.2 = 1.02 (|1.02 - 1| > 0.01)
+        row = {
+            "source_type": "real",
+            "study_id": "fixture_digitised_102",
+            "source": "test fixture",
+            "feedstock": "test_feedstock",
+            "vs_kg": "1.0",
+            "observed_ch4_nm3": "0.4",
+            "carb": "0.62",
+            "protein": "0.2",
+            "lipid": "0.2",
+            "composition_method": "digitised",
+        }
+        result = validate_bmp([row])
+        self.assertEqual(result["n"], 0)
+        self.assertEqual(result["n_errors"], 1)
+        self.assertEqual(result["composition_rounded"]["digitised"], 0)
+
+    def test_ceiling_equals_explicit_formula_on_unscaled_shares(self):
+        # TEST FIXTURE — tiny row with unscaled shares summing to 1.001
+        # Formula: (0.601 * 0.415 + 0.2 * 0.496 + 0.2 * 1.014) * 2.0 = 1.10283
+        row = {
+            "source_type": "real",
+            "study_id": "fixture_unscaled",
+            "source": "test fixture",
+            "feedstock": "test_feedstock",
+            "vs_kg": "2.0",
+            "observed_ch4_nm3": "1.0",
+            "carb": "0.601",
+            "protein": "0.2",
+            "lipid": "0.2",
+            "composition_method": "reported",
+        }
+        result = validate_bmp([row])
+        expected_ceiling_nm3 = (0.601 * 0.415 + 0.2 * 0.496 + 0.2 * 1.014) * 2.0
+        # metrics bias = predicted - observed
+        expected_bias = expected_ceiling_nm3 - 1.0
+        self.assertAlmostEqual(result["overall_metrics"]["bias"], expected_bias, delta=1e-9)
+
+    def test_fitted_rows_counted_under_fitted_excluded_and_never_in_n_rows(self):
+        # TEST FIXTURE — tiny synthetic rows: 2 measured rows and 2 fitted rows
+        rows = [
+            {
+                "source_type": "real",
+                "study_id": "study_meas_1",
+                "source": "test fixture",
+                "feedstock": "feed_a",
+                "vs_kg": "1.0",
+                "observed_ch4_nm3": "0.4",
+                "carb": "0.6",
+                "protein": "0.2",
+                "lipid": "0.2",
+                "measured_or_fitted": "measured",
+            },
+            {
+                "source_type": "real",
+                "study_id": "study_meas_2",
+                "source": "test fixture",
+                "feedstock": "feed_a",
+                "vs_kg": "1.0",
+                "observed_ch4_nm3": "0.45",
+                "carb": "0.6",
+                "protein": "0.2",
+                "lipid": "0.2",
+                "measured_or_fitted": "measured",
+            },
+            {
+                "source_type": "real",
+                "study_id": "study_fit_1",
+                "source": "test fixture",
+                "feedstock": "feed_b",
+                "vs_kg": "1.0",
+                "observed_ch4_nm3": "0.3",
+                "carb": "0.6",
+                "protein": "0.2",
+                "lipid": "0.2",
+                "measured_or_fitted": "fitted",
+            },
+            {
+                "source_type": "real",
+                "study_id": "study_fit_2",
+                "source": "test fixture",
+                "feedstock": "feed_b",
+                "vs_kg": "1.0",
+                "observed_ch4_nm3": "0.35",
+                "carb": "0.6",
+                "protein": "0.2",
+                "lipid": "0.2",
+                "measured_or_fitted": "fitted",
+            },
+        ]
+        result = validate_bmp(rows)
+        self.assertEqual(result["fitted_excluded"], 2)
+        self.assertEqual(result["n"], 2)
+        self.assertEqual(result["n_rows"], 2)
+
+    def test_fitted_row_above_ceiling_appears_in_fitted_above_ceiling(self):
+        # TEST FIXTURE — tiny synthetic rows:
+        # ceiling = (0.6*0.415 + 0.2*0.496 + 0.2*1.014) * 1.0 = 0.551
+        # fit_high has observed=0.60 > 0.551 (above ceiling)
+        # fit_low has observed=0.40 <= 0.551 (below ceiling)
+        rows = [
+            {
+                "source_type": "real",
+                "study_id": "fit_high",
+                "source": "test fixture",
+                "feedstock": "manure",
+                "vs_kg": "1.0",
+                "observed_ch4_nm3": "0.60",
+                "carb": "0.6",
+                "protein": "0.2",
+                "lipid": "0.2",
+                "measured_or_fitted": "fitted",
+            },
+            {
+                "source_type": "real",
+                "study_id": "fit_low",
+                "source": "test fixture",
+                "feedstock": "sludge",
+                "vs_kg": "1.0",
+                "observed_ch4_nm3": "0.40",
+                "carb": "0.6",
+                "protein": "0.2",
+                "lipid": "0.2",
+                "measured_or_fitted": "fitted",
+            },
+        ]
+        result = validate_bmp(rows)
+        self.assertEqual(result["fitted_excluded"], 2)
+        self.assertEqual(result["n"], 0)
+        self.assertEqual(len(result["fitted_above_ceiling"]), 1)
+        entry = result["fitted_above_ceiling"][0]
+        self.assertEqual(entry.study_id, "fit_high")
+        self.assertEqual(entry["study_id"], "fit_high")
+        self.assertEqual(entry[0], "fit_high")
+        self.assertEqual(entry.feedstock, "manure")
+        self.assertEqual(entry["feedstock"], "manure")
+        self.assertEqual(entry[1], "manure")
+        self.assertAlmostEqual(entry.observed, 0.60, delta=1e-9)
+        self.assertAlmostEqual(entry["observed"], 0.60, delta=1e-9)
+        self.assertAlmostEqual(entry[2], 0.60, delta=1e-9)
+        self.assertAlmostEqual(entry.ceiling, 0.551, delta=1e-9)
+        self.assertAlmostEqual(entry["ceiling"], 0.551, delta=1e-9)
+        self.assertAlmostEqual(entry[3], 0.551, delta=1e-9)
+
+    def test_tolerance_module_constants(self):
+        self.assertEqual(COMPOSITION_TOLERANCE_REPORTED, 0.002)
+        self.assertEqual(COMPOSITION_TOLERANCE_DIGITISED, 0.01)
 
 
 if __name__ == "__main__":
