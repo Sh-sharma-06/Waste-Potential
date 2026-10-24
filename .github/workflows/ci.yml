@@ -58,17 +58,17 @@ jobs:
 
           errors = []
 
-          rel_e = abs(result.e_net_kwh_d - expected_e_net) / abs(expected_e_net)
+          rel_e = abs(result["e_net_kwh_d"] - expected_e_net) / abs(expected_e_net)
           if rel_e > tol:
               errors.append(
-                  f"e_net_kwh_d: got {result.e_net_kwh_d}, "
+                  f"e_net_kwh_d: got {result['e_net_kwh_d']}, "
                   f"expected {expected_e_net}, rel_error {rel_e:.2e}"
               )
 
-          rel_b = abs(result.biogas_nm3_d - expected_biogas) / abs(expected_biogas)
+          rel_b = abs(result["biogas_nm3_d"] - expected_biogas) / abs(expected_biogas)
           if rel_b > tol:
               errors.append(
-                  f"biogas_nm3_d: got {result.biogas_nm3_d}, "
+                  f"biogas_nm3_d: got {result['biogas_nm3_d']}, "
                   f"expected {expected_biogas}, rel_error {rel_b:.2e}"
               )
 
@@ -77,6 +77,6 @@ jobs:
                   print("FAIL:", e)
               sys.exit(1)
 
-          print("OK  e_net_kwh_d  =", result.e_net_kwh_d)
-          print("OK  biogas_nm3_d =", result.biogas_nm3_d)
+          print("OK  e_net_kwh_d  =", result["e_net_kwh_d"])
+          print("OK  biogas_nm3_d =", result["biogas_nm3_d"])
           EOF

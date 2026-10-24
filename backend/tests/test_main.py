@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -101,6 +103,18 @@ def test_openapi_generates(client):
     resp = client.get("/openapi.json")
     assert resp.status_code == 200
     assert "/pathways/compare" in resp.json()["paths"]
+
+
+OPENAPI_SNAPSHOT = Path(__file__).resolve().parents[2] / "docs" / "openapi.snapshot.json"
+
+
+def test_openapi_matches_committed_snapshot():
+    snapshot = json.loads(OPENAPI_SNAPSHOT.read_text(encoding="utf-8"))
+    assert create_app(Settings()).openapi() == snapshot, (
+        f"OpenAPI schema has drifted from {OPENAPI_SNAPSHOT}. If the API change "
+        "is intentional, regenerate the snapshot from create_app(Settings()).openapi() "
+        "and commit it alongside the change."
+    )
 
 
 def _compare_body() -> dict:
