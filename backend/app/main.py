@@ -11,6 +11,7 @@ from app.api.external import router as external_router
 from app.api.geocode import router as geocode_router
 from app.core_engine.router import router as core_engine_router
 from app.data.buyers import router as buyers_router
+from app.data.market_catalog import router as market_catalog_router
 from app.decision.router import router as decision_router
 from app.errors import register_error_handlers
 from app.ml.router import router as ml_router
@@ -72,6 +73,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # P4 buyer discovery: /buyers
     app.include_router(buyers_router)
+
+    # Source-backed market catalogue: /market/catalog
+    app.include_router(market_catalog_router)
 
     # Vision classification and advice: /vision/classify, /vision/advice
     app.include_router(vision_router)

@@ -55,13 +55,14 @@ class PriceLoadResult:
     note: str
 
 
-def load_prices(material: str, csv_path: Path = _CSV_PATH) -> PriceLoadResult:
+def load_prices(material: str, csv_path: Optional[Path] = None) -> PriceLoadResult:
     """Load and validate price rows for *material* from *csv_path*.
 
     Returns a :class:`PriceLoadResult` with matching, validated rows sorted by
     ``price_inr_per_kg_high`` descending (comparison view).  Invalid rows are
     counted in ``rows_skipped``; the caller never sees them.
     """
+    csv_path = Path(csv_path) if csv_path is not None else _CSV_PATH
     today = date.today()
     stale_cutoff = today - timedelta(days=_STALE_DAYS)
 
