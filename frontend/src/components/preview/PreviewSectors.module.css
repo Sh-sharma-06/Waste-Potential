@@ -210,6 +210,22 @@
   backface-visibility: visible;
 }
 
+/* In a preserve-3d scene the browser hit-tests by depth, so the transparent 3D scaffolding
+   (the world plane, object/float/box layers and hidden faces) could sit in front of an
+   object's front face and swallow clicks on ENTER. Only the visible front face takes input.
+   Cursor tilt and proximity listen on window, so they are unaffected. */
+.world,
+.object,
+.float,
+.box,
+.face {
+  pointer-events: none;
+}
+
+.face.front {
+  pointer-events: auto;
+}
+
 .front {
   display: flex;
   flex-direction: column;
