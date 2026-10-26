@@ -31,3 +31,6 @@ frontend/tsconfig.tsbuildinfo
 
 # Ignore local ML models
 *.safetensors
+
+#Ignore datasets
+Datasets
