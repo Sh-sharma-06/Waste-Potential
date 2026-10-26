@@ -2,6 +2,8 @@
 
 import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import AudioReaderButton from "@/components/AudioReaderButton";
 
 /* ── Agriculture Green Accent Palette ── */
 const AGRI = {
@@ -19,7 +21,8 @@ const AGRI = {
   gradTitle: "linear-gradient(90deg,#DCFCE7,#4ADE80)",
   gradBtn: "linear-gradient(90deg,#16A34A 0%,#22C55E 50%,#4ADE80 100%)",
   btnText: "#02150a",
-  cardBg: "rgba(255,255,255,.05)",
+
+  cardBg: "rgba(12, 26, 18, 0.5)",
   badgeBg: "rgba(74,222,128,.15)",
 };
 
@@ -28,9 +31,9 @@ const glassBorder = (color: string) => `1.5px solid ${color}`;
 const glassCard = (extra?: React.CSSProperties): React.CSSProperties => ({
   border: glassBorder(AGRI.accentDim),
   background: AGRI.cardBg,
-  backdropFilter: "blur(14px)",
-  WebkitBackdropFilter: "blur(14px)",
-  boxShadow: `0 10px 40px rgba(0,30,20,.45), inset 0 0 30px ${AGRI.accentInner}, 0 0 36px ${AGRI.accentGlow}`,
+  backdropFilter: "blur(10px)",
+  WebkitBackdropFilter: "blur(10px)",
+  boxShadow: `0 10px 40px rgba(83, 162, 136, 0.45), inset 0 0 30px ${AGRI.accentInner}, 0 0 36px ${AGRI.accentGlow}`,
   borderRadius: 20,
   padding: "26px 30px",
   boxSizing: "border-box",
@@ -41,6 +44,11 @@ const glassCard = (extra?: React.CSSProperties): React.CSSProperties => ({
 interface Detection {
   class: string;
   confidence: number;
+}
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
 }
 
 type PipelineStage = "idle" | "detecting" | "advising" | "complete" | "error";
@@ -67,7 +75,13 @@ export default function AgricultureWasteClassifierPage() {
   const [adviceText, setAdviceText] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Chat state
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   /* ── Accept File Helper ── */
   const acceptFile = useCallback((f: File) => {
@@ -79,6 +93,7 @@ export default function AgricultureWasteClassifierPage() {
     setAdviceText(null);
     setErrorMsg(null);
     setModelSource(null);
+    setChatHistory([]);
   }, []);
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -90,7 +105,7 @@ export default function AgricultureWasteClassifierPage() {
     }
   }, [acceptFile]);
 
-  /* ── Step 2 & 3: Hybrid AI Pipeline (Local ML -> Gemini Rural Advice) ── */
+  /* ── Step 2 & 3: Hybrid AI Pipeline ── */
   const handleAnalyze = async () => {
     if (!file) return;
 
@@ -101,12 +116,10 @@ export default function AgricultureWasteClassifierPage() {
     let detectedConfidence = 0;
     let detectionsList: Detection[] = [];
 
-    // 1. Detection (Local ML) with Fallback to Cloud Gemini
     try {
       const localForm = new FormData();
       localForm.append("file", file);
 
-      // Primary: POST http://localhost:8000/vision/classify-local
       const localRes = await fetch("http://localhost:8000/vision/classify-local", {
         method: "POST",
         body: localForm,
@@ -130,7 +143,6 @@ export default function AgricultureWasteClassifierPage() {
     } catch (localErr) {
       console.warn("Local model detection failed, engaging Gemini fallback...", localErr);
 
-      // Fallback: POST http://localhost:8000/vision/classify
       try {
         const fallbackForm = new FormData();
         fallbackForm.append("image", file);
@@ -165,12 +177,10 @@ export default function AgricultureWasteClassifierPage() {
       }
     }
 
-    // Set detection state in UI
     const topResult: Detection = { class: detectedClass, confidence: detectedConfidence };
     setTopDetection(topResult);
     setAllDetections(detectionsList);
 
-    // 2. Insights (Gemini GenAI with Rural Sector): POST http://localhost:8000/vision/advice
     setStage("advising");
     try {
       const adviceRes = await fetch("http://localhost:8000/vision/advice", {
@@ -199,11 +209,48 @@ export default function AgricultureWasteClassifierPage() {
         `### On-Farm Utilisation & Composting\n` +
         `- **Stubble Incorporation:** Shred and mix residue back into topsoil 3–4 weeks before next sowing to enrich organic carbon.\n` +
         `- **Bio-Enriched Compost:** Layer residue with cattle manure and trichoderma bioculture for rapid decomposition in 45–60 days.\n\n` +
-        `### Bio-Energy & Monetization Pathways\n` +
-        `- **Biogas / Bio-CNG:** Excellent feedstock for anaerobic digesters, yielding high-calorific methane and nutrient slurry.\n` +
-        `- **Pelletization / Briquetting:** Compress into solid bio-coal for industrial boiler co-firing or brick kilns at ₹2,500–4,500/tonne.`
+        `### Monetization Pathways\n` +
+        `- **Pelletization / Briquetting:** Compress into solid bio-coal for industrial boiler co-firing or brick kilns at Rs 2,500–4,500/tonne.`
       );
       setStage("complete");
+    }
+  };
+
+  /* ── Chat send handler ── */
+  const handleChatSend = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+    const userMsg = chatInput.trim();
+    setChatInput("");
+    setChatLoading(true);
+
+    const newHistory: ChatMessage[] = [...chatHistory, { role: "user", content: userMsg }];
+    setChatHistory(newHistory);
+
+    try {
+      const res = await fetch("http://localhost:8000/vision/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: userMsg,
+          history: newHistory,
+          context: adviceText || "",
+          waste_type: topDetection?.class || "",
+          sector: "rural",
+        }),
+      });
+
+      if (!res.ok) throw new Error(`Chat API returned ${res.status}`);
+      const data = await res.json();
+      const reply = data.text || data.reply || "I could not generate a response. Please try again.";
+      setChatHistory([...newHistory, { role: "assistant", content: reply }]);
+    } catch {
+      setChatHistory([...newHistory, {
+        role: "assistant",
+        content: "Sorry, I could not connect to the AI service. Please check that the backend is running and try again.",
+      }]);
+    } finally {
+      setChatLoading(false);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     }
   };
 
@@ -279,21 +326,18 @@ export default function AgricultureWasteClassifierPage() {
         minHeight: "100vh",
         fontFamily: FONT,
         color: "#183D2B",
-
         backgroundImage: `
-    linear-gradient(
-      135deg,
-      rgba(230, 242, 220, 0.08),
-      rgba(190, 220, 175, 0.12)
-    ),
-    url('/agri-bg.jpeg')
-  `,
-
+            linear-gradient(
+              135deg,
+              rgba(230, 242, 220, 0.08),
+              rgba(190, 220, 175, 0.12)
+            ),
+            url('/agri-bg(new).jpg')
+          `,
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundAttachment: "fixed",
         backgroundRepeat: "no-repeat",
-
         padding: "0 0 80px",
       }}
     >
@@ -304,14 +348,15 @@ export default function AgricultureWasteClassifierPage() {
             <Link
               href="/explore"
               style={{
-                color: AGRI.accentSoft,
+                color: "#064E3B",
                 textDecoration: "none",
                 fontSize: ".88rem",
+                fontWeight: 700,
                 letterSpacing: ".08em",
-                border: glassBorder(AGRI.accentDim),
+                border: "1px solid rgba(6,78,59,0.3)",
                 borderRadius: 999,
                 padding: "7px 18px",
-                background: "rgba(74,222,128,.08)",
+                background: "rgba(255,255,255,0.4)",
                 backdropFilter: "blur(8px)",
                 display: "inline-flex",
                 alignItems: "center",
@@ -319,26 +364,26 @@ export default function AgricultureWasteClassifierPage() {
                 transition: "all .15s ease",
               }}
             >
-              ← Back to Categories
+              Back to Categories
             </Link>
 
             <span
               style={{
                 fontSize: ".75rem",
                 letterSpacing: ".08em",
-                color: "#86efac",
-                border: "1px solid rgba(74,222,128,0.4)",
+                color: "#064E3B",
+                border: "1px solid rgba(6,78,59,0.3)",
                 borderRadius: 999,
                 padding: "5px 14px",
-                background: "rgba(74,222,128,0.1)",
+                background: "rgba(255,255,255,0.4)",
                 backdropFilter: "blur(8px)",
-                fontWeight: 600,
+                fontWeight: 700,
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
               }}
             >
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ade80" }} />
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#059669" }} />
               HYBRID AI VISION PIPELINE (LOCAL ML + GEMINI)
             </span>
           </div>
@@ -347,16 +392,16 @@ export default function AgricultureWasteClassifierPage() {
             style={{
               fontSize: ".82rem",
               letterSpacing: ".08em",
-              color: AGRI.accentSoft,
-              border: glassBorder(AGRI.accentDim),
+              color: "#064E3B",
+              border: "1px solid rgba(6,78,59,0.3)",
               borderRadius: 999,
               padding: "6px 16px",
-              background: AGRI.badgeBg,
+              background: "rgba(255,255,255,0.4)",
               backdropFilter: "blur(8px)",
-              fontWeight: 600,
+              fontWeight: 700,
             }}
           >
-            📍 PIN {pin}
+            PIN {pin}
           </span>
         </div>
 
@@ -365,18 +410,15 @@ export default function AgricultureWasteClassifierPage() {
             style={{
               margin: "0 0 6px",
               fontSize: "clamp(1.4rem, 3.5vw, 2.2rem)",
-              fontWeight: 800,
+              fontWeight: 900,
               letterSpacing: ".06em",
               textTransform: "uppercase",
-              backgroundImage: AGRI.gradTitle,
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
+              color: "#026a4dff",
             }}
           >
             Agricultural Waste AI Classifier
           </h1>
-          <p style={{ margin: 0, color: AGRI.textBody, fontSize: ".92rem", letterSpacing: ".02em" }}>
+          <p style={{ margin: 0, color: "#064E3B", fontSize: ".92rem", letterSpacing: ".02em", fontWeight: 500 }}>
             Real-time on-device classification via local Hugging Face model paired with generative Gemini guidance for crop residue valorization and clean bio-energy pathways.
           </p>
         </div>
@@ -463,7 +505,7 @@ export default function AgricultureWasteClassifierPage() {
                       fontSize: "1.5rem",
                     }}
                   >
-                    🌾
+                    [AGRI]
                   </div>
                   <div style={{ textAlign: "center" }}>
                     <p style={{ margin: 0, color: AGRI.textHeading, fontSize: ".95rem", fontWeight: 600 }}>
@@ -511,9 +553,9 @@ export default function AgricultureWasteClassifierPage() {
               }}
             >
               {stage === "detecting"
-                ? "⚡ 1/2 Running Local ML Detection…"
+                ? "1/2 Running Local ML Detection..."
                 : stage === "advising"
-                  ? "✦ 2/2 Requesting Gemini Insights…"
+                  ? "2/2 Requesting Gemini Insights..."
                   : "ANALYZE WITH HYBRID AI VISION"}
             </button>
 
@@ -533,7 +575,7 @@ export default function AgricultureWasteClassifierPage() {
                   gap: 8,
                 }}
               >
-                <span>⚠</span>
+                <span>[!]</span>
                 <span>{errorMsg}</span>
               </div>
             )}
@@ -549,7 +591,6 @@ export default function AgricultureWasteClassifierPage() {
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: "1.3rem" }}>🎯</span>
                   <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, letterSpacing: ".08em", color: AGRI.textHeading, textTransform: "uppercase" }}>
                     Detection Result
                   </h2>
@@ -567,11 +608,10 @@ export default function AgricultureWasteClassifierPage() {
                     letterSpacing: ".06em",
                   }}
                 >
-                  {modelSource === "local" ? "✓ LOCAL ML PIPELINE" : "✦ GEMINI CLOUD FALLBACK"}
+                  {modelSource === "local" ? "LOCAL ML PIPELINE" : "GEMINI CLOUD FALLBACK"}
                 </span>
               </div>
 
-              {/* Exact format: "Detected: Crop Residue (95%)" */}
               <div
                 style={{
                   padding: "18px 20px",
@@ -604,7 +644,6 @@ export default function AgricultureWasteClassifierPage() {
                 </div>
               </div>
 
-              {/* Multi-class Detections Strip */}
               {allDetections.length > 1 && (
                 <div style={{ marginTop: 14 }}>
                   <span style={{ fontSize: ".72rem", color: AGRI.accentSoft, textTransform: "uppercase", letterSpacing: ".04em" }}>
@@ -633,40 +672,24 @@ export default function AgricultureWasteClassifierPage() {
           )}
         </div>
 
-        {/* ══ RIGHT PANEL: Gemini AI Guidance & Insights ══ */}
+        {/* ══ RIGHT PANEL: Gemini AI Guidance & Chat ══ */}
         <div style={{ position: "sticky", top: 28, alignSelf: "start" }}>
           {adviceText ? (
             <section style={glassCard({ border: "1.5px solid rgba(74,222,128,0.4)" })}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: "1.3rem", color: AGRI.accent }}>✦</span>
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "1.05rem",
-                      fontWeight: 800,
-                      letterSpacing: ".08em",
-                      color: AGRI.textHeading,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Gemini AI Insights &amp; Guidance
-                  </h2>
-                </div>
-
-                <span
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                <span style={{ fontSize: "1.3rem", color: AGRI.accent }}>✦</span>
+                <h2
                   style={{
-                    fontSize: ".68rem",
-                    fontWeight: 700,
-                    padding: "3px 10px",
-                    borderRadius: 999,
-                    background: "rgba(74,222,128,0.15)",
-                    border: "1px solid rgba(74,222,128,0.35)",
-                    color: AGRI.accentSoft,
+                    margin: 0,
+                    fontSize: "1.05rem",
+                    fontWeight: 800,
+                    letterSpacing: ".08em",
+                    color: AGRI.textHeading,
+                    textTransform: "uppercase",
                   }}
                 >
-                  RURAL &amp; BIO-ENERGY OFFTAKE
-                </span>
+                  Gemini AI Insights &amp; Guidance
+                </h2>
               </div>
 
               <div
@@ -675,35 +698,132 @@ export default function AgricultureWasteClassifierPage() {
                   borderRadius: 14,
                   background: "rgba(7,10,15,0.65)",
                   border: "1px solid rgba(74,222,128,0.2)",
-                  maxHeight: "68vh",
+                  maxHeight: "40vh",
                   overflowY: "auto",
                 }}
               >
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+                  <AudioReaderButton text={adviceText} />
+                </div>
                 {renderMarkdown(adviceText)}
               </div>
 
-              <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <Link
-                  href={`/simulator?pincode=${encodeURIComponent(pin)}&mass=5000`}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "10px 18px",
-                    borderRadius: 10,
-                    background: "rgba(74,222,128,0.15)",
-                    border: "1px solid #4ADE80",
-                    color: "#DCFCE7",
-                    fontSize: ".82rem",
-                    fontWeight: 700,
-                    letterSpacing: ".04em",
-                    textDecoration: "none",
-                    transition: "all .15s ease",
-                  }}
-                >
-                  <span>Simulate Bio-Energy Pathways</span>
-                  <span>→</span>
-                </Link>
+              {/* ── Gemini Chat Continuation ── */}
+              <div style={{ marginTop: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: AGRI.accent }} />
+                  <span style={{ fontSize: ".78rem", color: AGRI.accentSoft, letterSpacing: ".06em", textTransform: "uppercase", fontWeight: 700 }}>
+                    Continue conversation with Gemini
+                  </span>
+                </div>
+
+                {/* Chat messages */}
+                {chatHistory.length > 0 && (
+                  <div
+                    style={{
+                      maxHeight: "28vh",
+                      overflowY: "auto",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                      marginBottom: 14,
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      background: "rgba(7,10,15,0.55)",
+                      border: "1px solid rgba(74,222,128,0.15)",
+                    }}
+                  >
+                    {chatHistory.map((msg, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          display: "flex",
+                          justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+                        }}
+                      >
+                        <div
+                          style={{
+                            maxWidth: "85%",
+                            padding: "9px 14px",
+                            borderRadius: msg.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
+                            background: msg.role === "user"
+                              ? "rgba(74,222,128,0.18)"
+                              : "rgba(255,255,255,0.06)",
+                            border: msg.role === "user"
+                              ? "1px solid rgba(74,222,128,0.35)"
+                              : "1px solid rgba(255,255,255,0.1)",
+                            color: msg.role === "user" ? "#DCFCE7" : AGRI.textBody,
+                            fontSize: ".87rem",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+                    {chatLoading && (
+                      <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                        <div
+                          style={{
+                            padding: "9px 14px",
+                            borderRadius: "14px 14px 14px 4px",
+                            background: "rgba(255,255,255,0.06)",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            color: AGRI.textMuted,
+                            fontSize: ".84rem",
+                          }}
+                        >
+                          Gemini is thinking...
+                        </div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
+                )}
+
+                {/* Chat input row */}
+                <div style={{ display: "flex", gap: 10 }}>
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleChatSend()}
+                    placeholder="Ask a follow-up question about this waste..."
+                    disabled={chatLoading}
+                    style={{
+                      flex: 1,
+                      padding: "11px 16px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(74,222,128,0.3)",
+                      background: "rgba(7,10,15,0.75)",
+                      color: "#DCFCE7",
+                      fontFamily: FONT,
+                      fontSize: ".9rem",
+                      outline: "none",
+                      transition: "border-color .2s",
+                    }}
+                  />
+                  <button
+                    onClick={handleChatSend}
+                    disabled={!chatInput.trim() || chatLoading}
+                    style={{
+                      padding: "11px 20px",
+                      borderRadius: 12,
+                      border: "none",
+                      background: chatInput.trim() && !chatLoading ? AGRI.gradBtn : "rgba(255,255,255,.06)",
+                      color: chatInput.trim() && !chatLoading ? AGRI.btnText : "rgba(134,239,172,.3)",
+                      fontFamily: FONT,
+                      fontWeight: 700,
+                      fontSize: ".88rem",
+                      letterSpacing: ".06em",
+                      cursor: chatInput.trim() && !chatLoading ? "pointer" : "not-allowed",
+                      transition: "all .2s ease",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Send
+                  </button>
+                </div>
               </div>
             </section>
           ) : (
@@ -743,9 +863,9 @@ export default function AgricultureWasteClassifierPage() {
                 </h3>
                 <p style={{ margin: 0, color: AGRI.accentSoft, fontSize: ".86rem", maxWidth: 320, lineHeight: 1.5 }}>
                   {stage === "detecting"
-                    ? "Local ML model is classifying farm residue…"
+                    ? "Local ML model is classifying farm residue..."
                     : stage === "advising"
-                      ? "Generating tailored rural composting and bio-energy guidance…"
+                      ? "Generating tailored rural composting guidance..."
                       : "Upload an agricultural residue photo on the left and start analysis to generate actionable recovery guidelines."}
                 </p>
               </div>
@@ -763,7 +883,7 @@ export default function AgricultureWasteClassifierPage() {
                     }}
                   />
                   <span style={{ fontSize: ".8rem", color: AGRI.accent, fontWeight: 600 }}>
-                    Processing AI Inference…
+                    Processing AI Inference...
                   </span>
                 </div>
               )}
@@ -773,22 +893,4 @@ export default function AgricultureWasteClassifierPage() {
       </div>
     </main>
   );
-}
-
-
-import { useRouter } from "next/navigation"; // Add to your imports at the top
-
-// Inside your main function:
-const router = useRouter();
-
-// Below your Gemini Advice section:
-{
-  detectedItem && (
-    <button
-      onClick={() => router.push(`/market/energy?pincode=324005&output=${encodeURIComponent(detectedItem)}&mass=1000`)}
-      className="mt-6 w-full py-3 bg-green-500 text-[#070a0f] font-bold rounded-lg hover:bg-green-400 transition-all shadow-[0_0_15px_rgba(74,222,128,0.4)]"
-    >
-      Find Industrial Buyers for {detectedItem}
-    </button>
-  )
 }

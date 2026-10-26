@@ -21,6 +21,8 @@ from app.recyclables.recyclables_router import router as recyclables_router
 from app.pathways.router import router as pathways_router
 from app.platform.assistant.router import router as assistant_router
 from app.platform.router import router as platform_router
+from app.routers.simulator import router as simulator_router
+from app.routers.sarvam_router import router as sarvam_router, voice_router
 from app.schemas.common import BaseSchema
 
 
@@ -85,8 +87,40 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # ML yield model: /ml/yield, /ml/models
     app.include_router(ml_router)
+
+    # Simulator recommendation & process details: /simulator/recommend, /simulator/process-details
+    app.include_router(simulator_router)
+
+    # Sarvam AI STT, Translation, and TTS: /sarvam/stt, /sarvam/translate, /sarvam/tts
+    app.include_router(sarvam_router)
+    app.include_router(voice_router)
     
     return app
 
 
 app = create_app()
+
+from dataclasses import replace
+from pydantic import BaseModel
+
+from app.core_engine.engine import Params
+from app.audit_report.audit_data import build_audit_payload
+from app.audit_report.report_writer import make_report
+
+
+
+class AuditRequest(BaseModel):
+    location: str
+    transport_km: float
+    total_mass_kg_d: float = 1000
+    organic_fraction: float = 0.45
+    suitable_fraction: float = 0.80
+    ambient_temp_c: float = 25.0
+
+@app.post("/api/audit-report")
+def audit_report(req: AuditRequest):
+    p = replace(Params(), total_mass_kg_d=req.total_mass_kg_d,
+                organic_fraction=req.organic_fraction,
+                suitable_fraction=req.suitable_fraction,
+                ambient_temp_c=req.ambient_temp_c)
+    return make_report(build_audit_payload(p, req.location, req.transport_km))  

@@ -49,7 +49,7 @@ def _internal_error_response(headers: dict[str, str] | None = None) -> JSONRespo
 async def _http_exception_handler(
     request: Request, exc: StarletteHTTPException
 ) -> JSONResponse:
-    if exc.status_code < 500:
+    if exc.status_code < 500 or exc.status_code == 503:
         return await http_exception_handler(request, exc)
     # exc_info includes the chained cause (``raise HTTPException(...) from exc``).
     logger.error(

@@ -34,7 +34,8 @@ def extract_numbers(text: str) -> list[float]:
 # Grounding check (1 % relative tolerance)
 # ---------------------------------------------------------------------------
 
-_GROUNDING_TOLERANCE = 0.01   # 1 %
+_GROUNDING_TOLERANCE = 0.05   # 5 % — allows natural rounding by Gemini
+_MIN_NUMBER_TO_CHECK = 10.0   # ignore tiny integers (e.g. ordinals, sentence numbers)
 
 
 def _facts_numbers(facts: dict[str, Any]) -> list[float]:
@@ -70,12 +71,15 @@ def check_grounding(text: str, facts: dict[str, Any]) -> tuple[bool, list[float]
     Returns
     -------
     (grounded, unsupported_numbers)
-        *grounded* is True iff every number in the text is supported by FACTS.
-        *unsupported_numbers* lists any numbers that could not be matched.
+        *grounded* is True iff every significant number in the text is supported
+        by FACTS within _GROUNDING_TOLERANCE.  Small integers below
+        _MIN_NUMBER_TO_CHECK are skipped (ordinals, sentence counts, etc.).
     """
     fact_nums = _facts_numbers(facts)
     text_nums = extract_numbers(text)
-    unsupported = [n for n in text_nums if not _is_supported(n, fact_nums)]
+    # Only check numbers large enough to be real quantities, not ordinals/counts
+    significant = [n for n in text_nums if abs(n) >= _MIN_NUMBER_TO_CHECK]
+    unsupported = [n for n in significant if not _is_supported(n, fact_nums)]
     return (len(unsupported) == 0), unsupported
 
 

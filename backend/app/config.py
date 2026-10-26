@@ -79,7 +79,7 @@ def get_setting(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
 
 
-GEMINI_MODEL = get_setting("GEMINI_MODEL", "gemini-3.8-flash")
+GEMINI_MODEL = get_setting("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_API_KEY_AUDIT = get_setting("GEMINI_API_KEY_AUDIT")
 GEMINI_API_KEY_ADVISOR = get_setting("GEMINI_API_KEY_ADVISOR")
 GEMINI_API_KEY_PARSER = get_setting("GEMINI_API_KEY_PARSER")
@@ -95,3 +95,7 @@ GOOGLE_PLACES_API_KEY: str = get_setting("GOOGLE_PLACES_API_KEY")
 # Open-Meteo is a public API that requires no key; this is reserved for
 # future premium / commercial access.
 OPEN_METEO_API_KEY: str = get_setting("OPEN_METEO_API_KEY")
+
+# Sarvam AI for TTS, STT, and Translation
+SARVAM_API_KEY: str = get_setting("SARVAM_API_KEY") or get_setting("SARVAM_API")
+

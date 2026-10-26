@@ -120,3 +120,6 @@ def simulate(p: Params):
 def cost_per_kwh(annual_cost, e_net_kwh_d):
     """Undefined (None) when net electricity <= 0."""
     return None if e_net_kwh_d <= 0 else annual_cost / (e_net_kwh_d * 365)
+
+
+ENGINE_VERSION = "0.2"

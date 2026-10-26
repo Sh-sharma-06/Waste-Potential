@@ -2,25 +2,26 @@
 
 import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
+import AudioReaderButton from "../../../components/AudioReaderButton";
 
-/* ── Home Purple Accent Palette (Reverted from Orange) ── */
+/* ── Home Purple Accent Palette ── */
 const HOME = {
-  bg:          "#070a0f",
-  accent:      "#A78BFA",
-  accentHover: "#8B5CF6",
-  accentSoft:  "#C4B5FD",
-  accentDim:   "rgba(167,139,250,.45)",
-  accentGlow:  "rgba(167,139,250,.35)",
-  accentInner: "rgba(167,139,250,.06)",
-  accentDrop:  "rgba(167,139,250,.45)",
-  textHeading: "#EDE9FE",
-  textBody:    "#E0D8FB",
-  textMuted:   "#9383b8",
-  gradTitle:   "linear-gradient(90deg,#EDE9FE,#A78BFA)",
-  gradBtn:     "linear-gradient(90deg,#7C3AED 0%,#8B5CF6 50%,#A78BFA 100%)",
-  btnText:     "#0d0520",
-  cardBg:      "rgba(255,255,255,.05)",
-  badgeBg:     "rgba(167,139,250,.15)",
+  bg: "#070a0f",
+  accent: "#9D4EDD",
+  accentHover: "#7B2CBF",
+  accentSoft: "#C77DFF",
+  accentDim: "rgba(157,78,221,.45)",
+  accentGlow: "rgba(157,78,221,.35)",
+  accentInner: "rgba(157,78,221,.06)",
+  accentDrop: "rgba(157,78,221,.45)",
+  textHeading: "#10002B",
+  textBody: "#240046",
+  textMuted: "#3C096C",
+  gradTitle: "linear-gradient(90deg,#10002B,#5A189A)",
+  gradBtn: "linear-gradient(90deg,#3C096C 0%,#5A189A 50%,#7B2CBF 100%)",
+  btnText: "#FFFFFF",
+  cardBg: "rgba(255, 252, 255, 0.35)",
+  badgeBg: "rgba(255,255,255,.4)",
 };
 
 const FONT = '"Rubik", sans-serif';
@@ -30,7 +31,7 @@ const glassCard = (extra?: React.CSSProperties): React.CSSProperties => ({
   background: HOME.cardBg,
   backdropFilter: "blur(14px)",
   WebkitBackdropFilter: "blur(14px)",
-  boxShadow: `0 10px 40px rgba(15,8,40,.45), inset 0 0 30px ${HOME.accentInner}, 0 0 36px ${HOME.accentGlow}`,
+  boxShadow: `0 8px 32px rgba(80, 30, 120, 0.18), inset 0 0 20px ${HOME.accentInner}`,
   borderRadius: 20,
   padding: "26px 30px",
   boxSizing: "border-box",
@@ -41,6 +42,11 @@ const glassCard = (extra?: React.CSSProperties): React.CSSProperties => ({
 interface Detection {
   class: string;
   confidence: number;
+}
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
 }
 
 type PipelineStage = "idle" | "detecting" | "advising" | "complete" | "error";
@@ -66,7 +72,13 @@ export default function HomeWasteClassifierPage() {
   const [adviceText, setAdviceText] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Chat state
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   /* ── Accept File Helper ── */
   const acceptFile = useCallback((f: File) => {
@@ -78,6 +90,7 @@ export default function HomeWasteClassifierPage() {
     setAdviceText(null);
     setErrorMsg(null);
     setModelSource(null);
+    setChatHistory([]);
   }, []);
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -89,7 +102,7 @@ export default function HomeWasteClassifierPage() {
     }
   }, [acceptFile]);
 
-  /* ── Step 1: Hybrid AI Pipeline (Local ML -> Gemini Advice) ── */
+  /* ── Hybrid AI Pipeline ── */
   const handleAnalyze = async () => {
     if (!file) return;
 
@@ -100,12 +113,10 @@ export default function HomeWasteClassifierPage() {
     let detectedConfidence = 0;
     let detectionsList: Detection[] = [];
 
-    // 1. Detection (Local ML) with Fallback to Cloud Gemini
     try {
       const localForm = new FormData();
       localForm.append("file", file);
 
-      // Primary: POST http://localhost:8000/vision/classify-local
       const localRes = await fetch("http://localhost:8000/vision/classify-local", {
         method: "POST",
         body: localForm,
@@ -129,7 +140,6 @@ export default function HomeWasteClassifierPage() {
     } catch (localErr) {
       console.warn("Local model detection failed, engaging Gemini fallback...", localErr);
 
-      // Fallback: POST http://localhost:8000/vision/classify
       try {
         const fallbackForm = new FormData();
         fallbackForm.append("image", file);
@@ -164,12 +174,10 @@ export default function HomeWasteClassifierPage() {
       }
     }
 
-    // Set detection state in UI
     const topResult: Detection = { class: detectedClass, confidence: detectedConfidence };
     setTopDetection(topResult);
     setAllDetections(detectionsList);
 
-    // 2. Insights (Gemini GenAI): POST http://localhost:8000/vision/advice
     setStage("advising");
     try {
       const adviceRes = await fetch("http://localhost:8000/vision/advice", {
@@ -198,11 +206,49 @@ export default function HomeWasteClassifierPage() {
         `### Home Composting & Segregation\n` +
         `- Keep the ${detectedClass.toLowerCase()} stream segregated from organic wet food waste.\n` +
         `- Rinse clean any packaging films, bottles, or food trays before recycling.\n\n` +
-        `### DIY Upcycling & Doorstep Scrap Offtake\n` +
-        `- Sorted clean dry recyclables fetch ₹5–30/kg at local buy-back counters and kabadiwalas.\n` +
+        `### Doorstep Scrap Offtake\n` +
+        `- Sorted clean dry recyclables fetch Rs 5–30/kg at local buy-back counters.\n` +
         `- Request bulk pickup or explore regional recycling centers via the Marketplace.`
       );
       setStage("complete");
+    }
+  };
+
+  /* ── Chat send handler ── */
+  const handleChatSend = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+    const userMsg = chatInput.trim();
+    setChatInput("");
+    setChatLoading(true);
+
+    const newHistory: ChatMessage[] = [...chatHistory, { role: "user", content: userMsg }];
+    setChatHistory(newHistory);
+
+    try {
+      const res = await fetch("http://localhost:8000/vision/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: userMsg,
+          history: newHistory,
+          context: adviceText || "",
+          waste_type: topDetection?.class || "",
+          sector: "urban",
+        }),
+      });
+
+      if (!res.ok) throw new Error(`Chat API returned ${res.status}`);
+      const data = await res.json();
+      const reply = data.text || data.reply || "I could not generate a response. Please try again.";
+      setChatHistory([...newHistory, { role: "assistant", content: reply }]);
+    } catch {
+      setChatHistory([...newHistory, {
+        role: "assistant",
+        content: "Sorry, I could not connect to the AI service. Please check that the backend is running and try again.",
+      }]);
+    } finally {
+      setChatLoading(false);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     }
   };
 
@@ -252,7 +298,7 @@ export default function HomeWasteClassifierPage() {
             key={idx}
             style={{ margin: "6px 0", color: HOME.textBody, lineHeight: 1.55, fontSize: ".92rem" }}
             dangerouslySetInnerHTML={{
-              __html: trimmed.slice(2).replace(/\*\*(.+?)\*\*/g, `<strong style="color:#EDE9FE">$1</strong>`),
+              __html: trimmed.slice(2).replace(/\*\*(.+?)\*\*/g, `<strong style="color:#3C096C">$1</strong>`),
             }}
           />
         );
@@ -265,7 +311,7 @@ export default function HomeWasteClassifierPage() {
           key={idx}
           style={{ margin: "6px 0", color: HOME.textBody, lineHeight: 1.6, fontSize: ".92rem" }}
           dangerouslySetInnerHTML={{
-            __html: trimmed.replace(/\*\*(.+?)\*\*/g, `<strong style="color:#EDE9FE">$1</strong>`),
+            __html: trimmed.replace(/\*\*(.+?)\*\*/g, `<strong style="color:#3C096C">$1</strong>`),
           }}
         />
       );
@@ -276,11 +322,20 @@ export default function HomeWasteClassifierPage() {
     <main
       style={{
         minHeight: "100vh",
-        background: HOME.bg,
         fontFamily: FONT,
-        color: HOME.textHeading,
-        backgroundImage: `radial-gradient(ellipse 70% 50% at 70% 20%, rgba(167,139,250,.07) 0%, transparent 70%),
-                          radial-gradient(ellipse 50% 40% at 20% 80%, rgba(124,58,237,.05) 0%, transparent 70%)`,
+        color: "#2A1B4E",
+        backgroundImage: `
+            linear-gradient(
+              135deg,
+              rgba(255, 255, 255, 0.45),
+              rgba(240, 230, 255, 0.55)
+            ),
+            url('/home-bg(new).jpg')
+          `,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundAttachment: "fixed",
+        backgroundRepeat: "no-repeat",
         padding: "0 0 80px",
       }}
     >
@@ -291,14 +346,15 @@ export default function HomeWasteClassifierPage() {
             <Link
               href="/explore"
               style={{
-                color: HOME.accentSoft,
+                color: "#2A1B4E",
                 textDecoration: "none",
                 fontSize: ".88rem",
+                fontWeight: 700,
                 letterSpacing: ".08em",
-                border: glassBorder(HOME.accentDim),
+                border: "1px solid rgba(42,27,78,0.3)",
                 borderRadius: 999,
                 padding: "7px 18px",
-                background: "rgba(167,139,250,.08)",
+                background: "rgba(255,255,255,0.55)",
                 backdropFilter: "blur(8px)",
                 display: "inline-flex",
                 alignItems: "center",
@@ -306,44 +362,44 @@ export default function HomeWasteClassifierPage() {
                 transition: "all .15s ease",
               }}
             >
-              ← Back to Categories
+              Back to Categories
             </Link>
 
             <span
               style={{
                 fontSize: ".75rem",
                 letterSpacing: ".08em",
-                color: "#c4b5fd",
-                border: "1px solid rgba(167,139,250,0.4)",
+                color: "#2A1B4E",
+                border: "1px solid rgba(42,27,78,0.3)",
                 borderRadius: 999,
                 padding: "5px 14px",
-                background: "rgba(167,139,250,0.1)",
+                background: "rgba(255,255,255,0.55)",
                 backdropFilter: "blur(8px)",
-                fontWeight: 600,
+                fontWeight: 700,
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
               }}
             >
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#a78bfa" }} />
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#7C3AED" }} />
               HYBRID AI VISION PIPELINE (LOCAL ML + GEMINI)
             </span>
           </div>
 
-          <span
+          <span suppressHydrationWarning
             style={{
               fontSize: ".82rem",
               letterSpacing: ".08em",
-              color: HOME.accentSoft,
-              border: glassBorder(HOME.accentDim),
+              color: "#2A1B4E",
+              border: "1px solid rgba(42,27,78,0.3)",
               borderRadius: 999,
               padding: "6px 16px",
-              background: HOME.badgeBg,
+              background: "rgba(255,255,255,0.55)",
               backdropFilter: "blur(8px)",
-              fontWeight: 600,
+              fontWeight: 700,
             }}
           >
-            📍 PIN {pin}
+            PIN {pin}
           </span>
         </div>
 
@@ -352,18 +408,15 @@ export default function HomeWasteClassifierPage() {
             style={{
               margin: "0 0 6px",
               fontSize: "clamp(1.4rem, 3.5vw, 2.2rem)",
-              fontWeight: 800,
+              fontWeight: 900,
               letterSpacing: ".06em",
               textTransform: "uppercase",
-              backgroundImage: HOME.gradTitle,
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
+              color: "#3d0b6cff",
             }}
           >
             Household Waste AI Classifier
           </h1>
-          <p style={{ margin: 0, color: HOME.textBody, fontSize: ".92rem", letterSpacing: ".02em" }}>
+          <p style={{ margin: 0, color: "#3d0b6cff", fontSize: ".92rem", letterSpacing: ".02em", fontWeight: 500 }}>
             Real-time on-device classification via local Hugging Face model paired with generative Gemini guidance for domestic upcycling and disposal.
           </p>
         </div>
@@ -385,7 +438,7 @@ export default function HomeWasteClassifierPage() {
           {/* Upload Card */}
           <section style={glassCard()}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: "1rem", letterSpacing: ".08em", color: HOME.accentSoft, textTransform: "uppercase" }}>
+              <h2 style={{ margin: 0, fontSize: "1.05rem", letterSpacing: ".08em", color: "#3C096C", textTransform: "uppercase" }}>
                 Upload Waste Image
               </h2>
               <span style={{ fontSize: ".72rem", color: HOME.textMuted }}>
@@ -411,7 +464,7 @@ export default function HomeWasteClassifierPage() {
                 borderRadius: 16,
                 minHeight: 180,
                 border: `2px dashed ${dragging ? HOME.accent : HOME.accentDim}`,
-                background: dragging ? "rgba(167,139,250,.12)" : "rgba(7,10,15,.6)",
+                background: dragging ? "rgba(167,139,250,.12)" : "rgba(255,255,255,0.3)",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
@@ -450,13 +503,13 @@ export default function HomeWasteClassifierPage() {
                       fontSize: "1.5rem",
                     }}
                   >
-                    🏠
+                    [HOME]
                   </div>
                   <div style={{ textAlign: "center" }}>
                     <p style={{ margin: 0, color: HOME.textHeading, fontSize: ".95rem", fontWeight: 600 }}>
                       Drag and drop household waste photo here
                     </p>
-                    <span style={{ color: HOME.accentSoft, fontSize: ".82rem", marginTop: 4, display: "inline-block" }}>
+                    <span style={{ color: "#7643a6ff", fontSize: ".82rem", marginTop: 4, display: "inline-block" }}>
                       or click to browse from device
                     </span>
                   </div>
@@ -498,10 +551,10 @@ export default function HomeWasteClassifierPage() {
               }}
             >
               {stage === "detecting"
-                ? "⚡ 1/2 Running Local ML Detection…"
+                ? "1/2 Running Local ML Detection..."
                 : stage === "advising"
-                ? "✦ 2/2 Requesting Gemini Insights…"
-                : "🚀 ANALYZE WITH HYBRID AI VISION"}
+                  ? "2/2 Requesting Gemini Insights..."
+                  : "ANALYZE WITH HYBRID AI VISION"}
             </button>
 
             {/* Error Banner */}
@@ -520,7 +573,7 @@ export default function HomeWasteClassifierPage() {
                   gap: 8,
                 }}
               >
-                <span>⚠</span>
+                <span>[!]</span>
                 <span>{errorMsg}</span>
               </div>
             )}
@@ -531,12 +584,11 @@ export default function HomeWasteClassifierPage() {
             <section
               style={glassCard({
                 border: "1.5px solid #A78BFA",
-                background: "linear-gradient(135deg, rgba(167,139,250,0.12) 0%, rgba(15,8,40,0.85) 100%)",
+                background: "rgba(240,235,255,0.55)",
               })}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: "1.3rem" }}>🎯</span>
                   <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, letterSpacing: ".08em", color: HOME.textHeading, textTransform: "uppercase" }}>
                     Detection Result
                   </h2>
@@ -550,20 +602,19 @@ export default function HomeWasteClassifierPage() {
                     borderRadius: 999,
                     background: modelSource === "local" ? "rgba(34,197,94,0.2)" : "rgba(167,139,250,0.2)",
                     border: `1px solid ${modelSource === "local" ? "rgba(34,197,94,0.5)" : "rgba(167,139,250,0.5)"}`,
-                    color: modelSource === "local" ? "#86efac" : "#c4b5fd",
+                    color: modelSource === "local" ? "#166534" : "#4C1D95",
                     letterSpacing: ".06em",
                   }}
                 >
-                  {modelSource === "local" ? "✓ LOCAL ML PIPELINE" : "✦ GEMINI CLOUD FALLBACK"}
+                  {modelSource === "local" ? "LOCAL ML PIPELINE" : "GEMINI CLOUD FALLBACK"}
                 </span>
               </div>
 
-              {/* Exact format: "Detected: Plastic (95%)" */}
               <div
                 style={{
                   padding: "18px 20px",
                   borderRadius: 14,
-                  background: "rgba(7,10,15,0.75)",
+                  background: "rgba(255,255,255,0.5)",
                   border: "1px solid rgba(167,139,250,0.3)",
                   display: "flex",
                   alignItems: "center",
@@ -576,7 +627,7 @@ export default function HomeWasteClassifierPage() {
                   <span style={{ fontSize: ".72rem", color: HOME.textMuted, textTransform: "uppercase", letterSpacing: ".06em" }}>
                     Identified Household Item
                   </span>
-                  <p style={{ margin: "4px 0 0", fontSize: "1.35rem", fontWeight: 800, color: "#EDE9FE" }}>
+                  <p style={{ margin: "4px 0 0", fontSize: "1.35rem", fontWeight: 800, color: HOME.textHeading }}>
                     Detected: {topDetection.class} ({topDetection.confidence}%)
                   </p>
                 </div>
@@ -591,10 +642,9 @@ export default function HomeWasteClassifierPage() {
                 </div>
               </div>
 
-              {/* Multi-class Detections Strip */}
               {allDetections.length > 1 && (
                 <div style={{ marginTop: 14 }}>
-                  <span style={{ fontSize: ".72rem", color: HOME.accentSoft, textTransform: "uppercase", letterSpacing: ".04em" }}>
+                  <span style={{ fontSize: ".72rem", color: HOME.textMuted, textTransform: "uppercase", letterSpacing: ".04em" }}>
                     Secondary Candidate Matches:
                   </span>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
@@ -605,7 +655,7 @@ export default function HomeWasteClassifierPage() {
                           fontSize: ".74rem",
                           padding: "3px 10px",
                           borderRadius: 8,
-                          background: "rgba(255,255,255,0.05)",
+                          background: "rgba(255,255,255,0.5)",
                           border: "1px solid rgba(167,139,250,0.25)",
                           color: HOME.textBody,
                         }}
@@ -620,77 +670,158 @@ export default function HomeWasteClassifierPage() {
           )}
         </div>
 
-        {/* ══ RIGHT PANEL: Gemini AI Guidance & Insights ══ */}
+        {/* ══ RIGHT PANEL: Gemini AI Guidance & Chat ══ */}
         <div style={{ position: "sticky", top: 28, alignSelf: "start" }}>
           {adviceText ? (
             <section style={glassCard({ border: "1.5px solid rgba(167,139,250,0.4)" })}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: "1.3rem", color: HOME.accent }}>✦</span>
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "1.05rem",
-                      fontWeight: 800,
-                      letterSpacing: ".08em",
-                      color: HOME.textHeading,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Gemini AI Insights &amp; Guidance
-                  </h2>
-                </div>
-
-                <span
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                <span style={{ fontSize: "1.3rem", color: HOME.accent }}>✦</span>
+                <h2
                   style={{
-                    fontSize: ".68rem",
-                    fontWeight: 700,
-                    padding: "3px 10px",
-                    borderRadius: 999,
-                    background: "rgba(167,139,250,0.15)",
-                    border: "1px solid rgba(167,139,250,0.35)",
-                    color: HOME.accentSoft,
+                    margin: 0,
+                    fontSize: "1.05rem",
+                    fontWeight: 800,
+                    letterSpacing: ".08em",
+                    color: HOME.textHeading,
+                    textTransform: "uppercase",
                   }}
                 >
-                  DISPOSAL &amp; UPCYCLING
-                </span>
+                  Gemini AI Insights &amp; Guidance
+                </h2>
               </div>
 
               <div
                 style={{
                   padding: "16px 20px",
                   borderRadius: 14,
-                  background: "rgba(7,10,15,0.65)",
+                  background: "rgba(255,255,255,0.45)",
                   border: "1px solid rgba(167,139,250,0.2)",
-                  maxHeight: "68vh",
+                  maxHeight: "40vh",
                   overflowY: "auto",
                 }}
               >
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+                  <AudioReaderButton text={adviceText} />
+                </div>
                 {renderMarkdown(adviceText)}
               </div>
 
-              <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end" }}>
-                <Link
-                  href={`/market/non-energy?pincode=${encodeURIComponent(pin)}`}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "10px 18px",
-                    borderRadius: 10,
-                    background: "rgba(167,139,250,0.15)",
-                    border: "1px solid #A78BFA",
-                    color: "#EDE9FE",
-                    fontSize: ".82rem",
-                    fontWeight: 700,
-                    letterSpacing: ".04em",
-                    textDecoration: "none",
-                    transition: "all .15s ease",
-                  }}
-                >
-                  <span>Explore Recyclables Offtake</span>
-                  <span>→</span>
-                </Link>
+              {/* ── Gemini Chat Continuation ── */}
+              <div style={{ marginTop: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: HOME.accent }} />
+                  <span style={{ fontSize: ".78rem", color: HOME.textMuted, letterSpacing: ".06em", textTransform: "uppercase", fontWeight: 700 }}>
+                    Continue conversation with Gemini
+                  </span>
+                </div>
+
+                {/* Chat messages */}
+                {chatHistory.length > 0 && (
+                  <div
+                    style={{
+                      maxHeight: "28vh",
+                      overflowY: "auto",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                      marginBottom: 14,
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      background: "rgba(255,255,255,0.35)",
+                      border: "1px solid rgba(167,139,250,0.2)",
+                    }}
+                  >
+                    {chatHistory.map((msg, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          display: "flex",
+                          justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+                        }}
+                      >
+                        <div
+                          style={{
+                            maxWidth: "85%",
+                            padding: "9px 14px",
+                            borderRadius: msg.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
+                            background: msg.role === "user"
+                              ? "rgba(157,78,221,0.15)"
+                              : "rgba(255,255,255,0.5)",
+                            border: msg.role === "user"
+                              ? "1px solid rgba(157,78,221,0.35)"
+                              : "1px solid rgba(167,139,250,0.2)",
+                            color: HOME.textBody,
+                            fontSize: ".87rem",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+                    {chatLoading && (
+                      <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                        <div
+                          style={{
+                            padding: "9px 14px",
+                            borderRadius: "14px 14px 14px 4px",
+                            background: "rgba(255,255,255,0.5)",
+                            border: "1px solid rgba(167,139,250,0.2)",
+                            color: HOME.textMuted,
+                            fontSize: ".84rem",
+                          }}
+                        >
+                          Gemini is thinking...
+                        </div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
+                )}
+
+                {/* Chat input row */}
+                <div style={{ display: "flex", gap: 10 }}>
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleChatSend()}
+                    placeholder="Ask a follow-up question about this waste..."
+                    disabled={chatLoading}
+                    style={{
+                      flex: 1,
+                      padding: "11px 16px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(157,78,221,0.35)",
+                      background: "rgba(255,255,255,0.6)",
+                      color: HOME.textBody,
+                      fontFamily: FONT,
+                      fontSize: ".9rem",
+                      outline: "none",
+                      transition: "border-color .2s",
+                    }}
+                  />
+                  <button
+                    onClick={handleChatSend}
+                    disabled={!chatInput.trim() || chatLoading}
+                    style={{
+                      padding: "11px 20px",
+                      borderRadius: 12,
+                      border: "none",
+                      background: chatInput.trim() && !chatLoading ? HOME.gradBtn : "rgba(255,255,255,.3)",
+                      color: chatInput.trim() && !chatLoading ? HOME.btnText : HOME.textMuted,
+                      fontFamily: FONT,
+                      fontWeight: 700,
+                      fontSize: ".88rem",
+                      letterSpacing: ".06em",
+                      cursor: chatInput.trim() && !chatLoading ? "pointer" : "not-allowed",
+                      transition: "all .2s ease",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Send
+                  </button>
+                </div>
               </div>
             </section>
           ) : (
@@ -712,7 +843,7 @@ export default function HomeWasteClassifierPage() {
                   width: 58,
                   height: 58,
                   borderRadius: "50%",
-                  background: "rgba(167,139,250,0.1)",
+                  background: "rgba(167,139,250,0.15)",
                   border: "1px solid rgba(167,139,250,0.3)",
                   display: "flex",
                   alignItems: "center",
@@ -728,12 +859,12 @@ export default function HomeWasteClassifierPage() {
                 <h3 style={{ margin: "0 0 6px", fontSize: "1.1rem", fontWeight: 700, color: HOME.textHeading }}>
                   Gemini GenAI Advisory Desk
                 </h3>
-                <p style={{ margin: 0, color: HOME.accentSoft, fontSize: ".86rem", maxWidth: 320, lineHeight: 1.5 }}>
+                <p style={{ margin: 0, color: HOME.textMuted, fontSize: ".86rem", maxWidth: 320, lineHeight: 1.5 }}>
                   {stage === "detecting"
-                    ? "Local ML model is classifying your image…"
+                    ? "Local ML model is classifying your image..."
                     : stage === "advising"
-                    ? "Generating tailored recycling, composting, and upcycling advice…"
-                    : "Upload an image on the left and start analysis to generate actionable recovery guidelines."}
+                      ? "Generating tailored recycling, composting, and upcycling advice..."
+                      : "Upload an image on the left and start analysis to generate actionable recovery guidelines."}
                 </p>
               </div>
 
@@ -750,7 +881,7 @@ export default function HomeWasteClassifierPage() {
                     }}
                   />
                   <span style={{ fontSize: ".8rem", color: HOME.accent, fontWeight: 600 }}>
-                    Processing AI Inference…
+                    Processing AI Inference...
                   </span>
                 </div>
               )}

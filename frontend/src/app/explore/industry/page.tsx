@@ -1,24 +1,26 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-/* ── Industry accent tokens (from SelectionPage.css .card--industry) ── */
+/* ── Industry accent tokens ── */
 const IND = {
-  accent: "#E2623A",
-  accentSoft: "#F0A080",
-  accentDim: "rgba(226,98,58,.45)",
-  accentGlow: "rgba(226,98,58,.4)",
-  accentInner: "rgba(226,98,58,.06)",
-  accentDrop: "rgba(226,98,58,.45)",
-  textBody: "#F5D2C2",
-  gradTitle: "linear-gradient(90deg,#FFE4D6,#E2623A)",
-  gradBtn: "linear-gradient(90deg,#C2410C,#E2623A)",
-  btnText: "#1a0800",
-  badgeBg: "rgba(226,98,58,.15)",
+  accent: "#C2410C",
+  accentSoft: "#EA580C",
+  accentDim: "rgba(194,65,12,.45)",
+  accentGlow: "rgba(194,65,12,.35)",
+  accentInner: "rgba(194,65,12,.06)",
+  accentDrop: "rgba(194,65,12,.45)",
+  textHeading: "#27120A",
+  textBody: "#431E12",
+  textMuted: "#6C321E",
+  gradTitle: "linear-gradient(90deg,#27120A,#9A3412)",
+  gradBtn: "linear-gradient(90deg,#9A3412 0%,#C2410C 50%,#EA580C 100%)",
+  btnText: "#FFFFFF",
+  cardBg: "rgba(255, 248, 242, 0.55)",
+  badgeBg: "rgba(255,255,255,.5)",
 };
 
-const BG = "#070a0f";
 const FONT = '"Rubik",sans-serif';
 
 const glassBorder = (color: string) => `1.5px solid ${color}`;
@@ -29,17 +31,17 @@ const glassCard = (
   extra?: React.CSSProperties
 ): React.CSSProperties => ({
   border: glassBorder(border),
-  background: "rgba(255,255,255,.06)",
-  backdropFilter: "blur(12px)",
-  WebkitBackdropFilter: "blur(12px)",
-  boxShadow: `0 10px 40px rgba(40,15,5,.45),inset 0 0 30px ${inner},0 0 36px ${glow}`,
+  background: IND.cardBg,
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)",
+  boxShadow: `0 8px 32px rgba(100, 40, 10, 0.18), inset 0 0 20px ${inner}`,
   borderRadius: 20,
   padding: "28px 32px",
   boxSizing: "border-box",
   ...extra,
 });
 
-/* ── Real API response shape (GET /api/geocode?pincode=...) ── */
+/* ── Real API response shape ── */
 interface GeoResponse {
   lat: number;
   lng: number;
@@ -51,24 +53,21 @@ interface GeoResponse {
 
 type WasteTab = "energy" | "non-energy";
 
-/* ── Non-Energy Recoverable Itemized Categories ── */
 interface ItemizedCategoryConfig {
   key: string;
   label: string;
-  icon: string;
   desc: string;
   placeholder: string;
 }
 
 const NON_ENERGY_CATEGORIES: ItemizedCategoryConfig[] = [
-  { key: "plastics", label: "Plastics", icon: "🧴", desc: "PET, HDPE, LDPE, PP, multilayer plastics", placeholder: "e.g. 500" },
-  { key: "metals", label: "Metals", icon: "🔩", desc: "Ferrous scrap, steel, aluminum, copper", placeholder: "e.g. 300" },
-  { key: "glass", label: "Glass", icon: "🍾", desc: "Clear flint, amber, green cullet & jars", placeholder: "e.g. 200" },
-  { key: "electronics", label: "Electronics / E-Waste", icon: "💻", desc: "PCBs, consumer appliances, IT hardware", placeholder: "e.g. 150" },
-  { key: "paper", label: "Paper / Cardboard", icon: "📦", desc: "OCC corrugated boxes, kraft, office pulp", placeholder: "e.g. 400" },
+  { key: "plastics", label: "Plastics", desc: "PET, HDPE, LDPE, PP, multilayer plastics", placeholder: "e.g. 500" },
+  { key: "metals", label: "Metals", desc: "Ferrous scrap, steel, aluminum, copper", placeholder: "e.g. 300" },
+  { key: "glass", label: "Glass", desc: "Clear flint, amber, green cullet & jars", placeholder: "e.g. 200" },
+  { key: "electronics", label: "Electronics / E-Waste", desc: "PCBs, consumer appliances, IT hardware", placeholder: "e.g. 150" },
+  { key: "paper", label: "Paper / Cardboard", desc: "OCC corrugated boxes, kraft, office pulp", placeholder: "e.g. 400" },
 ];
 
-/* ── Geocode fetcher — hits the live backend via Next.js proxy ── */
 async function fetchGeocode(pincode: string): Promise<GeoResponse> {
   const res = await fetch(
     `/api/geocode?pincode=${encodeURIComponent(pincode)}&country=India`
@@ -81,7 +80,6 @@ async function fetchGeocode(pincode: string): Promise<GeoResponse> {
   return res.json();
 }
 
-/* ── Inline animated spinner ── */
 function Spinner() {
   return (
     <>
@@ -89,7 +87,7 @@ function Spinner() {
         @keyframes wp-spin { to { transform: rotate(360deg); } }
         .wp-spinner {
           display: inline-block; width: 16px; height: 16px; border-radius: 50%;
-          border: 2px solid rgba(240,160,128,.3); border-top-color: #F0A080;
+          border: 2px solid rgba(194,65,12,.3); border-top-color: #C2410C;
           animation: wp-spin .7s linear infinite; vertical-align: middle;
           margin-right: 8px;
         }
@@ -107,12 +105,41 @@ export default function IndustryPage() {
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
 
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const sendPincodeToIframe = useCallback((targetPin: string) => {
+    const cleaned = targetPin.replace(/\D/g, "").slice(0, 6);
+    if (cleaned.length !== 6) return;
+    try {
+      if (iframeRef.current && iframeRef.current.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(
+          { type: "WP_PINCODE_UPDATE", pincode: cleaned },
+          "*"
+        );
+      }
+    } catch (err) {
+      console.warn("Failed to postMessage to heatmap iframe:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    const cleaned = pin.replace(/\D/g, "").slice(0, 6);
+    if (cleaned.length === 6) {
+      sendPincodeToIframe(cleaned);
+    }
+  }, [pin, sendPincodeToIframe]);
+
+  const handleIframeLoad = () => {
+    const cleaned = pin.replace(/\D/g, "").slice(0, 6);
+    if (cleaned.length === 6) {
+      sendPincodeToIframe(cleaned);
+    }
+  };
+
   const [tab, setTab] = useState<WasteTab>("energy");
 
-  /* Energy Recoverable single input */
   const [weight, setWeight] = useState("");
 
-  /* Step 1: Itemized quantities for Non-Energy Recoverable categories */
   const [itemizedQuantities, setItemizedQuantities] = useState<Record<string, string>>({
     plastics: "",
     metals: "",
@@ -121,18 +148,15 @@ export default function IndustryPage() {
     paper: "",
   });
 
-  /* Calculate total Non-Energy Recoverable quantity */
   const totalNonEnergyQuantity = Object.values(itemizedQuantities).reduce((acc, val) => {
     const num = parseFloat(val);
     return acc + (isNaN(num) || num < 0 ? 0 : num);
   }, 0);
 
-  /* Proceed button enables based on active tab */
   const proceedEnabled = tab === "energy"
     ? parseFloat(weight) > 0
     : totalNonEnergyQuantity > 0;
 
-  /* ── Geocode handler ── */
   const findLocation = async () => {
     const trimmed = pin.trim();
     if (!/^[1-9]\d{5}$/.test(trimmed)) {
@@ -145,6 +169,7 @@ export default function IndustryPage() {
     try {
       const result = await fetchGeocode(trimmed);
       setGeo(result);
+      sendPincodeToIframe(trimmed);
       try { localStorage.setItem("wp_location", trimmed); } catch { }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -162,7 +187,6 @@ export default function IndustryPage() {
     }
   };
 
-  /* ── Proceed handler ── */
   const proceed = () => {
     if (!proceedEnabled) return;
     const resolvedPin = pin.trim() || "110001";
@@ -175,7 +199,6 @@ export default function IndustryPage() {
       });
       router.push(`/simulator?${params.toString()}`);
     } else {
-      /* Filter out 0 or empty inputs to build clean itemized breakdown */
       const breakdownObj: Record<string, number> = {};
       Object.entries(itemizedQuantities).forEach(([k, v]) => {
         const num = parseFloat(v);
@@ -191,16 +214,27 @@ export default function IndustryPage() {
         ...(geo ? { address: geo.display_name, lat: String(geo.lat), lng: String(geo.lng) } : {}),
       });
 
-      /* Step 1 Requirement: Route to /market/non-energy?pincode={pincode}&breakdown={JSON_STRINGIFIED_QUANTITIES} */
       router.push(`/market/non-energy?${params.toString()}`);
     }
   };
 
   return (
     <main style={{
-      minHeight: "100vh", background: BG, fontFamily: FONT, color: "#ffe4d6",
-      backgroundImage: `radial-gradient(ellipse 65% 45% at 20% 15%,rgba(226,98,58,.07) 0%,transparent 70%),
-                        radial-gradient(ellipse 50% 40% at 85% 75%,rgba(194,65,12,.05) 0%,transparent 70%)`,
+      minHeight: "100vh",
+      fontFamily: FONT,
+      color: "#431E12",
+      backgroundImage: `
+        linear-gradient(
+          135deg,
+          rgba(255, 248, 242, 0.45),
+          rgba(245, 220, 205, 0.55)
+        ),
+        url('/industry-bg(new).jpg')
+      `,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundAttachment: "fixed",
+      backgroundRepeat: "no-repeat",
       padding: "0 0 80px",
     }}>
 
@@ -208,47 +242,37 @@ export default function IndustryPage() {
       <header style={{ padding: "28px 5vw 0", display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <Link href="/explore" style={{
-            color: IND.accentSoft, textDecoration: "none", fontSize: ".95rem",
+            color: "#27120A", textDecoration: "none", fontSize: ".95rem", fontWeight: 700,
             letterSpacing: ".08em", display: "flex", alignItems: "center", gap: 6,
-            border: glassBorder(IND.accentDim), borderRadius: 999, padding: "7px 18px",
-            background: "rgba(226,98,58,.07)", backdropFilter: "blur(8px)",
+            border: "1px solid rgba(39,18,10,0.3)", borderRadius: 999, padding: "7px 18px",
+            background: "rgba(255,255,255,.55)", backdropFilter: "blur(8px)",
           }}>
-            ← Back to Categories
+            Back to Categories
           </Link>
-          <span style={{
-            fontSize: ".8rem", letterSpacing: ".1em", color: IND.accentSoft,
-            border: glassBorder(IND.accentDim), borderRadius: 999, padding: "5px 14px",
-            background: IND.badgeBg, backdropFilter: "blur(8px)",
-          }}>
-            ⚙ INDUSTRY MODULE
-          </span>
         </div>
-
         <div>
           <h1 style={{
-            margin: "0 0 6px", fontSize: "clamp(1.3rem,3.2vw,2rem)", fontWeight: 700,
+            margin: "0 0 6px", fontSize: "clamp(1.3rem,3.2vw,2rem)", fontWeight: 900,
             letterSpacing: ".12em", textTransform: "uppercase",
-            backgroundImage: IND.gradTitle,
-            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
+            color: "#27120A",
           }}>
             Industrial Waste Intelligence Hub
           </h1>
-          <p style={{ margin: 0, color: IND.textBody, fontSize: ".95rem", letterSpacing: ".03em" }}>
+          <p style={{ margin: 0, color: "#431E12", fontSize: ".95rem", letterSpacing: ".03em", fontWeight: 500 }}>
             Configure facility location and feedstock volume to simulate energy pathways and buyer markets.
           </p>
         </div>
       </header>
 
-      {/* ══ FULL-WIDTH VERTICAL STACK ══ */}
+      {/* ══ SINGLE-COLUMN LAYOUT ══ */}
       <div style={{ padding: "36px 5vw 0", display: "flex", flexDirection: "column", gap: 28, boxSizing: "border-box" }}>
 
         {/* ── 1. LOCATION CARD ── */}
         <section style={glassCard(IND.accentDim, IND.accentGlow, IND.accentInner)}>
           <h2 style={{ margin: "0 0 20px", fontSize: "1rem", letterSpacing: ".1em", color: IND.accentSoft, textTransform: "uppercase" }}>
-            📍 Regional Location (Indian 6-Digit PIN Code)
+            Regional Location (Indian 6-Digit PIN Code)
           </h2>
 
-          {/* PIN input row */}
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <input
               value={pin}
@@ -265,8 +289,8 @@ export default function IndustryPage() {
               style={{
                 flex: "1 1 180px", padding: "13px 20px", borderRadius: 12,
                 border: glassBorder(geoError ? "#f87171" : pin.length === 6 && !geoError ? IND.accent : IND.accentDim),
-                background: "rgba(255,255,255,.05)", backdropFilter: "blur(8px)",
-                color: "#ffe4d6", fontFamily: FONT, fontSize: "1.05rem", letterSpacing: ".1em",
+                background: "rgba(255,255,255,.6)", backdropFilter: "blur(8px)",
+                color: "#431E12", fontFamily: FONT, fontSize: "1.05rem", letterSpacing: ".1em",
                 outline: "none", transition: "border-color .2s",
               }}
             />
@@ -276,47 +300,44 @@ export default function IndustryPage() {
               style={{
                 flex: "0 0 auto", padding: "13px 28px", borderRadius: 12,
                 border: glassBorder(IND.accent),
-                background: geoLoading ? "rgba(255,255,255,.05)" : IND.gradBtn,
+                background: geoLoading ? "rgba(255,255,255,.3)" : IND.gradBtn,
                 color: geoLoading ? IND.accentSoft : IND.btnText,
                 fontFamily: FONT, fontWeight: 600, fontSize: ".95rem", letterSpacing: ".12em",
                 textTransform: "uppercase", cursor: geoLoading ? "not-allowed" : "pointer",
                 boxShadow: geoLoading ? "none" : `0 0 18px ${IND.accentGlow}`,
                 transition: "all .25s", whiteSpace: "nowrap",
               }}>
-              {geoLoading ? <><Spinner />Fetching…</> : "Find Location"}
+              {geoLoading ? <><Spinner />Fetching...</> : "Find Location"}
             </button>
           </div>
 
-          {/* ── Loading state ── */}
           {geoLoading && (
             <p style={{ margin: "14px 0 0", color: IND.accentSoft, fontSize: ".88rem", letterSpacing: ".04em" }}>
-              <Spinner />Fetching location data from OpenStreetMap Nominatim…
+              <Spinner />Fetching location data from OpenStreetMap Nominatim...
             </p>
           )}
 
-          {/* ── Error state ── */}
           {geoError && (
             <div style={{
               marginTop: 14, padding: "12px 16px", borderRadius: 12,
               border: glassBorder("rgba(248,113,113,.4)"), background: "rgba(248,113,113,.08)",
             }}>
-              <p style={{ margin: 0, color: "#f87171", fontSize: ".88rem" }}>⚠ {geoError}</p>
+              <p style={{ margin: 0, color: "#b91c1c", fontSize: ".88rem" }}>[!] {geoError}</p>
             </div>
           )}
 
-          {/* ── Success state ── */}
           {geo && (
             <div style={{
               marginTop: 18, borderRadius: 14,
               border: glassBorder("rgba(226,98,58,.3)"),
-              background: "rgba(226,98,58,.07)", backdropFilter: "blur(6px)",
+              background: "rgba(255,245,240,.65)", backdropFilter: "blur(6px)",
               overflow: "hidden",
             }}>
               <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(226,98,58,.15)" }}>
-                <p style={{ margin: "0 0 3px", color: "#c09080", fontSize: ".72rem", letterSpacing: ".12em", textTransform: "uppercase" }}>
+                <p style={{ margin: "0 0 3px", color: IND.textMuted, fontSize: ".72rem", letterSpacing: ".12em", textTransform: "uppercase" }}>
                   Resolved Address
                 </p>
-                <p style={{ margin: 0, color: "#ffe4d6", fontSize: ".97rem", fontWeight: 500, lineHeight: 1.5 }}>
+                <p style={{ margin: 0, color: IND.textBody, fontSize: ".97rem", fontWeight: 500, lineHeight: 1.5 }}>
                   {geo.display_name}
                 </p>
               </div>
@@ -327,8 +348,8 @@ export default function IndustryPage() {
                 gap: 0,
               }}>
                 {[
-                  { label: "Latitude", value: `${geo.lat.toFixed(6)}° N` },
-                  { label: "Longitude", value: `${geo.lng.toFixed(6)}° E` },
+                  { label: "Latitude", value: `${geo.lat.toFixed(6)} N` },
+                  { label: "Longitude", value: `${geo.lng.toFixed(6)} E` },
                   { label: "Precision", value: geo.precision || "Postal-code area centroid, approximate" },
                   { label: "Source", value: geo.source || "OpenStreetMap Nominatim (ODbL)" },
                 ].map(({ label, value }, idx) => (
@@ -337,8 +358,8 @@ export default function IndustryPage() {
                     borderRight: idx % 2 === 0 ? "1px solid rgba(226,98,58,.12)" : "none",
                     borderTop: idx >= 2 ? "1px solid rgba(226,98,58,.12)" : "none",
                   }}>
-                    <p style={{ margin: "0 0 3px", color: "#c09080", fontSize: ".72rem", letterSpacing: ".1em", textTransform: "uppercase" }}>{label}</p>
-                    <p style={{ margin: 0, color: "#ffe4d6", fontSize: ".88rem", fontWeight: 500 }}>{value}</p>
+                    <p style={{ margin: "0 0 3px", color: IND.textMuted, fontSize: ".72rem", letterSpacing: ".1em", textTransform: "uppercase" }}>{label}</p>
+                    <p style={{ margin: 0, color: IND.textBody, fontSize: ".88rem", fontWeight: 500 }}>{value}</p>
                   </div>
                 ))}
               </div>
@@ -349,56 +370,55 @@ export default function IndustryPage() {
                   padding: "3px 10px", borderRadius: 999,
                   background: geo.cached ? "rgba(74,222,128,.12)" : "rgba(226,98,58,.1)",
                   border: `1px solid ${geo.cached ? "rgba(74,222,128,.35)" : "rgba(226,98,58,.25)"}`,
-                  color: geo.cached ? "#86EFAC" : IND.accentSoft,
+                  color: geo.cached ? "#166534" : IND.accentSoft,
                 }}>
-                  {geo.cached ? "⚡ Cached result" : "🌐 Live result"}
+                  {geo.cached ? "Cached result" : "Live result"}
                 </span>
               </div>
             </div>
           )}
         </section>
 
-        {/* ── 2. WASTE CATEGORY TABS (Key Constraint: Non-Energy Recoverable) ── */}
+        {/* ── 2. WASTE CATEGORY TABS ── */}
         <section style={glassCard(IND.accentDim, IND.accentGlow, IND.accentInner)}>
           <h2 style={{ margin: "0 0 20px", fontSize: "1rem", letterSpacing: ".1em", color: IND.accentSoft, textTransform: "uppercase" }}>
-            ⚡ Waste Category
+            Waste Category
           </h2>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             {(
               [
-                { id: "energy" as WasteTab, icon: "⚡", label: "Energy Recoverable", sub: "Thermal / Bio-conversion Streams" },
-                { id: "non-energy" as WasteTab, icon: "♻️", label: "Non-Energy Recoverable", sub: "Recyclable / Material Recovery" },
-              ] as { id: WasteTab; icon: string; label: string; sub: string }[]
-            ).map(({ id, icon, label, sub }) => {
+                { id: "energy" as WasteTab, label: "Energy Recoverable", sub: "Thermal / Bio-conversion Streams" },
+                { id: "non-energy" as WasteTab, label: "Non-Energy Recoverable", sub: "Recyclable / Material Recovery" },
+              ] as { id: WasteTab; label: string; sub: string }[]
+            ).map(({ id, label, sub }) => {
               const active = tab === id;
               return (
                 <button
                   key={id}
                   onClick={() => setTab(id)}
                   style={{
-                    padding: "18px 20px", borderRadius: 16, textAlign: "left",
-                    border: active ? glassBorder(IND.accent) : glassBorder("rgba(226,98,58,.22)"),
-                    background: active ? "rgba(226,98,58,.14)" : "rgba(255,255,255,.03)",
+                    padding: "20px 22px", borderRadius: 16, textAlign: "left",
+                    border: active ? glassBorder(IND.accent) : "1.5px solid rgba(194,65,12,0.25)",
+                    background: active ? "rgba(194,65,12,0.12)" : "rgba(255,255,255,0.45)",
                     cursor: "pointer",
-                    boxShadow: active ? `0 0 22px ${IND.accentGlow}, inset 0 0 20px rgba(226,98,58,.08)` : "none",
+                    boxShadow: active ? `0 0 22px ${IND.accentGlow}, inset 0 0 20px rgba(194,65,12,.08)` : "none",
                     transition: "all .25s",
                   }}>
-                  <p style={{ margin: "0 0 4px", fontSize: "1.15rem" }}>{icon}</p>
                   <p style={{
                     margin: "0 0 4px", fontFamily: FONT, fontWeight: 700,
                     fontSize: ".95rem", letterSpacing: ".08em", textTransform: "uppercase",
-                    color: active ? "#FB923C" : "#c09080",
+                    color: active ? IND.accent : IND.textMuted,
                   }}>
                     {label}
                   </p>
-                  <p style={{ margin: 0, fontFamily: FONT, fontSize: ".8rem", color: active ? IND.textBody : "#7a5545" }}>
+                  <p style={{ margin: 0, fontFamily: FONT, fontSize: ".8rem", color: active ? IND.textBody : "#9a7060" }}>
                     {sub}
                   </p>
                 </button>
               );
             })}
           </div>
-          <p style={{ margin: "16px 0 0", fontSize: ".82rem", color: "#b07060", letterSpacing: ".03em" }}>
+          <p style={{ margin: "16px 0 0", fontSize: ".82rem", color: IND.textMuted, letterSpacing: ".03em" }}>
             {tab === "energy"
               ? "Energy Recoverable waste streams will be routed through the Energy Simulator for thermodynamic conversion pathway modelling."
               : "Non-Energy Recoverable waste streams will be routed to the Non-Energy Recoverable Marketplace for itemized industrial recycling offtake pricing."}
@@ -408,12 +428,11 @@ export default function IndustryPage() {
         {/* ── 3. FEEDSTOCK QUANTITY & PROCEED ── */}
         <section style={glassCard(IND.accentDim, IND.accentGlow, IND.accentInner)}>
           {tab === "energy" ? (
-            /* Energy Recoverable single input view */
             <>
               <h2 style={{ margin: "0 0 6px", fontSize: "1rem", letterSpacing: ".1em", color: IND.accentSoft, textTransform: "uppercase" }}>
-                ⚖ Total Waste Quantity (Energy Recoverable)
+                Total Waste Quantity (Energy Recoverable)
               </h2>
-              <p style={{ margin: "0 0 18px", fontSize: ".82rem", color: "#b07060", letterSpacing: ".04em" }}>
+              <p style={{ margin: "0 0 18px", fontSize: ".82rem", color: IND.textMuted, letterSpacing: ".04em" }}>
                 kg / day — The entered quantity will be converted for simulation models and energy yield analysis.
               </p>
 
@@ -431,34 +450,32 @@ export default function IndustryPage() {
                       : proceedEnabled ? IND.accent
                         : IND.accentDim
                   ),
-                  background: "rgba(255,255,255,.05)", backdropFilter: "blur(8px)",
-                  color: "#ffe4d6", fontFamily: FONT, fontSize: "1.2rem", letterSpacing: ".06em",
+                  background: "rgba(255,255,255,.6)", backdropFilter: "blur(8px)",
+                  color: IND.textBody, fontFamily: FONT, fontSize: "1.2rem", letterSpacing: ".06em",
                   outline: "none", transition: "border-color .2s",
                 }}
               />
 
               {weight !== "" && parseFloat(weight) <= 0 && (
-                <p style={{ margin: "10px 0 0", color: "#f87171", fontSize: ".84rem" }}>
-                  ⚠ Quantity must be greater than 0.
+                <p style={{ margin: "10px 0 0", color: "#b91c1c", fontSize: ".84rem" }}>
+                  [!] Quantity must be greater than 0.
                 </p>
               )}
             </>
           ) : (
-            /* Step 1 Requirement: Itemized Input Fields for Non-Energy Recoverable Categories */
             <>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
-                <h2 style={{ margin: 0, fontSize: "1.05rem", letterSpacing: ".08em", color: "#FB923C", textTransform: "uppercase", fontWeight: 800 }}>
-                  ⚖ Itemized Feedstock Quantities (Non-Energy Recoverable)
+                <h2 style={{ margin: 0, fontSize: "1.05rem", letterSpacing: ".08em", color: IND.accentSoft, textTransform: "uppercase", fontWeight: 800 }}>
+                  Itemized Feedstock Quantities (Non-Energy Recoverable)
                 </h2>
-                <span style={{ fontSize: ".76rem", color: "#fdba74" }}>
+                <span style={{ fontSize: ".76rem", color: IND.textMuted }}>
                   Unit: kg / day
                 </span>
               </div>
-              <p style={{ margin: "0 0 20px", fontSize: ".84rem", color: "#b07060", letterSpacing: ".02em" }}>
+              <p style={{ margin: "0 0 20px", fontSize: ".84rem", color: IND.textMuted, letterSpacing: ".02em" }}>
                 Enter estimated daily volumes for each non-energy recoverable material category. Live industrial buyers and pricing tables will be fetched per stream.
               </p>
 
-              {/* Itemized Category Input Grid */}
               <div style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
@@ -475,9 +492,9 @@ export default function IndustryPage() {
                       style={{
                         padding: "18px 20px",
                         borderRadius: 16,
-                        background: isEntered ? "rgba(251,146,60,0.12)" : "rgba(15,23,42,0.6)",
-                        border: isEntered ? "1.5px solid #FB923C" : "1px solid rgba(226,98,58,.22)",
-                        boxShadow: isEntered ? "0 0 18px rgba(251,146,60,0.25)" : "none",
+                        background: isEntered ? "rgba(194,65,12,0.1)" : "rgba(255,255,255,0.5)",
+                        border: isEntered ? "1.5px solid #C2410C" : "1px solid rgba(194,65,12,.22)",
+                        boxShadow: isEntered ? "0 0 18px rgba(194,65,12,0.2)" : "none",
                         transition: "all .2s ease",
                         display: "flex",
                         flexDirection: "column",
@@ -485,34 +502,31 @@ export default function IndustryPage() {
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: "1.4rem" }}>{cat.icon}</span>
-                          <span style={{
-                            fontFamily: FONT,
-                            fontWeight: 700,
-                            fontSize: ".94rem",
-                            color: isEntered ? "#FB923C" : "#FFE4D6",
-                            letterSpacing: ".02em",
-                          }}>
-                            {cat.label}
-                          </span>
-                        </div>
+                        <span style={{
+                          fontFamily: FONT,
+                          fontWeight: 700,
+                          fontSize: ".94rem",
+                          color: isEntered ? IND.accent : IND.textBody,
+                          letterSpacing: ".02em",
+                        }}>
+                          {cat.label}
+                        </span>
                         {isEntered && (
                           <span style={{
                             fontSize: ".65rem",
                             fontWeight: 800,
                             padding: "2px 8px",
                             borderRadius: 999,
-                            background: "rgba(34,197,94,0.2)",
-                            border: "1px solid rgba(34,197,94,0.5)",
-                            color: "#86efac",
+                            background: "rgba(34,197,94,0.15)",
+                            border: "1px solid rgba(34,197,94,0.4)",
+                            color: "#166534",
                           }}>
                             ACTIVE
                           </span>
                         )}
                       </div>
 
-                      <p style={{ margin: 0, fontSize: ".74rem", color: "#9a6050", lineHeight: 1.35 }}>
+                      <p style={{ margin: 0, fontSize: ".74rem", color: IND.textMuted, lineHeight: 1.35 }}>
                         {cat.desc}
                       </p>
 
@@ -535,9 +549,9 @@ export default function IndustryPage() {
                             padding: "12px 64px 12px 16px",
                             borderRadius: 10,
                             boxSizing: "border-box",
-                            border: "1px solid rgba(251,146,60,0.3)",
-                            background: "rgba(7,10,15,0.85)",
-                            color: "#ffe4d6",
+                            border: "1px solid rgba(194,65,12,0.3)",
+                            background: "rgba(255,255,255,.7)",
+                            color: IND.textBody,
                             fontFamily: FONT,
                             fontSize: "1.05rem",
                             fontWeight: 600,
@@ -549,7 +563,7 @@ export default function IndustryPage() {
                           right: 14,
                           top: 13,
                           fontSize: ".75rem",
-                          color: "#fdba74",
+                          color: IND.textMuted,
                           fontWeight: 600,
                           pointerEvents: "none",
                         }}>
@@ -561,68 +575,180 @@ export default function IndustryPage() {
                 })}
               </div>
 
-              {/* Total Aggregate Summary Strip */}
               <div style={{
                 marginTop: 20,
                 padding: "14px 20px",
                 borderRadius: 14,
-                background: "rgba(251,146,60,0.12)",
-                border: "1px solid rgba(251,146,60,0.35)",
+                background: "rgba(194,65,12,0.08)",
+                border: "1px solid rgba(194,65,12,0.25)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
                 flexWrap: "wrap",
                 gap: 10,
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: "1.3rem" }}>📦</span>
-                  <div>
-                    <span style={{ fontSize: ".7rem", color: "#fdba74", textTransform: "uppercase", letterSpacing: ".06em" }}>
-                      Total Non-Energy Recoverable Volume
-                    </span>
-                    <p style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: "#FFE4D6" }}>
-                      {totalNonEnergyQuantity.toLocaleString()} kg / day
-                    </p>
-                  </div>
+                <div>
+                  <span style={{ fontSize: ".7rem", color: IND.textMuted, textTransform: "uppercase", letterSpacing: ".06em" }}>
+                    Total Non-Energy Recoverable Volume
+                  </span>
+                  <p style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: IND.textBody }}>
+                    {totalNonEnergyQuantity.toLocaleString()} kg / day
+                  </p>
                 </div>
 
                 <span style={{
                   fontSize: ".74rem",
-                  color: totalNonEnergyQuantity > 0 ? "#86efac" : "#9a6050",
+                  color: totalNonEnergyQuantity > 0 ? "#166534" : IND.textMuted,
                   fontWeight: 600,
                 }}>
                   {totalNonEnergyQuantity > 0
-                    ? `✓ Ready for marketplace routing (${Object.values(itemizedQuantities).filter(v => parseFloat(v) > 0).length} streams active)`
+                    ? `Ready for marketplace routing (${Object.values(itemizedQuantities).filter(v => parseFloat(v) > 0).length} streams active)`
                     : "Enter quantity in at least one category to proceed"}
                 </span>
               </div>
             </>
           )}
 
-          {/* ── Proceed Button (Step 1 Requirement: PROCEED TO MARKETPLACE → activates only when totalQuantity > 0) ── */}
           <button
             disabled={!proceedEnabled}
             onClick={proceed}
             style={{
               marginTop: 26, width: "100%", padding: "16px 0", borderRadius: 999,
-              border: glassBorder(proceedEnabled ? IND.accent : "rgba(226,98,58,.2)"),
-              background: proceedEnabled ? IND.gradBtn : "rgba(255,255,255,.04)",
-              color: proceedEnabled ? IND.btnText : "rgba(240,160,128,.3)",
+              border: glassBorder(proceedEnabled ? IND.accent : "rgba(194,65,12,.2)"),
+              background: proceedEnabled ? IND.gradBtn : "rgba(255,255,255,.2)",
+              color: proceedEnabled ? IND.btnText : "rgba(108,50,30,.4)",
               fontFamily: FONT, fontWeight: 800, fontSize: "1.05rem", letterSpacing: ".16em",
               textTransform: "uppercase", cursor: proceedEnabled ? "pointer" : "not-allowed",
               boxShadow: proceedEnabled ? `0 0 30px ${IND.accentGlow}` : "none",
               filter: proceedEnabled ? `drop-shadow(0 0 8px ${IND.accentDrop})` : "none",
               transition: "all .3s",
-              opacity: proceedEnabled ? 1 : 0.45,
+              opacity: proceedEnabled ? 1 : 0.5,
             }}>
             {proceedEnabled
               ? tab === "energy"
-                ? "PROCEED TO SIMULATOR →"
-                : "PROCEED TO MARKETPLACE →"
+                ? "PROCEED TO SIMULATOR"
+                : "PROCEED TO MARKETPLACE"
               : tab === "energy"
                 ? "PROCEED TO SIMULATOR  (enter quantity to unlock)"
                 : "PROCEED TO MARKETPLACE  (enter category quantity to unlock)"}
           </button>
+        </section>
+
+        {/* ── 4. REGIONAL HEATMAP (Full-width, below input form) ── */}
+        <section style={glassCard(IND.accentDim, IND.accentGlow, IND.accentInner, { padding: 0, overflow: "hidden" })}>
+          {/* Header banner */}
+          <div style={{
+            padding: "16px 22px",
+            borderBottom: "1px solid rgba(194,65,12,.2)",
+            background: "rgba(255,248,242,0.8)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 10,
+          }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h2 style={{
+                  margin: 0,
+                  fontSize: ".92rem",
+                  letterSpacing: ".1em",
+                  color: IND.accentSoft,
+                  textTransform: "uppercase",
+                  fontWeight: 800,
+                }}>
+                  Regional Waste Density Heatmap
+                </h2>
+              </div>
+              <p style={{ margin: "3px 0 0", color: IND.textMuted, fontSize: ".78rem", letterSpacing: ".02em" }}>
+                Interactive district &amp; PIN-level biomass and plastic density
+              </p>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{
+                fontSize: ".68rem",
+                letterSpacing: ".08em",
+                textTransform: "uppercase",
+                padding: "4px 10px",
+                borderRadius: 999,
+                background: pin.length === 6 ? "rgba(34,197,94,0.15)" : "rgba(194,65,12,0.1)",
+                border: `1px solid ${pin.length === 6 ? "rgba(34,197,94,0.4)" : "rgba(194,65,12,0.3)"}`,
+                color: pin.length === 6 ? "#166534" : IND.textMuted,
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+              }}>
+                <span style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: pin.length === 6 ? "#22c55e" : "#ea580c",
+                  boxShadow: pin.length === 6 ? "0 0 8px #22c55e" : "none",
+                }} />
+                {pin.length === 6 ? `PIN ${pin}` : "AWAITING PIN"}
+              </span>
+
+              <a
+                href={`http://localhost:3001${pin.length === 6 ? `?pincode=${pin}` : ""}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open heatmap in a new browser tab"
+                style={{
+                  color: IND.textBody,
+                  textDecoration: "none",
+                  fontSize: ".75rem",
+                  fontWeight: 600,
+                  padding: "4px 10px",
+                  borderRadius: 8,
+                  background: "rgba(255,255,255,0.5)",
+                  border: "1px solid rgba(194,65,12,0.3)",
+                  transition: "all .2s",
+                }}
+              >
+                Popout
+              </a>
+            </div>
+          </div>
+
+          {/* Notice */}
+          <div style={{
+            padding: "10px 18px",
+            background: "rgba(194,65,12,0.07)",
+            borderBottom: "1px solid rgba(194,65,12,0.15)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}>
+            <p style={{
+              margin: 0,
+              fontSize: ".75rem",
+              color: IND.textMuted,
+              letterSpacing: ".02em",
+              lineHeight: 1.4,
+            }}>
+              <strong>Notice:</strong> District-level statistics displayed across matched PIN-code boundaries; values are not PIN-code-specific.
+            </p>
+          </div>
+
+          {/* Heatmap Iframe */}
+          <div style={{ position: "relative", width: "100%", height: "700px", background: "#f5f5f0" }}>
+            <iframe
+              ref={iframeRef}
+              id="heatmap-iframe"
+              src={`http://localhost:3001${pin.length === 6 ? `?pincode=${pin}` : ""}`}
+              title="Regional Biomass & Waste Density Heatmap"
+              onLoad={handleIframeLoad}
+              style={{
+                width: "100%",
+                height: "100%",
+                border: "none",
+                display: "block",
+              }}
+              allow="geolocation"
+            />
+          </div>
         </section>
 
       </div>

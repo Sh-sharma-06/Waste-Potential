@@ -1,0 +1,167 @@
+{
+  "scenario": "default Params()",
+  "n_runs": 2000,
+  "seed": 42,
+  "net_kwh_d": {
+    "p2_5": 44.262964215408275,
+    "p50": 73.60400263343567,
+    "p97_5": 116.96362759365203
+  },
+  "p_net_le_0": 0.0,
+  "runs_with_warnings": 200,
+  "sensitivity": [
+    {
+      "input": "y_biogas_nm3_per_kg_vs",
+      "abs_spearman": 0.7063123405780851
+    },
+    {
+      "input": "ts_fraction",
+      "abs_spearman": 0.46596681099170273
+    },
+    {
+      "input": "eta_el",
+      "abs_spearman": 0.2414443698610925
+    },
+    {
+      "input": "suitable_fraction",
+      "abs_spearman": 0.23852256413064105
+    },
+    {
+      "input": "ch4_fraction",
+      "abs_spearman": 0.23188977405940217
+    },
+    {
+      "input": "availability",
+      "abs_spearman": 0.16052509913127477
+    },
+    {
+      "input": "vs_of_ts",
+      "abs_spearman": 0.13436035259008816
+    },
+    {
+      "input": "aux_mix_kwh_m3_d",
+      "abs_spearman": 0.08957171989292996
+    },
+    {
+      "input": "ch4_slip",
+      "abs_spearman": 0.05443935310983827
+    }
+  ],
+  "input_distributions": {
+    "y_biogas_nm3_per_kg_vs": {
+      "kind": "triangular",
+      "args": [
+        0.35,
+        0.55,
+        0.8
+      ],
+      "evidence": "placeholder, replace with literature/plant data",
+      "assumed": true,
+      "clip": null
+    },
+    "ts_fraction": {
+      "kind": "triangular",
+      "args": [
+        0.2,
+        0.27,
+        0.35
+      ],
+      "evidence": "placeholder, replace with literature/plant data",
+      "assumed": true,
+      "clip": null
+    },
+    "suitable_fraction": {
+      "kind": "triangular",
+      "args": [
+        0.65,
+        0.8,
+        0.9
+      ],
+      "evidence": "placeholder, replace with literature/plant data",
+      "assumed": true,
+      "clip": null
+    },
+    "eta_el": {
+      "kind": "triangular",
+      "args": [
+        0.3,
+        0.35,
+        0.4
+      ],
+      "evidence": "placeholder, replace with literature/plant data",
+      "assumed": true,
+      "clip": null
+    },
+    "ch4_fraction": {
+      "kind": "normal",
+      "args": [
+        0.6,
+        0.03
+      ],
+      "evidence": "placeholder, replace with literature/plant data",
+      "assumed": true,
+      "clip": [
+        0.5,
+        0.7
+      ]
+    },
+    "availability": {
+      "kind": "triangular",
+      "args": [
+        0.8,
+        0.9,
+        0.96
+      ],
+      "evidence": "placeholder, replace with literature/plant data",
+      "assumed": true,
+      "clip": null
+    },
+    "vs_of_ts": {
+      "kind": "triangular",
+      "args": [
+        0.8,
+        0.88,
+        0.94
+      ],
+      "evidence": "placeholder, replace with literature/plant data",
+      "assumed": true,
+      "clip": null
+    },
+    "aux_mix_kwh_m3_d": {
+      "kind": "lognormal",
+      "args": [
+        -1.8971199848858813,
+        0.3
+      ],
+      "evidence": "placeholder, replace with literature/plant data",
+      "assumed": true,
+      "clip": null
+    },
+    "ch4_slip": {
+      "kind": "uniform",
+      "args": [
+        0.005,
+        0.03
+      ],
+      "evidence": "placeholder, replace with literature/plant data",
+      "assumed": true,
+      "clip": null
+    }
+  },
+  "assumptions_note": "One or more input distributions are flagged as assumed. The credible interval is only as credible as the distributions and is not a measure of model accuracy. Distributions are centred on the stored run values.",
+  "centred_on": {
+    "y_biogas_nm3_per_kg_vs": 0.55,
+    "ts_fraction": 0.27,
+    "suitable_fraction": 0.8,
+    "eta_el": 0.35,
+    "ch4_fraction": 0.6,
+    "availability": 0.9,
+    "vs_of_ts": 0.88,
+    "aux_mix_kwh_m3_d": 0.15,
+    "ch4_slip": 0.015
+  },
+  "fixed_inputs": [],
+  "recentred": true,
+  "clipped_samples": 0,
+  "generated_at": "2026-10-25T09:53:13.120655+00:00"
+}

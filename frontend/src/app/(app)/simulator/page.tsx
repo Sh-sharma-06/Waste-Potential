@@ -4,6 +4,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { StageCanvas3D } from "./equipment-3d";
 import { getStagesByPathway, getInputBadgeStyle } from "./stages-data";
+import AudioReaderButton from "@/components/AudioReaderButton";
+import FloatingChatbot from "@/components/FloatingChatbot";
+import ProcessSelector from "@/components/ProcessSelector";
 import { PATHWAY_NAMES } from "./pathway-config";
 import { ProcessStage } from "./types";
 
@@ -269,6 +272,8 @@ function SimulatorInner() {
   const mass        = parseFloat(massRaw) || 0;
   const address     = params.get("address") ?? "";
 
+  const [activeView, setActiveView] = useState<"monte_carlo" | "gemini">("monte_carlo");
+
   const [results, setResults]     = useState<PathwayResult[] | null>(null);
   const [simError, setSimError]   = useState<string | null>(null);
   const [loadPhase, setLoadPhase] = useState(0); // 0=idle,1=loading,2=done
@@ -449,11 +454,70 @@ function SimulatorInner() {
           }}>
             ← Back to Industry Hub
           </Link>
-          <span style={{ fontSize: ".78rem", letterSpacing: ".09em", color: C.accentSoft,
-            border: gb(C.accentDim), borderRadius: 999, padding: "5px 14px",
-            background: "rgba(226,98,58,.12)", backdropFilter: "blur(8px)" }}>
-            ⚡ MONTE CARLO ENGINE
-          </span>
+          {/* Top-Right Tab Navigation Toggle */}
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "4px",
+              borderRadius: 999,
+              background: "rgba(255, 255, 255, 0.04)",
+              border: gb(C.accentDim),
+              backdropFilter: "blur(12px)",
+              gap: 4,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setActiveView("monte_carlo")}
+              style={{
+                fontSize: ".78rem",
+                letterSpacing: ".08em",
+                color: activeView === "monte_carlo" ? "#1a0800" : C.accentSoft,
+                border: "none",
+                borderRadius: 999,
+                padding: "6px 16px",
+                background:
+                  activeView === "monte_carlo"
+                    ? C.gradBtn
+                    : "transparent",
+                fontWeight: activeView === "monte_carlo" ? 700 : 500,
+                cursor: "pointer",
+                boxShadow:
+                  activeView === "monte_carlo"
+                    ? `0 0 16px ${C.accentGlow}`
+                    : "none",
+                transition: "all .2s ease",
+              }}
+            >
+              ⚡ MONTE CARLO ENGINE
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView("gemini")}
+              style={{
+                fontSize: ".78rem",
+                letterSpacing: ".08em",
+                color: activeView === "gemini" ? "#1a0800" : C.accentSoft,
+                border: "none",
+                borderRadius: 999,
+                padding: "6px 16px",
+                background:
+                  activeView === "gemini"
+                    ? C.gradBtn
+                    : "transparent",
+                fontWeight: activeView === "gemini" ? 700 : 500,
+                cursor: "pointer",
+                boxShadow:
+                  activeView === "gemini"
+                    ? `0 0 16px ${C.accentGlow}`
+                    : "none",
+                transition: "all .2s ease",
+              }}
+            >
+              AI RECOMMENDATION ENGINE
+            </button>
+          </div>
         </div>
 
         <div>
@@ -502,7 +566,7 @@ function SimulatorInner() {
         )}
 
         {/* ══ LOADING CARD ══ */}
-        {loadPhase === 1 && (
+        {loadPhase === 1 && activeView === "monte_carlo" && (
           <section style={card()}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 28, padding: "20px 0" }}>
               <div style={{ position: "relative", width: 80, height: 80 }}>
@@ -557,8 +621,11 @@ function SimulatorInner() {
           </section>
         )}
 
-        {/* ══ RESULTS CARD: 7-Pathway Feasibility Ranking ══ */}
-        {loadPhase === 2 && results && (
+        {/* ══ TABBED MAIN CONTENT: MONTE CARLO vs GEMINI PROCESS SELECTOR ══ */}
+        {activeView === "monte_carlo" ? (
+          <>
+            {/* ══ RESULTS CARD: 7-Pathway Feasibility Ranking ══ */}
+            {loadPhase === 2 && results && (
           <section style={card()}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between",
               flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
@@ -730,22 +797,25 @@ function SimulatorInner() {
                           background: "rgba(226,98,58,.06)", backdropFilter: "blur(6px)",
                         }}
                       >
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                          <span style={{ fontSize: ".75rem", letterSpacing: ".1em",
-                            textTransform: "uppercase", padding: "2px 10px", borderRadius: 999,
-                            background: explainCache[row.pathway].source === "gemini"
-                              ? "rgba(74,222,128,.12)" : "rgba(226,98,58,.1)",
-                            border: gb(explainCache[row.pathway].source === "gemini"
-                              ? "rgba(74,222,128,.3)" : "rgba(226,98,58,.2)"),
-                            color: explainCache[row.pathway].source === "gemini" ? "#86efac" : C.accentSoft,
-                          }}>
-                            {explainCache[row.pathway].source === "gemini" ? "✦ Gemini AI" : "📋 Template"}
-                          </span>
-                          {!explainCache[row.pathway].grounded && (
-                            <span style={{ fontSize: ".72rem", color: "#9a6050" }}>
-                              (indicative — grounding check not passed)
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: ".75rem", letterSpacing: ".1em",
+                              textTransform: "uppercase", padding: "2px 10px", borderRadius: 999,
+                              background: explainCache[row.pathway].source === "gemini"
+                                ? "rgba(74,222,128,.12)" : "rgba(226,98,58,.1)",
+                              border: gb(explainCache[row.pathway].source === "gemini"
+                                ? "rgba(74,222,128,.3)" : "rgba(226,98,58,.2)"),
+                              color: explainCache[row.pathway].source === "gemini" ? "#86efac" : C.accentSoft,
+                            }}>
+                              {explainCache[row.pathway].source === "gemini" ? "✦ Gemini AI" : "📋 Template"}
                             </span>
-                          )}
+                            {!explainCache[row.pathway].grounded && (
+                              <span style={{ fontSize: ".72rem", color: "#9a6050" }}>
+                                (indicative — grounding check not passed)
+                              </span>
+                            )}
+                          </div>
+                          <AudioReaderButton text={explainCache[row.pathway].text} />
                         </div>
                         <p style={{ margin: "0 0 10px", color: C.textBody, fontSize: ".88rem",
                           lineHeight: 1.65, letterSpacing: ".02em" }}>
@@ -776,6 +846,26 @@ function SimulatorInner() {
               })}
             </div>
           </section>
+        )}
+          </>
+        ) : (
+          <ProcessSelector
+            location={address || (pincode ? `PIN ${pincode}, India` : "Industrial Zone")}
+            weight={mass >= 1000 ? Math.round((mass / 1000) * 10) / 10 : mass || 25}
+            weather={params.get("weather") || "Tropical, 28°C with moderate humidity"}
+            duration={params.get("duration") || "< 24 hours (Continuous)"}
+            onSelectProcess={(proc) => {
+              const matched = ALL_PATHWAYS.find(
+                (p) =>
+                  PATHWAY_META[p]?.label.toLowerCase().includes(proc.toLowerCase()) ||
+                  p.toLowerCase().includes(proc.toLowerCase())
+              );
+              if (matched) {
+                setSelectedPathwayId(matched);
+                setHasUserSelected(true);
+              }
+            }}
+          />
         )}
 
         {/* ══ STEP 2: INTERACTIVE 3D SUBPROCESS PIPELINE VIEW ══ */}
@@ -1582,6 +1672,7 @@ function SimulatorInner() {
         )}
 
       </div>
+      <FloatingChatbot simulationContext={{ pincode, address, mass_kg_per_day: mass, selected_pathway: selectedPathwayId, results, simulation_status: loadPhase === 1 ? "running" : loadPhase === 2 ? "complete" : "idle", error: simError }} />
     </main>
   );
 }

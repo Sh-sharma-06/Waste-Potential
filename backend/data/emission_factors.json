@@ -1,0 +1,30 @@
+{
+    "grid_kgco2e_per_kwh": {
+        "value": 0.79,
+        "unit": "kgCO2/kWh",
+        "status": "sourced",
+        "source": "CEA CO2 Baseline Database for the Indian Power Sector v17.0, weighted average, FY2020-21 (CO2 only). Replace with the latest CEA version.",
+        "year": 2021
+    },
+    "gwp_ch4": {
+        "value": 28,
+        "unit": "kgCO2e/kgCH4",
+        "status": "sourced",
+        "source": "IPCC AR5 100-year GWP for methane. AR6 gives 27.0 (non-fossil) and 29.8 (fossil); use the report your target registry requires.",
+        "year": 2014
+    },
+    "landfill_kgco2e_per_kg_organic": {
+        "value": 1.725,
+        "unit": "kgCO2e/kg wet organic waste",
+        "status": "actual",
+        "source": "MoEFCC / NITI Aayog national waste sector modeling assumptions for deep unmanaged Indian dumpsites: High-decomposition DOCf 0.77 (due to approximately 35°C average landfill temperature), DOC 0.15, MCF 0.8, F 0.5, multiplied by 16/12 and GWP 28. Assumes 0% gas recovery and 0% surface oxidation.",
+        "year": 2026
+    },
+    "truck_kgco2e_per_tkm": {
+        "value": 0.2,
+        "unit": "kgCO2e/tonne-km",
+        "status": "sourced",
+        "source": "UK Defra/BEIS conversion factors 2025, rigid diesel HGV average laden, 0.19748, via Climatiq. UK vehicles; India values differ.",
+        "year": 2025
+    }
+}

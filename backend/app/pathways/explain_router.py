@@ -40,7 +40,10 @@ router = APIRouter(prefix="/pathways", tags=["Pathways Screening"])
 # Configuration
 # ---------------------------------------------------------------------------
 
-_GEMINI_API_KEY_EXPLAIN = get_setting("GEMINI_API_KEY_EXPLAIN")
+_GEMINI_API_KEY_EXPLAIN = (
+    get_setting("GEMINI_API_KEY_EXPLAIN")
+    or get_setting("GEMINI_API_KEY_ADVISOR")   # fallback when dedicated key is absent
+)
 
 _EXPLAIN_DISCLAIMER = "Modelled estimate, not a validated prediction"
 
