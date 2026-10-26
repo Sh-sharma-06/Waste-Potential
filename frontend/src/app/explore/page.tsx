@@ -1,6 +1,6 @@
-"use client";
-import SelectionPage from "@/components/SelectionPage/SelectionPage";
+import PreviewSectors from "@/components/preview/PreviewSectors";
 
-export default function ExploreRoute() {
-  return <SelectionPage />;
+// The glass-structure sector selection from the design preview, in the main site's typeface.
+export default function ExplorePage() {
+  return <PreviewSectors homeHref="/" showPreviewChip={false} typeface="classic" />;
 }

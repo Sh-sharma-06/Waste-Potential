@@ -1,0 +1,350 @@
+/* Shared palette with /explore: sage (Agriculture) × lavender (Home) × sand/orange (Industry) */
+.cover {
+  --bg: #fbfaf7;
+  --white: #ffffff;
+  --ink: #302d32;
+  --ink-soft: #625d66;
+
+  --sage: #a8c3a0;
+  --sage-pale: #dde9d8;
+  --sage-deep: #46634b;
+  --lavender: #b9a7d9;
+  --lavender-pale: #e8e0f5;
+  --lavender-deep: #68558f;
+  --sand: #e7c9a3;
+  --sand-pale: #f5e8d5;
+  --amber: #c8874b;
+
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-height: 100vh;
+  min-height: 100svh;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  padding: 2rem 1rem;
+}
+
+/* ---------- Ribbon waves (layered over the shared atmosphere) ---------- */
+
+.waves {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* The SVG morphs the ribbon curves; CSS adds a slow sway on top. */
+.ribbons {
+  position: absolute;
+  inset: -6%;
+  width: 112%;
+  height: 112%;
+}
+
+.ribbonWide {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.ribbonSoft {
+  filter: blur(10px);
+  transform-origin: center;
+  animation: sway 20s ease-in-out infinite;
+}
+
+.ribbonLines {
+  transform-origin: center;
+  animation: sway 20s ease-in-out infinite;
+}
+
+/* ---------- Content ---------- */
+
+.content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  max-width: 72rem;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.eyebrow {
+  margin: 0 0 1.75rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  opacity: 0;
+  animation: fadeUp 1s ease forwards 0.1s;
+}
+
+.title {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 0;
+  font-size: clamp(2.3rem, 7.2vw, 5.75rem);
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
+
+.word {
+  display: inline-flex;
+  white-space: nowrap;
+}
+
+/* Outer span: entrance animation. */
+.letterIn {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(0.4em);
+  filter: blur(8px);
+  animation: letterIn 1.1s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+/* Inner span: reacts to the cursor via --i (0 to 1, set from JS).
+   --hl is this letter's sector colour (green, lavender or amber). */
+.letter {
+  --i: 0;
+  --hl: var(--lavender-deep);
+  display: inline-block;
+  transform: translateY(calc(var(--i) * -0.12em)) scale(calc(1 + var(--i) * 0.06));
+  color: color-mix(in srgb, var(--hl) calc(var(--i) * 100%), var(--ink));
+  text-shadow: 0 0 calc(var(--i) * 18px) color-mix(in srgb, var(--hl) calc(var(--i) * 35%), transparent);
+  transition:
+    transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1),
+    color 0.35s ease,
+    text-shadow 0.35s ease;
+}
+
+/* Divider previews the three sector colours. */
+.rule {
+  display: block;
+  width: 6rem;
+  height: 2px;
+  margin: 2rem 0 1.5rem;
+  border-radius: 2px;
+  background: linear-gradient(to right, transparent, var(--sage), var(--lavender), var(--sand), transparent);
+  transform: scaleX(0);
+  animation: grow 1.2s ease forwards 1.2s;
+}
+
+.tagline {
+  margin: 0;
+  max-width: 36rem;
+  font-size: clamp(1.15rem, 2.6vw, 1.6rem);
+  font-style: italic;
+  font-weight: 300;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  opacity: 0;
+  animation: fadeUp 1.2s ease forwards 1.4s;
+}
+
+/* ---------- Explore button ---------- */
+
+/* Level 1: entrance. */
+.ctaWrap {
+  margin-top: 3rem;
+  opacity: 0;
+  animation: fadeUp 1s ease forwards 1.9s;
+}
+
+/* Level 2: gentle autonomous float. */
+.ctaFloat {
+  animation: ctaFloat 4.5s ease-in-out infinite;
+  animation-delay: 3s;
+}
+
+/* Level 3: white glass button with a soft sage → lavender → sand border. */
+.cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 2.25rem;
+  overflow: hidden;
+  border: 1.5px solid transparent;
+  border-radius: 14px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.88)) padding-box,
+    linear-gradient(120deg, var(--sage), var(--lavender), var(--sand)) border-box;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.35em;
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: 0 12px 30px -16px rgba(104, 85, 143, 0.45);
+  transition:
+    transform 0.4s cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 0.4s ease;
+}
+
+/* Pale tinted wash that fades in on hover. */
+.cta::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, var(--sage-pale), var(--lavender-pale), var(--sand-pale));
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.cta:hover,
+.cta:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 36px -16px rgba(104, 85, 143, 0.55);
+}
+
+.cta:hover::before,
+.cta:focus-visible::before {
+  opacity: 1;
+}
+
+.cta:focus-visible {
+  outline: 2px solid var(--lavender-deep);
+  outline-offset: 4px;
+}
+
+/* Keep the label above the hover wash. */
+.ctaLabel,
+.ctaArrow {
+  position: relative;
+  z-index: 1;
+}
+
+.ctaLabel {
+  padding-left: 0.35em; /* balances the trailing letter-spacing */
+}
+
+.ctaArrow {
+  display: inline-block;
+  letter-spacing: 0;
+  color: var(--lavender-deep);
+  transition: transform 0.4s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.cta:hover .ctaArrow,
+.cta:focus-visible .ctaArrow {
+  transform: translateX(6px);
+}
+
+/* ---------- Page transition ---------- */
+
+/* An iris of light opening from the button; /explore fades the same light away on arrival. */
+.iris {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: radial-gradient(circle at var(--ix) var(--iy), #ffffff 0%, #f8f6f1 45%, #eeeae2 100%);
+  clip-path: circle(0 at var(--ix) var(--iy));
+  animation: irisOpen 0.85s cubic-bezier(0.7, 0, 0.2, 1) forwards;
+}
+
+/* ---------- Keyframes ---------- */
+
+@keyframes letterIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes grow {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes irisOpen {
+  to {
+    clip-path: circle(150% at var(--ix) var(--iy));
+  }
+}
+
+@keyframes ctaFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes sway {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(-60px, 30px, 0) rotate(-2deg);
+  }
+}
+
+/* ---------- Mobile ---------- */
+
+@media (max-width: 640px) {
+  .eyebrow {
+    font-size: 0.6rem;
+    letter-spacing: 0.3em;
+  }
+
+  .ctaWrap {
+    margin-top: 2.25rem;
+  }
+
+  .cta {
+    padding: 0.9rem 1.9rem;
+  }
+}
+
+/* ---------- Reduced motion: a still, fully visible composition. ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .ribbonSoft,
+  .ribbonLines,
+  .ctaFloat {
+    animation: none;
+  }
+
+  .eyebrow,
+  .letterIn,
+  .rule,
+  .tagline,
+  .ctaWrap {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+
+  .letter,
+  .cta,
+  .cta::before,
+  .ctaArrow {
+    transition: none;
+  }
+}
