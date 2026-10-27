@@ -1,0 +1,827 @@
+.page {
+  --ink: #302d32;
+  --ink-soft: #5c5760;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  overflow-x: clip;
+  background: #f8f6f1;
+  color: var(--ink);
+}
+
+/* Sector tokens ("r, g, b" so they can take alpha). --accent is the readable deep shade. */
+.agriculture {
+  --tint: 168, 195, 160;
+  --pale: 221, 233, 216;
+  --deep: 70, 99, 75;
+  --accent: #46634b;
+}
+
+.home {
+  --tint: 185, 167, 217;
+  --pale: 232, 224, 245;
+  --deep: 104, 85, 143;
+  --accent: #68558f;
+}
+
+.industry {
+  --tint: 231, 201, 163;
+  --pale: 245, 232, 213;
+  --deep: 200, 135, 75;
+  --accent: #915a28;
+}
+
+/* Light veil continuing the landing page's transition, fading away on arrival. */
+.arrive {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: radial-gradient(circle at 50% 50%, #ffffff 0%, #f8f6f1 45%, #eeeae2 100%);
+  pointer-events: none;
+  animation: arriveOut 0.9s var(--ease-out) forwards 0.05s;
+}
+
+/* ---------- Top bar and intro ---------- */
+
+.topbar {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem clamp(1rem, 4vw, 2.5rem);
+}
+
+.brand {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.brand:focus-visible {
+  outline: 2px solid #68558f;
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
+.chip {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid rgba(48, 45, 50, 0.15);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+
+.intro {
+  position: relative;
+  z-index: 2;
+  max-width: 30rem;
+  margin: 1.5rem 0 0 clamp(1.25rem, 7vw, 6.5rem);
+  animation: fadeUp 1s var(--ease-out) backwards 0.35s;
+}
+
+.eyebrow {
+  margin: 0 0 0.9rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.heading {
+  margin: 0;
+  font-size: clamp(2.2rem, 4.8vw, 4rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.hint {
+  margin: 1.1rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 300;
+  color: var(--ink-soft);
+}
+
+/* ---------- 3D stage ---------- */
+
+.stage {
+  position: relative;
+  z-index: 2;
+  height: clamp(34rem, 66vh, 44rem);
+  margin-top: -7rem;
+  perspective: 1800px;
+  perspective-origin: 50% 35%;
+}
+
+/* Cursor parallax via transform (--wx/--wy); an independent slow drift via the `rotate` property. */
+.world {
+  --wx: 0deg;
+  --wy: 0deg;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform: rotateX(var(--wx)) rotateY(var(--wy));
+  transition: transform 1.2s var(--ease-out);
+  animation: worldDrift 20s ease-in-out infinite;
+}
+
+/* One glass structure. --p: cursor proximity (0..1, JS); --pf: 1 when keyboard-focused. */
+.object {
+  --p: 0;
+  --pf: 0;
+  --tx: 0deg;
+  --ty: 0deg;
+  --lx: 50%;
+  --ly: 0%;
+  --z: 0px;
+  --w: clamp(15rem, 20vw, 18.5rem);
+  --h: calc(var(--w) * 1.25);
+  --d: 3.5rem;
+  --base-ry: 0deg;
+
+  position: absolute;
+  width: var(--w);
+  height: var(--h);
+  transform-style: preserve-3d;
+  transform: translate3d(0, 0, calc(var(--z) + max(var(--p), var(--pf)) * 60px))
+    scale(calc(1 + max(var(--p), var(--pf)) * 0.04));
+  transition: transform 0.7s var(--ease-out), opacity 0.6s ease;
+  animation: objectIn 1.3s var(--ease-out) backwards;
+  animation-delay: calc(0.5s + var(--n) * 0.18s);
+}
+
+.object:focus-within {
+  --pf: 1;
+}
+
+/* Asymmetric composition: Home is the raised centrepiece, the others flank it at different depths. */
+.object.agriculture {
+  left: 7%;
+  top: 30%;
+  --z: -40px;
+  --base-ry: 12deg;
+}
+
+.object.home {
+  left: calc(50% - var(--w) / 2);
+  top: 6%;
+  --z: 40px;
+  --base-ry: 0deg;
+}
+
+.object.industry {
+  right: 7%;
+  top: 22%;
+  --z: -10px;
+  --base-ry: -12deg;
+}
+
+.float {
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+}
+
+.box {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform: rotateX(calc(-7deg + var(--tx))) rotateY(calc(var(--base-ry) + var(--ty)));
+  transition: transform 0.7s var(--ease-out);
+}
+
+/* ---------- Faces ---------- */
+
+.face {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  backface-visibility: visible;
+}
+
+/* In a preserve-3d scene the browser hit-tests by depth, so the transparent 3D scaffolding
+   (the world plane, object/float/box layers and hidden faces) could sit in front of an
+   object's front face and swallow clicks on ENTER. Only the visible front face takes input.
+   Cursor tilt and proximity listen on window, so they are unaffected. */
+.world,
+.object,
+.float,
+.box,
+.face {
+  pointer-events: none;
+}
+
+.face.front {
+  pointer-events: auto;
+}
+
+.front {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 1.75rem 1.6rem 1.6rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.74) 0%, rgba(255, 255, 255, 0.5) 42%, rgba(var(--tint), 0.4) 100%);
+  transform: translateZ(calc(var(--d) / 2));
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tint), calc(0.25 + max(var(--p), var(--pf)) * 0.55)),
+    inset 0 1px 0 #ffffff,
+    inset 0 -40px 60px -40px rgba(var(--deep), 0.35),
+    0 0 calc(max(var(--p), var(--pf)) * 46px) rgba(var(--tint), calc(max(var(--p), var(--pf)) * 0.7));
+  transition: box-shadow 0.5s ease;
+}
+
+.back {
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(var(--tint), 0.3);
+  transform: rotateY(180deg) translateZ(calc(var(--d) / 2));
+}
+
+.left,
+.right {
+  inset: 0 auto 0 calc(50% - var(--d) / 2);
+  width: var(--d);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.55), rgba(var(--tint), 0.55) 60%, rgba(var(--deep), 0.25));
+}
+
+.right {
+  transform: rotateY(90deg) translateZ(calc(var(--w) / 2));
+}
+
+.left {
+  transform: rotateY(-90deg) translateZ(calc(var(--w) / 2));
+}
+
+.top,
+.bottom {
+  inset: calc(50% - var(--d) / 2) 0 auto 0;
+  height: var(--d);
+  border-radius: 6px;
+}
+
+/* Lit from above. */
+.top {
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.9), rgba(var(--pale), 0.75));
+  transform: rotateX(90deg) translateZ(calc(var(--h) / 2));
+}
+
+.bottom {
+  background: rgba(var(--deep), 0.28);
+  transform: rotateX(-90deg) translateZ(calc(var(--h) / 2));
+}
+
+/* ---------- Light inside the glass ---------- */
+
+.aura,
+.texture,
+.specular {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Cursor-following highlight plus a fixed reflection streak. */
+.specular {
+  background:
+    radial-gradient(circle at var(--lx) var(--ly), rgba(255, 255, 255, calc(0.1 + max(var(--p), var(--pf)) * 0.6)) 0%, transparent 45%),
+    linear-gradient(115deg, transparent 28%, rgba(255, 255, 255, 0.4) 36%, transparent 44%);
+}
+
+/* Slow reflection sweeping across every object. */
+.specular::after {
+  content: "";
+  position: absolute;
+  inset: -40% -90%;
+  background: linear-gradient(110deg, transparent 45%, rgba(255, 255, 255, 0.5) 50%, transparent 55%);
+  animation: sweep calc(10s + var(--n) * 1.7s) ease-in-out infinite;
+  animation-delay: calc(2.5s + var(--n) * 1.3s);
+}
+
+/* Agriculture: organic — light grows upward from the base, motes rise through it. */
+.agriculture .aura {
+  background: radial-gradient(ellipse 85% 60% at 50% 100%, rgba(var(--tint), 0.85), transparent 70%);
+  transform-origin: 50% 100%;
+  animation: grow 7s ease-in-out infinite;
+}
+
+.agriculture .texture {
+  background-image:
+    radial-gradient(circle 18px at 25% 50%, rgba(var(--deep), 0.16), transparent),
+    radial-gradient(circle 12px at 70% 50%, rgba(var(--deep), 0.12), transparent),
+    radial-gradient(circle 8px at 48% 50%, rgba(var(--tint), 0.6), transparent);
+  background-size: 100% 70%;
+  animation: riseThrough 11s linear infinite;
+}
+
+/* Home: warm, intimate — a soft hearth glow breathing slowly. */
+.home .aura {
+  background: radial-gradient(circle at 50% 78%, rgba(var(--pale), 0.9) 0%, rgba(var(--tint), 0.4) 40%, transparent 68%);
+  animation: hearth 6s ease-in-out infinite;
+}
+
+.home .texture {
+  background: radial-gradient(ellipse 70% 40% at 50% 0%, rgba(255, 255, 255, 0.6), transparent 70%);
+}
+
+/* Industry: engineered — a precise grid with a measured scanning beam. */
+.industry .face {
+  border-radius: 8px;
+}
+
+.industry .texture {
+  background-image:
+    linear-gradient(rgba(var(--deep), 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--deep), 0.14) 1px, transparent 1px);
+  background-size: 18px 18px;
+  mask-image: linear-gradient(to top, #000 0%, transparent 85%);
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 85%);
+}
+
+.industry .aura {
+  inset: 0 0 auto 0;
+  height: 16%;
+  background: linear-gradient(to bottom, transparent, rgba(200, 135, 75, 0.4), transparent);
+  animation: scan 5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+/* ---------- Text and ENTER ---------- */
+
+.index,
+.title,
+.text,
+.enter {
+  position: relative;
+  z-index: 1;
+}
+
+.index,
+.title,
+.text {
+  opacity: calc(0.84 + max(var(--p), var(--pf)) * 0.16);
+  transition: opacity 0.4s ease;
+}
+
+.index {
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  color: var(--accent);
+}
+
+.title {
+  margin: 0.5rem 0 0.75rem;
+  font-size: clamp(1.6rem, 2.2vw, 2rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.text {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.enter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: auto;
+  padding: 0.75rem 1.3rem;
+  border-radius: 10px;
+  background: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  color: #ffffff;
+  text-decoration: none;
+  box-shadow: 0 10px 24px -12px rgba(var(--deep), 0.9);
+  transform: translateY(calc((1 - max(var(--p), var(--pf))) * 3px));
+  transition: transform 0.4s var(--ease-out), box-shadow 0.4s ease, filter 0.3s ease;
+}
+
+.enter:hover {
+  filter: brightness(0.92);
+  box-shadow: 0 14px 30px -12px rgba(var(--deep), 1);
+}
+
+.enter:active {
+  transform: scale(0.96);
+  transition-duration: 0.12s;
+}
+
+.enter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+/* Ground shadow, synced to each object's float. */
+.shadow {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: -3.5rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(var(--deep), 0.3) 0%, transparent 70%);
+}
+
+.notice {
+  position: absolute;
+  top: calc(100% + 1.4rem);
+  left: -1rem;
+  right: -1rem;
+  z-index: 2;
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid rgba(var(--deep), 0.3);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--ink);
+  animation: fadeUp 0.5s var(--ease-out);
+}
+
+/* ---------- Floating personalities ---------- */
+
+.agriculture .float {
+  animation: floatOrganic 9s ease-in-out infinite;
+}
+
+.agriculture .shadow {
+  animation: shadowSoft 9s ease-in-out infinite;
+}
+
+.home .float {
+  animation: floatCalm 11s ease-in-out infinite;
+  animation-delay: -3s;
+}
+
+.home .shadow {
+  animation: shadowSoft 11s ease-in-out infinite;
+  animation-delay: -3s;
+}
+
+.industry .float {
+  animation: floatPrecise 8s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  animation-delay: -1.5s;
+}
+
+.industry .shadow {
+  animation: shadowPrecise 8s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  animation-delay: -1.5s;
+}
+
+/* ---------- ENTER transition ---------- */
+
+.launching {
+  --pf: 1;
+  z-index: 5;
+}
+
+.launching .box {
+  transform: rotateX(0deg) rotateY(0deg) scale(1.1);
+}
+
+.receding {
+  opacity: 0.35;
+}
+
+.launchVeil {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at var(--ox) var(--oy), rgba(var(--tint), 1) 0%, rgba(var(--pale), 1) 45%, #fbfaf7 100%);
+  clip-path: circle(0 at var(--ox) var(--oy));
+  animation: veilOpen 0.85s cubic-bezier(0.7, 0, 0.2, 1) forwards 0.15s;
+}
+
+.launchVeil.retract {
+  animation: veilClose 0.45s cubic-bezier(0.7, 0, 0.2, 1) forwards;
+}
+
+.launchTitle {
+  font-size: clamp(2.5rem, 9vw, 7rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  opacity: 0;
+  animation: fadeUp 0.6s var(--ease-out) forwards 0.5s;
+}
+
+/* ---------- Classic typeface (main site): Cormorant Garamond, refined weights ---------- */
+
+.classic .brand {
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+}
+
+.classic .heading {
+  font-size: clamp(2.4rem, 4.6vw, 3.8rem);
+  font-weight: 300;
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+}
+
+.classic .title {
+  font-size: clamp(1.85rem, 2.4vw, 2.2rem);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.classic .launchTitle {
+  font-weight: 300;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- Keyframes ---------- */
+
+@keyframes arriveOut {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes objectIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 70px, calc(var(--z) - 260px)) rotateX(16deg);
+  }
+}
+
+@keyframes worldDrift {
+  0%,
+  100% {
+    rotate: y -2deg;
+  }
+  50% {
+    rotate: y 2deg;
+  }
+}
+
+@keyframes floatOrganic {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotateZ(0deg);
+  }
+  25% {
+    transform: translate3d(0, -11px, 0) rotateZ(0.8deg);
+  }
+  50% {
+    transform: translate3d(0, -17px, 0) rotateZ(-0.3deg);
+  }
+  75% {
+    transform: translate3d(0, -6px, 0) rotateZ(-0.9deg);
+  }
+}
+
+@keyframes floatCalm {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0);
+  }
+}
+
+/* Moves, holds, moves: deliberate and coordinated. */
+@keyframes floatPrecise {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotateY(0deg);
+  }
+  20%,
+  48% {
+    transform: translate3d(0, -14px, 0) rotateY(3deg);
+  }
+  68%,
+  82% {
+    transform: translate3d(0, -4px, 0) rotateY(-1.5deg);
+  }
+}
+
+@keyframes shadowSoft {
+  0%,
+  100% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scaleX(0.84);
+    opacity: 0.6;
+  }
+}
+
+@keyframes shadowPrecise {
+  0%,
+  100% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  20%,
+  48% {
+    transform: scaleX(0.82);
+    opacity: 0.55;
+  }
+  68%,
+  82% {
+    transform: scaleX(0.95);
+    opacity: 0.85;
+  }
+}
+
+@keyframes sweep {
+  0% {
+    transform: translateX(-45%);
+  }
+  40%,
+  100% {
+    transform: translateX(45%);
+  }
+}
+
+@keyframes grow {
+  0%,
+  100% {
+    transform: scaleY(0.75);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scaleY(1.15);
+    opacity: 1;
+  }
+}
+
+@keyframes riseThrough {
+  from {
+    background-position: 0 140%;
+  }
+  to {
+    background-position: 0 -60%;
+  }
+}
+
+@keyframes hearth {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  65%,
+  100% {
+    transform: translateY(640%);
+  }
+}
+
+@keyframes veilOpen {
+  to {
+    clip-path: circle(150% at var(--ox) var(--oy));
+  }
+}
+
+@keyframes veilClose {
+  from {
+    clip-path: circle(150% at var(--ox) var(--oy));
+  }
+  to {
+    clip-path: circle(0 at var(--ox) var(--oy));
+  }
+}
+
+/* ---------- Tablet and mobile: a vertical stack, no cursor tilt. ---------- */
+
+@media (max-width: 1000px) {
+  .intro {
+    margin: 1rem auto 0;
+    padding: 0 1.25rem;
+    text-align: center;
+  }
+
+  .stage {
+    height: auto;
+    margin-top: 3.5rem;
+    padding-bottom: 5rem;
+  }
+
+  .world {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5.5rem;
+    transform: none;
+    animation: none;
+  }
+
+  .object,
+  .object.agriculture,
+  .object.home,
+  .object.industry {
+    position: relative;
+    left: auto;
+    right: auto;
+    top: auto;
+    --z: 0px;
+    --w: min(20rem, calc(100vw - 4rem));
+    --h: 19.5rem;
+    --d: 2.75rem;
+  }
+
+  .object.agriculture {
+    --base-ry: 6deg;
+  }
+
+  .object.industry {
+    --base-ry: -6deg;
+  }
+}
+
+@media (max-width: 640px) {
+  .chip {
+    display: none;
+  }
+
+  .eyebrow {
+    font-size: 0.62rem;
+    letter-spacing: 0.3em;
+  }
+}
+
+/* ---------- Reduced motion: a still, composed gallery. ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .arrive {
+    display: none;
+  }
+
+  .intro,
+  .object,
+  .world,
+  .float,
+  .shadow,
+  .aura,
+  .texture,
+  .specular::after,
+  .notice,
+  .launchTitle {
+    animation: none !important;
+  }
+
+  .launchTitle {
+    opacity: 1;
+  }
+
+  .object,
+  .box,
+  .front,
+  .enter,
+  .index,
+  .title,
+  .text {
+    transition: none;
+  }
+}
