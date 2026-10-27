@@ -16,8 +16,8 @@
     "landfill_kgco2e_per_kg_organic": {
         "value": 1.725,
         "unit": "kgCO2e/kg wet organic waste",
-        "status": "actual",
-        "source": "MoEFCC / NITI Aayog national waste sector modeling assumptions for deep unmanaged Indian dumpsites: High-decomposition DOCf 0.77 (due to approximately 35°C average landfill temperature), DOC 0.15, MCF 0.8, F 0.5, multiplied by 16/12 and GWP 28. Assumes 0% gas recovery and 0% surface oxidation.",
+        "status": "sourced",
+        "source": "MoEFCC / NITI Aayog national waste sector modeling assumptions for deep unmanaged Indian dumpsites: High-decomposition DOCf 0.77 (due to approximately 35\u00c2\u00b0C average landfill temperature), DOC 0.15, MCF 0.8, F 0.5, multiplied by 16/12 and GWP 28. Assumes 0% gas recovery and 0% surface oxidation.",
         "year": 2026
     },
     "truck_kgco2e_per_tkm": {
@@ -26,5 +26,68 @@
         "status": "sourced",
         "source": "UK Defra/BEIS conversion factors 2025, rigid diesel HGV average laden, 0.19748, via Climatiq. UK vehicles; India values differ.",
         "year": 2025
+    },
+    "gwp_n2o": {
+        "value": 265,
+        "unit": "kgCO2e/kgN2O",
+        "status": "sourced",
+        "source": "IPCC AR5 100-year GWP for nitrous oxide. Kept on AR5 for consistency with gwp_ch4; AR6 gives 273.",
+        "year": 2014
+    },
+    "composting_ch4_kg_per_t_wet": {
+        "value": 4.0,
+        "unit": "kgCH4/tonne wet waste treated",
+        "status": "sourced",
+        "source": "IPCC 2006 Guidelines, Vol. 5 Ch. 4, Table 4.1, composting default CH4 emission factor (wet weight basis).",
+        "year": 2006
+    },
+    "composting_n2o_kg_per_t_wet": {
+        "value": 0.3,
+        "unit": "kgN2O/tonne wet waste treated",
+        "status": "sourced",
+        "source": "IPCC 2006 Guidelines, Vol. 5 Ch. 4, Table 4.1, composting default N2O emission factor (wet weight basis).",
+        "year": 2006
+    },
+    "stationary_combustion_ch4_kg_per_kwh": {
+        "value": 3.6e-06,
+        "unit": "kgCH4/kWh fuel (LHV)",
+        "status": "sourced",
+        "source": "IPCC 2006 Guidelines, Vol. 2 Ch. 2, Table 2.2, 'other primary solid/gaseous biomass' default 1 kg CH4/TJ (= 3.6e-6 kg/kWh). Applied to combusted syngas and pyrolysis oil/gas.",
+        "year": 2006
+    },
+    "stationary_combustion_n2o_kg_per_kwh": {
+        "value": 3.6e-07,
+        "unit": "kgN2O/kWh fuel (LHV)",
+        "status": "sourced",
+        "source": "IPCC 2006 Guidelines, Vol. 2 Ch. 2, Table 2.2, biomass gases default 0.1 kg N2O/TJ (= 3.6e-7 kg/kWh).",
+        "year": 2006
+    },
+    "fossil_heat_kgco2_per_kwh": {
+        "value": 0.2786,
+        "unit": "kgCO2/kWh fuel (LHV)",
+        "status": "assumed",
+        "source": "IPCC 2006 Guidelines, Vol. 2 Ch. 1, Table 1.4, residual fuel oil 77,400 kg CO2/TJ. The value is sourced; the ASSUMPTION is that pyrolysis oil/gas displaces industrial furnace oil 1:1 on an energy basis. Confirm the offtaker's actual displaced fuel.",
+        "year": 2006
+    },
+    "biochar_carbon_fraction": {
+        "value": 0.65,
+        "unit": "kgC/kg biochar (dry)",
+        "status": "assumed",
+        "source": "IPCC 2019 Refinement, Vol. 4 Ch. 2, Appendix 4, Table 4A.1 organic-carbon fraction for herbaceous-feedstock pyrolysis biochar, used as a proxy for mixed organic waste. Requires lab ultimate analysis of the actual char.",
+        "year": 2019
+    },
+    "biochar_permanence_fraction": {
+        "value": 0.8,
+        "unit": "fraction of biochar C remaining after 100 years",
+        "status": "sourced",
+        "source": "IPCC 2019 Refinement, Vol. 4 Ch. 2, Appendix 4, Table 4A.2 F_perm for medium-temperature (450-600 C) pyrolysis biochar. Only valid if the char is applied to soil, not burned.",
+        "year": 2019
+    },
+    "organic_lhv_dry_mj_per_kg": {
+        "value": 17.0,
+        "unit": "MJ/kg dry organic solids",
+        "status": "assumed",
+        "source": "Typical lower heating value of dry food/garden waste used to size syngas energy in the gasification branch. Replace with bomb-calorimeter data for the actual feedstock.",
+        "year": 2026
     }
 }

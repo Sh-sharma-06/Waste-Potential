@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import "./CoverPage.css";
 
 // Put bg.mp4 and poster.jpg inside your /public folder.
-export default function CoverPage({ onExplore }) {
+export default function CoverPage({ onExplore = undefined } = {}) {
   const [ready, setReady] = useState(false);
 
   // Start the sequence once the video can play (fallback after 2s).

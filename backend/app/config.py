@@ -79,7 +79,16 @@ def get_setting(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
 
 
-GEMINI_MODEL = get_setting("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = get_setting("GEMINI_MODEL", "gemini-3.8-flash")
+# Tried in order after GEMINI_MODEL when it is over quota, overloaded or unavailable.
+GEMINI_FALLBACK_MODELS = ("gemini-3.5-flash", "gemini-3.5-flash-lite")
+
+
+def gemini_models() -> list[str]:
+    """GEMINI_MODEL first, then the fallbacks, without duplicates."""
+    return list(dict.fromkeys([GEMINI_MODEL, *GEMINI_FALLBACK_MODELS]))
+
+
 GEMINI_API_KEY_AUDIT = get_setting("GEMINI_API_KEY_AUDIT")
 GEMINI_API_KEY_ADVISOR = get_setting("GEMINI_API_KEY_ADVISOR")
 GEMINI_API_KEY_PARSER = get_setting("GEMINI_API_KEY_PARSER")
@@ -90,7 +99,10 @@ GEMINI_API_KEY_PARSER = get_setting("GEMINI_API_KEY_PARSER")
 # An empty string means the key was not set; clients will raise a clear error.
 # ---------------------------------------------------------------------------
 
-OPEN_ROUTE_SERVICE_API_KEY: str = get_setting("OPEN_ROUTE_SERVICE_API_KEY")
+# MAPS_ROUTING_API_KEY is accepted as an alias for the OpenRouteService key.
+OPEN_ROUTE_SERVICE_API_KEY: str = (
+    get_setting("OPEN_ROUTE_SERVICE_API_KEY") or get_setting("MAPS_ROUTING_API_KEY")
+)
 GOOGLE_PLACES_API_KEY: str = get_setting("GOOGLE_PLACES_API_KEY")
 # Open-Meteo is a public API that requires no key; this is reserved for
 # future premium / commercial access.

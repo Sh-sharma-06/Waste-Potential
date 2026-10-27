@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+import base64
+import io
 import logging
 import os
+import re
+import wave
 from enum import Enum
 from typing import Optional
 
@@ -48,6 +53,101 @@ SPEAKER_MAPPINGS = {
     "anushka": "priya",
     "vidya": "shreya",
 }
+
+# Sarvam rejects longer inputs with a 400 validation error, so longer text is chunked.
+TTS_MAX_CHARS = 500
+TRANSLATE_MAX_CHARS = 2000
+# Most text read aloud per request (keeps latency and cost bounded).
+TTS_TOTAL_MAX_CHARS = 2000
+
+# Sentence ends (incl. Devanagari danda and double danda) or line breaks.
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?।॥])\s+|\n+")
+
+
+def split_text(text: str, limit: int) -> list[str]:
+    """Split text into chunks of at most `limit` chars at sentence, then word, boundaries."""
+    pieces: list[str] = []
+    for sentence in _SENTENCE_BREAK.split(text):
+        sentence = sentence.strip()
+        while len(sentence) > limit:
+            cut = sentence.rfind(" ", 0, limit + 1)
+            if cut <= 0:
+                cut = limit
+            pieces.append(sentence[:cut].strip())
+            sentence = sentence[cut:].strip()
+        if sentence:
+            pieces.append(sentence)
+
+    chunks: list[str] = []
+    for piece in pieces:
+        if chunks and len(chunks[-1]) + 1 + len(piece) <= limit:
+            chunks[-1] += " " + piece
+        else:
+            chunks.append(piece)
+    return chunks
+
+
+def split_paragraphs(text: str, limit: int) -> list[tuple[str, str]]:
+    """Chunk text for translation, keeping its layout.
+
+    Returns (chunk, separator) pairs: the separator ("\\n" between paragraphs, " " inside a
+    paragraph that had to be split, "" at the end) goes after the chunk when reassembling.
+    """
+    blocks: list[tuple[str, str]] = []
+    for paragraph in text.split("\n"):
+        parts = ([paragraph] if len(paragraph) <= limit else split_text(paragraph, limit)) or [""]
+        blocks.extend((part, " ") for part in parts[:-1])
+        blocks.append((parts[-1], "\n"))
+    blocks[-1] = (blocks[-1][0], "")
+
+    chunks: list[tuple[str, str]] = []
+    for block, sep in blocks:
+        if chunks and len(chunks[-1][0]) + len(chunks[-1][1]) + len(block) <= limit:
+            prev, prev_sep = chunks[-1]
+            chunks[-1] = (prev + prev_sep + block, sep)
+        else:
+            chunks.append((block, sep))
+    return chunks
+
+
+def concat_wavs(clips_b64: list[str]) -> str:
+    """Join base64 WAV clips that share one format (Sarvam returns mono 16-bit PCM)."""
+    if len(clips_b64) == 1:
+        return clips_b64[0]
+    out = io.BytesIO()
+    writer: wave.Wave_write | None = None
+    for clip in clips_b64:
+        with wave.open(io.BytesIO(base64.b64decode(clip))) as reader:
+            if writer is None:
+                writer = wave.open(out, "wb")
+                writer.setparams(reader.getparams())
+            writer.writeframes(reader.readframes(reader.getnframes()))
+    assert writer is not None
+    writer.close()
+    return base64.b64encode(out.getvalue()).decode("ascii")
+
+
+async def _sarvam_post(client: httpx.AsyncClient, path: str, payload: dict, api_key: str, service: str) -> dict:
+    """POST JSON to Sarvam; map network and API errors to HTTPExceptions."""
+    try:
+        resp = await client.post(
+            f"{SARVAM_BASE_URL}{path}",
+            json=payload,
+            headers={"api-subscription-key": api_key, "Content-Type": "application/json"},
+        )
+    except Exception as exc:
+        logger.error("Sarvam %s network error: %s", service, exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to communicate with Sarvam {service} service: {str(exc)}",
+        )
+    if resp.status_code != 200:
+        logger.error("Sarvam %s error %s: %s", service, resp.status_code, resp.text)
+        raise HTTPException(
+            status_code=resp.status_code if resp.status_code < 500 else 502,
+            detail=f"Sarvam {service} failed: {resp.text}",
+        )
+    return resp.json()
 
 
 def get_sarvam_api_key() -> str:
@@ -187,40 +287,22 @@ async def translate_text(req: TranslateRequest):
             target_language_code=tgt,
         )
 
-    payload = {
-        "input": req.text,
-        "source_language_code": src,
-        "target_language_code": tgt,
-        "model": "sarvam-translate:v1",
-    }
-    headers = {
-        "api-subscription-key": api_key,
-        "Content-Type": "application/json",
-    }
+    async def translate_chunk(client: httpx.AsyncClient, chunk: str) -> str:
+        if not chunk.strip():
+            return chunk  # blank line between paragraphs
+        payload = {
+            "input": chunk,
+            "source_language_code": src,
+            "target_language_code": tgt,
+            "model": "sarvam-translate:v1",
+        }
+        res_json = await _sarvam_post(client, "/translate", payload, api_key, "translation")
+        return res_json.get("translated_text", "")
 
+    chunks = split_paragraphs(req.text, TRANSLATE_MAX_CHARS)
     async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            resp = await client.post(
-                f"{SARVAM_BASE_URL}/translate",
-                json=payload,
-                headers=headers,
-            )
-        except Exception as exc:
-            logger.error("Sarvam translate network error: %s", exc)
-            raise HTTPException(
-                status_code=502,
-                detail=f"Failed to communicate with Sarvam translation service: {str(exc)}",
-            )
-
-    if resp.status_code != 200:
-        logger.error("Sarvam translate error %s: %s", resp.status_code, resp.text)
-        raise HTTPException(
-            status_code=resp.status_code if resp.status_code < 500 else 502,
-            detail=f"Sarvam translation failed: {resp.text}",
-        )
-
-    res_json = resp.json()
-    translated_text = res_json.get("translated_text", "")
+        translated = await asyncio.gather(*(translate_chunk(client, c) for c, _ in chunks))
+    translated_text = "".join(t + sep for t, (_, sep) in zip(translated, chunks))
     return TranslateResponse(
         translated_text=translated_text,
         source_language_code=src,
@@ -246,51 +328,38 @@ async def text_to_speech(req: TTSRequest):
     if target_speaker not in BULBUL_V3_SPEAKERS:
         target_speaker = "kavya"  # Default pleasant female Indian voice
 
-    clean_text = req.text.strip()
-    if len(clean_text) > 2000:
-        clean_text = clean_text[:2000]
+    # Read up to TTS_TOTAL_MAX_CHARS, in whole chunks of at most TTS_MAX_CHARS.
+    chunks: list[str] = []
+    total = 0
+    for chunk in split_text(req.text, TTS_MAX_CHARS):
+        if chunks and total + len(chunk) > TTS_TOTAL_MAX_CHARS:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+    if not chunks:
+        raise HTTPException(status_code=400, detail="Text to speak is empty.")
 
-    payload = {
-        "inputs": [clean_text],
-        "target_language_code": lang,
-        "speaker": target_speaker,
-        "model": "bulbul:v3",
-        "pace": 1.0,
-    }
-    headers = {
-        "api-subscription-key": api_key,
-        "Content-Type": "application/json",
-    }
+    async def synthesize(client: httpx.AsyncClient, chunk: str) -> str:
+        payload = {
+            "inputs": [chunk],
+            "target_language_code": lang,
+            "speaker": target_speaker,
+            "model": "bulbul:v3",
+            "pace": 1.0,
+        }
+        res_json = await _sarvam_post(client, "/text-to-speech", payload, api_key, "TTS")
+        audios = res_json.get("audios", [])
+        if not audios:
+            raise HTTPException(status_code=502, detail="No audio returned from Sarvam TTS service.")
+        return audios[0]
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            resp = await client.post(
-                f"{SARVAM_BASE_URL}/text-to-speech",
-                json=payload,
-                headers=headers,
-            )
-        except Exception as exc:
-            logger.error("Sarvam TTS network error: %s", exc)
-            raise HTTPException(
-                status_code=502,
-                detail=f"Failed to communicate with Sarvam TTS service: {str(exc)}",
-            )
-
-    if resp.status_code != 200:
-        logger.error("Sarvam TTS error %s: %s", resp.status_code, resp.text)
-        raise HTTPException(
-            status_code=resp.status_code if resp.status_code < 500 else 502,
-            detail=f"Sarvam TTS failed: {resp.text}",
-        )
-
-    res_json = resp.json()
-    audios = res_json.get("audios", [])
-    if not audios:
-        raise HTTPException(status_code=502, detail="No audio returned from Sarvam TTS service.")
+        clips = await asyncio.gather(*(synthesize(client, c) for c in chunks))
+    audio = concat_wavs(list(clips))
 
     return TTSResponse(
-        audio_base64=audios[0],
-        audios=audios,
+        audio_base64=audio,
+        audios=[audio],
         language_code=lang,
         speaker=target_speaker,
     )

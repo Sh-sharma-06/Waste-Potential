@@ -33,6 +33,8 @@ logger = logging.getLogger(__name__)
 _SEARCH_TEXT_URL = "https://places.googleapis.com/v1/places:searchText"
 _TIMEOUT_S = 10.0
 _DEFAULT_RADIUS_M = 50_000  # 50 km
+# Places API (New) rejects locationBias circles above 50 km with HTTP 400.
+MAX_BIAS_RADIUS_M = 50_000
 
 # Fields requested via X-Goog-FieldMask header.
 _FIELD_MASK = (

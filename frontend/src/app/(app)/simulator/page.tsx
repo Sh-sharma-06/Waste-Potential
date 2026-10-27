@@ -5,36 +5,36 @@ import Link from "next/link";
 import { StageCanvas3D } from "./equipment-3d";
 import { getStagesByPathway, getInputBadgeStyle } from "./stages-data";
 import AudioReaderButton from "@/components/AudioReaderButton";
-import FloatingChatbot from "@/components/FloatingChatbot";
+import { useChatbotStore } from "@/stores/chatbot";
 import ProcessSelector from "@/components/ProcessSelector";
 import { PATHWAY_NAMES } from "./pathway-config";
 import { ProcessStage } from "./types";
+import { INDUSTRY_PAGE_BG } from "@/lib/industryTheme";
 
 /* ── Industry / amber accent palette ── */
 const C = {
-  accent:      "#E2623A",
-  accentSoft:  "#F0A080",
+  accent:      "#C2410C",
+  accentSoft:  "#9A3412",
   accentDim:   "rgba(226,98,58,.45)",
-  accentGlow:  "rgba(226,98,58,.4)",
+  accentGlow:  "rgba(226,98,58,.25)",
   accentInner: "rgba(226,98,58,.06)",
   accentDrop:  "rgba(226,98,58,.45)",
-  textBody:    "#F5D2C2",
-  gradTitle:   "linear-gradient(90deg,#FFE4D6,#E2623A)",
+  textBody:    "#431E12",
+  gradTitle:   "linear-gradient(90deg,#431E12,#C2410C)",
   gradBtn:     "linear-gradient(90deg,#C2410C,#E2623A)",
   btnText:     "#1a0800",
   barA:        "#FB923C",
   barB:        "#F97316",
 };
 
-const BG   = "#070a0f";
 const FONT = '"Rubik",sans-serif';
 const gb   = (c: string) => `1.5px solid ${c}`;
 const card = (extra?: React.CSSProperties): React.CSSProperties => ({
   border: gb(C.accentDim),
-  background: "rgba(255,255,255,.06)",
+  background: "rgba(255,255,255,0.57)",
   backdropFilter: "blur(12px)",
   WebkitBackdropFilter: "blur(12px)",
-  boxShadow: `0 10px 40px rgba(40,15,5,.45),inset 0 0 30px ${C.accentInner},0 0 36px ${C.accentGlow}`,
+  boxShadow: `0 10px 40px rgba(120,53,15,0.16),inset 0 0 30px ${C.accentInner},0 0 36px ${C.accentGlow}`,
   borderRadius: 20,
   padding: "28px 32px",
   boxSizing: "border-box",
@@ -121,7 +121,6 @@ async function callCompare(pincode: string, mass_kg: number): Promise<PathwayRes
     opex_inr_yr:         Object.fromEntries(ALL_PATHWAYS.map(p => [p, 1_800_000])),
     asset_life_yr:       Object.fromEntries(ALL_PATHWAYS.map(p => [p, 20])),
     gate_fee_inr_t:      Object.fromEntries(ALL_PATHWAYS.map(p => [p, 800])),
-    net_kwh_per_tonne:   Object.fromEntries(ALL_PATHWAYS.map(p => [p, 350])),
     direct_ghg_kg_per_tonne: Object.fromEntries(ALL_PATHWAYS.map(p => [p, 120])),
     capacity_tpd:        Object.fromEntries(ALL_PATHWAYS.map(p => [p, Math.max(waste_tpd * 1.5, 5)])),
   };
@@ -172,7 +171,7 @@ function ScoreBar({ score, animated }: { score: number; animated: boolean }) {
     <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
       <div style={{
         flex: 1, height: 8, borderRadius: 999,
-        background: "rgba(255,255,255,.08)",
+        background: "rgba(255,255,255,0.61)",
         overflow: "hidden",
       }}>
         <div style={{
@@ -208,59 +207,30 @@ function Spinner({ size = 18, color = C.accentSoft }: { size?: number; color?: s
   );
 }
 
-/* ── Scaled output yield calculator ── */
-function getYieldInfo(pathwayId: string, massKg: number) {
-  const m = massKg > 0 ? massKg : 10000;
-  switch (pathwayId) {
-    case "pyrolysis":
-      return {
-        qty: Math.round(m * 0.68).toLocaleString(),
-        unit: "kg/day Bio-oil (68%)",
-        fullYield: `${Math.round(m * 0.68).toLocaleString()} kg/day Bio-oil`,
-      };
-    case "anaerobic_digestion":
-      return {
-        qty: Math.round(m * 0.58).toLocaleString(),
-        unit: "Nm³/day Bio-CNG",
-        fullYield: `${Math.round(m * 0.58).toLocaleString()} Nm³/day Bio-CNG`,
-      };
-    case "gasification":
-      return {
-        qty: Math.round(m * 1.45).toLocaleString(),
-        unit: "kWh/day Net Power",
-        fullYield: `${Math.round(m * 1.45).toLocaleString()} kWh/day Electricity`,
-      };
-    case "incineration":
-      return {
-        qty: Math.round(m * 1.15).toLocaleString(),
-        unit: "kWh/day Power & Steam",
-        fullYield: `${Math.round(m * 1.15).toLocaleString()} kWh/day Power`,
-      };
-    case "htc":
-      return {
-        qty: Math.round(m * 0.72).toLocaleString(),
-        unit: "kg/day Hydro-char",
-        fullYield: `${Math.round(m * 0.72).toLocaleString()} kg/day Hydro-char`,
-      };
-    case "torrefaction":
-      return {
-        qty: Math.round(m * 0.76).toLocaleString(),
-        unit: "kg/day Bio-coal Pellets",
-        fullYield: `${Math.round(m * 0.76).toLocaleString()} kg/day Bio-coal`,
-      };
-    case "composting":
-      return {
-        qty: Math.round(m * 0.48).toLocaleString(),
-        unit: "kg/day Bio-manure",
-        fullYield: `${Math.round(m * 0.48).toLocaleString()} kg/day Bio-manure`,
-      };
-    default:
-      return {
-        qty: Math.round(m * 0.65).toLocaleString(),
-        unit: "kg/day Output",
-        fullYield: `${Math.round(m * 0.65).toLocaleString()} kg/day`,
-      };
+/* ── Daily yield from the physics model (POST /pathways/compare result) ── */
+const OUTPUT_LABELS: Record<string, { unit: string; digits: number }> = {
+  biogas_m3_d: { unit: "m³/day biogas", digits: 0 },
+  syngas_mj_d: { unit: "MJ/day syngas", digits: 0 },
+  heat_mj_d:   { unit: "MJ/day heat", digits: 0 },
+  compost_t_d: { unit: "t/day compost", digits: 2 },
+};
+
+type ModelYield =
+  | { kind: "estimate"; energyKwhD: number; products: string[] }
+  | { kind: "none"; message: string };
+
+function getModelYield(row: PathwayResult | undefined, fromModel: boolean): ModelYield {
+  if (!fromModel) return { kind: "none", message: "No model estimate: live simulation unavailable" };
+  if (!row || row.model_status === "infeasible") {
+    return { kind: "none", message: "No model estimate for this feedstock" };
   }
+  const products = Object.entries(row.outputs ?? {})
+    .filter(([key, value]) => key in OUTPUT_LABELS && Number.isFinite(value))
+    .map(([key, value]) => {
+      const { unit, digits } = OUTPUT_LABELS[key];
+      return `${value.toLocaleString(undefined, { maximumFractionDigits: digits })} ${unit}`;
+    });
+  return { kind: "estimate", energyKwhD: row.e_net_kwh_d, products };
 }
 
 /* ── Inner component (needs Suspense boundary for useSearchParams) ── */
@@ -269,12 +239,22 @@ function SimulatorInner() {
   const params      = useSearchParams();
   const pincode     = params.get("pincode") ?? "";
   const massRaw     = params.get("mass") ?? "0";
-  const mass        = parseFloat(massRaw) || 0;
+  const initialMass = parseFloat(massRaw) || 0;
   const address     = params.get("address") ?? "";
+  const category    = params.get("category") ?? "energy";
+  const latParam    = params.get("lat") ? Number(params.get("lat")) : undefined;
+  const lngParam    = params.get("lng") ? Number(params.get("lng")) : undefined;
+
+  const [dailyVolumeInput, setDailyVolumeInput] = useState<string>(
+    initialMass > 0 ? String(initialMass) : ""
+  );
+  const [activeMass, setActiveMass]             = useState<number>(initialMass);
+  const [hasSimulated, setHasSimulated]         = useState<boolean>(false);
 
   const [activeView, setActiveView] = useState<"monte_carlo" | "gemini">("monte_carlo");
 
   const [results, setResults]     = useState<PathwayResult[] | null>(null);
+  const [resultsFromModel, setResultsFromModel] = useState(false);
   const [simError, setSimError]   = useState<string | null>(null);
   const [loadPhase, setLoadPhase] = useState(0); // 0=idle,1=loading,2=done
 
@@ -323,38 +303,61 @@ function SimulatorInner() {
     return () => clearInterval(t);
   }, [loadPhase]);
 
-  /* ── Run simulation on mount ── */
-  useEffect(() => {
-    if (mass <= 0) {
-      setSimError("No valid mass provided. Please go back and enter a quantity.");
+  /* ── Trigger backend API calls for Monte Carlo & simulation ── */
+  const handleRunSimulation = async (specifiedMass?: number) => {
+    const rawVal = specifiedMass !== undefined ? String(specifiedMass) : dailyVolumeInput;
+    const parsedMass = parseFloat(rawVal);
+    if (isNaN(parsedMass) || parsedMass <= 0) {
+      setSimError("Please enter a valid daily waste volume greater than 0 kg/day.");
       return;
     }
-    let cancelled = false;
 
-    async function run() {
-      setLoadPhase(1);
-      setSimError(null);
-      try {
-        const data = await callCompare(pincode, mass);
-        if (!cancelled) {
-          setResults(data);
-          setLoadPhase(2);
-          barAnimRef.current = true;
-        }
-      } catch (e: unknown) {
-        if (cancelled) return;
-        const msg = e instanceof Error ? e.message : String(e);
-        setResults(buildMockResults(mass / 1000));
-        setLoadPhase(2);
-        barAnimRef.current = true;
-        if (!msg.includes("fetch") && !msg.includes("network")) {
-          setSimError(`Live simulation unavailable (${msg}) — showing indicative results.`);
-        }
+    setActiveMass(parsedMass);
+    setHasSimulated(true);
+    setLoadPhase(1);
+    setSimError(null);
+
+    try {
+      const data = await callCompare(pincode, parsedMass);
+      setResults(data);
+      setResultsFromModel(true);
+      setLoadPhase(2);
+      barAnimRef.current = true;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setResults(buildMockResults(parsedMass / 1000));
+      setResultsFromModel(false);
+      setLoadPhase(2);
+      barAnimRef.current = true;
+      if (!msg.includes("fetch") && !msg.includes("network")) {
+        setSimError(`Live simulation unavailable (${msg}) — showing indicative results.`);
       }
     }
-    run();
-    return () => { cancelled = true; };
-  }, [pincode, mass]);
+  };
+
+  /* ── Route to Marketplace appending process and mass ── */
+  const handleFinalizeProcess = () => {
+    const chosenProcess = selectedPathwayId;
+    const massVal = activeMass > 0 ? activeMass : (parseFloat(dailyVolumeInput) || 10000);
+    const pinVal = pincode || "110001";
+
+    try {
+      sessionStorage.setItem("wp_audit_process", chosenProcess);
+      sessionStorage.setItem("wp_audit_mass", String(massVal));
+      sessionStorage.setItem("wp_audit_pincode", pinVal);
+      sessionStorage.setItem("wp_audit_category", category);
+    } catch (err) {
+      console.warn("sessionStorage save failed:", err);
+    }
+
+    const searchParams = new URLSearchParams({
+      pincode: pinVal,
+      process: chosenProcess,
+      mass: String(massVal),
+      category: category,
+    });
+    router.push(`/market/energy?${searchParams.toString()}`);
+  };
 
   /* ── Explain handler ── */
   const handleExplain = async (pathway: string) => {
@@ -402,6 +405,21 @@ function SimulatorInner() {
 
   const bestScore = sorted.reduce((m, r) => Math.max(m, r.optimality_share ?? 0), 0);
 
+  /* Share live simulation state with the global chatbot (mounted in the root layout) */
+  const setChatContext = useChatbotStore((s) => s.setContext);
+  useEffect(() => {
+    setChatContext({
+      pincode,
+      address,
+      mass_kg_per_day: activeMass,
+      selected_pathway: selectedPathwayId,
+      results,
+      simulation_status: loadPhase === 1 ? "running" : loadPhase === 2 ? "complete" : "idle",
+      error: simError,
+    });
+  }, [setChatContext, pincode, address, activeMass, selectedPathwayId, results, loadPhase, simError]);
+  useEffect(() => () => setChatContext(null), [setChatContext]);
+
   /* Set default selected pathway to top-ranking feasible pathway once results load */
   useEffect(() => {
     if (sorted.length > 0 && !hasUserSelected) {
@@ -417,7 +435,10 @@ function SimulatorInner() {
     selectedPathwayId.replace(/_/g, " ").toUpperCase();
   const primaryOutput =
     PATHWAY_META[selectedPathwayId]?.output ?? "Bio-Energy & Bio-Products";
-  const yieldInfo = getYieldInfo(selectedPathwayId, mass);
+  const modelYield = getModelYield(
+    results?.find((r) => r.pathway === selectedPathwayId),
+    resultsFromModel
+  );
 
   /* Stage navigation helpers in inspector */
   const currentStageIndex = inspectedStage
@@ -438,9 +459,7 @@ function SimulatorInner() {
 
   return (
     <main style={{
-      minHeight: "100vh", background: BG, fontFamily: FONT, color: "#ffe4d6",
-      backgroundImage: `radial-gradient(ellipse 65% 45% at 15% 10%,rgba(226,98,58,.07) 0%,transparent 70%),
-                        radial-gradient(ellipse 50% 40% at 85% 80%,rgba(194,65,12,.05) 0%,transparent 70%)`,
+      minHeight: "100vh", ...INDUSTRY_PAGE_BG, fontFamily: FONT, color: "#27120A",
       padding: "0 0 80px",
     }}>
 
@@ -461,7 +480,7 @@ function SimulatorInner() {
               alignItems: "center",
               padding: "4px",
               borderRadius: 999,
-              background: "rgba(255, 255, 255, 0.04)",
+              background: "rgba(255,255,255,0.53)",
               border: gb(C.accentDim),
               backdropFilter: "blur(12px)",
               gap: 4,
@@ -530,7 +549,7 @@ function SimulatorInner() {
             Optimal Waste-to-Energy Pathways
           </h1>
           <p style={{ margin: 0, color: C.textBody, fontSize: ".9rem", letterSpacing: ".02em" }}>
-            Monte Carlo risk-adjusted feasibility analysis based on location, local weather, transport distance, and market demand.
+            See which process works best for your waste, location and weather.
           </p>
         </div>
 
@@ -540,8 +559,8 @@ function SimulatorInner() {
         }}>
           {[
             { icon: "📍", label: `PIN: ${pincode || "—"}` },
-            { icon: "⚖️", label: `Mass: ${mass.toLocaleString()} kg/day` },
-            { icon: "⚡", label: "Category: Energy Recoverable" },
+            { icon: "⚖️", label: activeMass > 0 ? `Mass: ${activeMass.toLocaleString()} kg/day` : "Awaiting Mass Input" },
+            { icon: "⚡", label: `Category: ${category === "non-energy" ? "Non-Energy Recoverable" : "Energy Recoverable"}` },
             ...(address ? [{ icon: "🏭", label: address.split(",").slice(0, 2).join(",") }] : []),
           ].map(({ icon, label }) => (
             <span key={label} style={{
@@ -557,16 +576,186 @@ function SimulatorInner() {
 
       <div style={{ padding: "32px 5vw 0", display: "flex", flexDirection: "column", gap: 28 }}>
 
+        {/* ══ INPUT BLOCK: ENTER DAILY WASTE VOLUME (KG/DAY) ══ */}
+        <section style={card({
+          border: "1.5px solid #FB923C",
+          background: "linear-gradient(135deg, rgba(251,146,60,0.1) 0%, rgba(255,250,245,0.85) 100%)",
+          boxShadow: "0 8px 32px rgba(120,53,15,0.14), inset 0 0 20px rgba(226,98,58,.08)",
+        })}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
+            <h2 style={{
+              margin: 0,
+              fontSize: "1.1rem",
+              fontWeight: 800,
+              letterSpacing: ".08em",
+              color: "#C2410C",
+              textTransform: "uppercase",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}>
+              ⚖️ Enter Daily Waste Volume (kg/day)
+            </h2>
+            <span style={{ fontSize: ".76rem", color: "#C2410C" }}>
+              Location: PIN {pincode || "110001"} · Pathway Feasibility Modeling
+            </span>
+          </div>
+          <p style={{ margin: "0 0 18px", fontSize: ".85rem", color: C.textBody, letterSpacing: ".02em" }}>
+            Enter how much waste you produce each day, then run the simulation.
+          </p>
+
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "stretch" }}>
+            <div style={{ position: "relative", flex: "1 1 260px" }}>
+              <input
+                type="number"
+                min="1"
+                value={dailyVolumeInput}
+                onChange={(e) => setDailyVolumeInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleRunSimulation()}
+                placeholder="e.g. 10000"
+                aria-label="Daily waste volume in kg per day"
+                style={{
+                  width: "100%",
+                  padding: "14px 80px 14px 20px",
+                  borderRadius: 14,
+                  boxSizing: "border-box",
+                  border: "1.5px solid rgba(251,146,60,0.4)",
+                  background: "rgba(255,250,245,0.85)",
+                  color: "#27120A",
+                  fontFamily: FONT,
+                  fontSize: "1.15rem",
+                  fontWeight: 700,
+                  letterSpacing: ".06em",
+                  outline: "none",
+                  boxShadow: "inset 0 0 12px rgba(120,53,15,0.17)",
+                }}
+              />
+              <span style={{
+                position: "absolute",
+                right: 16,
+                top: "50%",
+                transform: "translateY(-50%)",
+                fontSize: ".82rem",
+                fontWeight: 700,
+                color: "#C2410C",
+                pointerEvents: "none",
+              }}>
+                kg/day
+              </span>
+            </div>
+
+            <button
+              onClick={() => handleRunSimulation()}
+              disabled={loadPhase === 1}
+              style={{
+                flex: "0 0 auto",
+                padding: "14px 32px",
+                borderRadius: 14,
+                background: loadPhase === 1
+                  ? "rgba(226,98,58,0.2)"
+                  : "linear-gradient(90deg, #C2410C 0%, #EA580C 50%, #FB923C 100%)",
+                border: "none",
+                color: loadPhase === 1 ? "#9A3412" : "#070a0f",
+                fontFamily: FONT,
+                fontWeight: 800,
+                fontSize: "1rem",
+                letterSpacing: ".1em",
+                textTransform: "uppercase",
+                cursor: loadPhase === 1 ? "not-allowed" : "pointer",
+                boxShadow: "0 0 24px rgba(251,146,60,0.5)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                transition: "all .2s ease",
+              }}
+            >
+              {loadPhase === 1 ? (
+                <>
+                  <Spinner size={16} color="#FB923C" />
+                  <span>Simulating...</span>
+                </>
+              ) : (
+                <>
+                  <span>⚡ Run Simulation</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Quick preset chips */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+            <span style={{ fontSize: ".72rem", color: "#7A4A38", letterSpacing: ".04em" }}>Quick Presets:</span>
+            {[
+              { label: "1,000 kg/day (Micro-plant)", val: 1000 },
+              { label: "5,000 kg/day (Mid-scale)", val: 5000 },
+              { label: "10,000 kg/day (Cluster standard)", val: 10000 },
+              { label: "25,000 kg/day (Heavy industrial)", val: 25000 },
+            ].map((preset) => (
+              <button
+                key={preset.val}
+                type="button"
+                onClick={() => {
+                  setDailyVolumeInput(String(preset.val));
+                  handleRunSimulation(preset.val);
+                }}
+                style={{
+                  fontSize: ".72rem",
+                  padding: "4px 12px",
+                  borderRadius: 999,
+                  background: "rgba(255,255,255,0.53)",
+                  border: "1px solid rgba(226,98,58,0.25)",
+                  color: "#C2410C",
+                  cursor: "pointer",
+                  transition: "all .15s",
+                }}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
         {/* ── Soft error notice ── */}
-        {simError && loadPhase === 2 && (
-          <div style={{ padding: "10px 18px", borderRadius: 12,
+        {simError && (
+          <div style={{ padding: "12px 18px", borderRadius: 12,
             border: gb("rgba(248,113,113,.35)"), background: "rgba(248,113,113,.07)" }}>
-            <p style={{ margin: 0, color: "#fca5a5", fontSize: ".84rem" }}>ℹ {simError}</p>
+            <p style={{ margin: 0, color: "#b91c1c", fontSize: ".86rem" }}>ℹ {simError}</p>
           </div>
         )}
 
+        {/* ══ INITIAL PLACEHOLDER (Hidden Monte Carlo & 3D visualizers before simulation) ══ */}
+        {!hasSimulated && loadPhase === 0 && (
+          <section style={card({
+            textAlign: "center",
+            padding: "50px 30px",
+            border: "1px dashed rgba(251,146,60,0.35)",
+            background: "rgba(255,255,255,0.49)",
+          })}>
+            <div style={{
+              width: 60,
+              height: 60,
+              borderRadius: "50%",
+              background: "rgba(251,146,60,0.12)",
+              border: "1px solid rgba(251,146,60,0.3)",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "1.8rem",
+              marginBottom: 16,
+            }}>
+              📊
+            </div>
+            <h3 style={{ margin: "0 0 8px", fontSize: "1.2rem", fontWeight: 800, color: "#27120A" }}>
+              Awaiting Feedstock Volume
+            </h3>
+            <p style={{ margin: 0, maxWidth: 540, marginInline: "auto", fontSize: ".88rem", color: "#C2410C", lineHeight: 1.5 }}>
+              Enter your daily waste above and click <strong>&quot;Run Simulation&quot;</strong> to see the best processes.
+            </p>
+          </section>
+        )}
+
         {/* ══ LOADING CARD ══ */}
-        {loadPhase === 1 && activeView === "monte_carlo" && (
+        {loadPhase === 1 && (
           <section style={card()}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 28, padding: "20px 0" }}>
               <div style={{ position: "relative", width: 80, height: 80 }}>
@@ -594,8 +783,8 @@ function SimulatorInner() {
                   letterSpacing: ".08em", color: C.accentSoft }}>
                   {PHASES[phaseIdx]}
                 </p>
-                <p style={{ margin: 0, fontSize: ".8rem", color: "#9a6050", letterSpacing: ".04em" }}>
-                  Feedstock: {mass.toLocaleString()} kg/day · Location: {pincode || "—"}
+                <p style={{ margin: 0, fontSize: ".8rem", color: "#7A4A38", letterSpacing: ".04em" }}>
+                  Feedstock: {activeMass.toLocaleString()} kg/day · Location: {pincode || "—"}
                 </p>
               </div>
 
@@ -607,11 +796,11 @@ function SimulatorInner() {
                 ].map((step, i) => (
                   <div key={step} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     {i < phaseIdx
-                      ? <span style={{ color: "#4ade80", fontSize: ".85rem" }}>✓</span>
+                      ? <span style={{ color: "#15803d", fontSize: ".85rem" }}>✓</span>
                       : i === phaseIdx % 3
                       ? <Spinner size={14} />
                       : <span style={{ width: 14, height: 14 }} />}
-                    <span style={{ fontSize: ".82rem", color: i < phaseIdx ? "#86efac" : "#b07060", letterSpacing: ".03em" }}>
+                    <span style={{ fontSize: ".82rem", color: i < phaseIdx ? "#15803d" : "#8A5A48", letterSpacing: ".03em" }}>
                       {step}
                     </span>
                   </div>
@@ -622,11 +811,12 @@ function SimulatorInner() {
         )}
 
         {/* ══ TABBED MAIN CONTENT: MONTE CARLO vs GEMINI PROCESS SELECTOR ══ */}
-        {activeView === "monte_carlo" ? (
-          <>
-            {/* ══ RESULTS CARD: 7-Pathway Feasibility Ranking ══ */}
-            {loadPhase === 2 && results && (
-          <section style={card()}>
+        {hasSimulated && loadPhase === 2 && (
+          activeView === "monte_carlo" ? (
+            <>
+              {/* ══ RESULTS CARD: 7-Pathway Feasibility Ranking ══ */}
+              {results && (
+                <section style={card()}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between",
               flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
               <div>
@@ -634,11 +824,15 @@ function SimulatorInner() {
                   color: C.accentSoft, textTransform: "uppercase" }}>
                   ✦ 7-Pathway Feasibility Ranking
                 </h2>
-                <p style={{ margin: 0, fontSize: ".76rem", color: "#fdba74" }}>
-                  Click any process row below to view its full 3D interactive subprocess equipment pipeline.
+                <p style={{ margin: 0, fontSize: ".76rem", color: "#C2410C" }}>
+                  Click a process to see how it works step by step.
+                </p>
+                {/* callCompare sends identical capex/opex for every pathway (no verified per-process costs yet). */}
+                <p style={{ margin: "4px 0 0", fontSize: ".72rem", color: "#7A4A38", fontStyle: "italic" }}>
+                  Costs are assumed equal for every process, so the ranking compares energy and product revenue only.
                 </p>
               </div>
-              <span style={{ fontSize: ".78rem", color: "#9a6050", letterSpacing: ".06em" }}>
+              <span style={{ fontSize: ".78rem", color: "#7A4A38", letterSpacing: ".06em" }}>
                 Optimality share · {results.filter(r => r.feasible).length} of 7 feasible
               </span>
             </div>
@@ -654,7 +848,7 @@ function SimulatorInner() {
             }}>
               {["Process", "Optimality Score", "Primary Output", "AI Insight"].map(h => (
                 <span key={h} style={{ fontSize: ".72rem", letterSpacing: ".1em",
-                  textTransform: "uppercase", color: "#9a6050" }}>
+                  textTransform: "uppercase", color: "#7A4A38" }}>
                   {h}
                 </span>
               ))}
@@ -680,7 +874,7 @@ function SimulatorInner() {
                     style={{
                       border: isSelected ? "1.5px solid #FB923C" : "1px solid rgba(226,98,58,.15)",
                       borderRadius: 14,
-                      background: isSelected ? "rgba(251,146,60,0.12)" : "rgba(255,255,255,.01)",
+                      background: isSelected ? "rgba(251,146,60,0.12)" : "rgba(255,255,255,0.47)",
                       boxShadow: isSelected
                         ? "0 0 24px rgba(251,146,60,0.35), inset 0 0 16px rgba(251,146,60,0.08)"
                         : "none",
@@ -707,7 +901,7 @@ function SimulatorInner() {
                               margin: 0,
                               fontWeight: 700,
                               fontSize: ".9rem",
-                              color: isSelected ? "#FB923C" : isTop ? C.accentSoft : "#ffe4d6",
+                              color: isSelected ? "#C2410C" : isTop ? C.accentSoft : "#27120A",
                               letterSpacing: ".04em",
                             }}>
                               {meta.label}
@@ -726,7 +920,7 @@ function SimulatorInner() {
                                 gap: 4,
                                 boxShadow: "0 0 12px rgba(251,146,60,0.6)",
                               }}>
-                                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#070a0f" }} />
+                                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "rgba(255,250,245,0.9)" }} />
                                 SELECTED
                               </span>
                             )}
@@ -745,7 +939,7 @@ function SimulatorInner() {
                               </span>
                             )}
                           </div>
-                          <p style={{ margin: "2px 0 0", fontSize: ".72rem", color: "#9a6050" }}>
+                          <p style={{ margin: "2px 0 0", fontSize: ".72rem", color: "#7A4A38" }}>
                             {row.feasible ? row.status : `rejected — ${row.reasons[0] ?? "infeasible"}`}
                           </p>
                         </div>
@@ -757,8 +951,8 @@ function SimulatorInner() {
                       {/* Col 3: Output Badge */}
                       <span style={{
                         fontSize: ".75rem", padding: "5px 10px", borderRadius: 999,
-                        border: gb(row.feasible ? "rgba(226,98,58,.3)" : "rgba(255,255,255,.1)"),
-                        background: row.feasible ? "rgba(226,98,58,.1)" : "rgba(255,255,255,.03)",
+                        border: gb(row.feasible ? "rgba(226,98,58,.3)" : "rgba(194,65,12,0.2)"),
+                        background: row.feasible ? "rgba(226,98,58,.1)" : "rgba(255,255,255,0.51)",
                         color: row.feasible ? C.accentSoft : "#6b5248",
                         letterSpacing: ".04em", textAlign: "center",
                       }}>
@@ -775,8 +969,8 @@ function SimulatorInner() {
                         style={{
                           padding: "8px 14px", borderRadius: 12, cursor: "pointer",
                           border: gb(active ? C.accent : "rgba(226,98,58,.25)"),
-                          background: active ? "rgba(226,98,58,.15)" : "rgba(255,255,255,.04)",
-                          color: active ? C.accentSoft : "#c09080",
+                          background: active ? "rgba(226,98,58,.15)" : "rgba(255,255,255,0.53)",
+                          color: active ? C.accentSoft : "#8A5A48",
                           fontFamily: FONT, fontSize: ".78rem", fontWeight: 600,
                           letterSpacing: ".06em", display: "flex", alignItems: "center", gap: 6,
                           transition: "all .2s",
@@ -805,12 +999,12 @@ function SimulatorInner() {
                                 ? "rgba(74,222,128,.12)" : "rgba(226,98,58,.1)",
                               border: gb(explainCache[row.pathway].source === "gemini"
                                 ? "rgba(74,222,128,.3)" : "rgba(226,98,58,.2)"),
-                              color: explainCache[row.pathway].source === "gemini" ? "#86efac" : C.accentSoft,
+                              color: explainCache[row.pathway].source === "gemini" ? "#15803d" : C.accentSoft,
                             }}>
                               {explainCache[row.pathway].source === "gemini" ? "✦ Gemini AI" : "📋 Template"}
                             </span>
                             {!explainCache[row.pathway].grounded && (
-                              <span style={{ fontSize: ".72rem", color: "#9a6050" }}>
+                              <span style={{ fontSize: ".72rem", color: "#7A4A38" }}>
                                 (indicative — grounding check not passed)
                               </span>
                             )}
@@ -828,11 +1022,11 @@ function SimulatorInner() {
                             { label: "MC Wins", value: row.win_count != null ? `${row.win_count} / ${Math.round((row.win_count / (row.optimality_share ?? 0.01)) * 1)}` : "—" },
                           ].map(({ label, value }) => (
                             <div key={label} style={{ padding: "6px 14px", borderRadius: 10,
-                              background: "rgba(255,255,255,.04)", border: gb("rgba(226,98,58,.18)") }}>
+                              background: "rgba(255,255,255,0.53)", border: gb("rgba(226,98,58,.18)") }}>
                               <p style={{ margin: "0 0 2px", fontSize: ".67rem", letterSpacing: ".1em",
-                                textTransform: "uppercase", color: "#9a6050" }}>{label}</p>
+                                textTransform: "uppercase", color: "#7A4A38" }}>{label}</p>
                               <p style={{ margin: 0, fontSize: ".88rem", fontWeight: 600,
-                                color: "#ffe4d6" }}>{value}</p>
+                                color: "#27120A" }}>{value}</p>
                             </div>
                           ))}
                         </div>
@@ -851,28 +1045,28 @@ function SimulatorInner() {
         ) : (
           <ProcessSelector
             location={address || (pincode ? `PIN ${pincode}, India` : "Industrial Zone")}
-            weight={mass >= 1000 ? Math.round((mass / 1000) * 10) / 10 : mass || 25}
-            weather={params.get("weather") || "Tropical, 28°C with moderate humidity"}
-            duration={params.get("duration") || "< 24 hours (Continuous)"}
-            onSelectProcess={(proc) => {
-              const matched = ALL_PATHWAYS.find(
-                (p) =>
-                  PATHWAY_META[p]?.label.toLowerCase().includes(proc.toLowerCase()) ||
-                  p.toLowerCase().includes(proc.toLowerCase())
-              );
-              if (matched) {
-                setSelectedPathwayId(matched);
-                setHasUserSelected(true);
-              }
+            // activeMass is kg/day; the recommender expects tonnes/day.
+            weight={activeMass > 0 ? Math.round(activeMass) / 1000 : 25}
+            category={category}
+            pincode={pincode || undefined}
+            lat={latParam}
+            lng={lngParam}
+            weather={params.get("weather") || undefined}
+            duration={params.get("duration") || undefined}
+            selectedProcessId={hasUserSelected ? selectedPathwayId : null}
+            onSelectProcess={(id) => {
+              setSelectedPathwayId(id);
+              setHasUserSelected(true);
             }}
           />
-        )}
+        )
+      )}
 
         {/* ══ STEP 2: INTERACTIVE 3D SUBPROCESS PIPELINE VIEW ══ */}
-        {loadPhase === 2 && (
+        {hasSimulated && loadPhase === 2 && (
           <section style={card({
             border: "1.5px solid #FB923C",
-            boxShadow: "0 10px 40px rgba(40,15,5,.45), inset 0 0 30px rgba(226,98,58,.06), 0 0 36px rgba(251,146,60,0.3)",
+            boxShadow: "0 10px 40px rgba(120,53,15,0.16), inset 0 0 30px rgba(226,98,58,.06), 0 0 36px rgba(251,146,60,0.3)",
             padding: "28px 32px",
           })}>
             {/* 1. Header Bar */}
@@ -894,7 +1088,7 @@ function SimulatorInner() {
                     letterSpacing: ".08em",
                     textTransform: "uppercase",
                     fontWeight: 800,
-                    color: "#FB923C",
+                    color: "#C2410C",
                     display: "flex",
                     alignItems: "center",
                     gap: 8,
@@ -908,7 +1102,7 @@ function SimulatorInner() {
                     borderRadius: 999,
                     background: "rgba(251,146,60,0.18)",
                     border: "1.5px solid #FB923C",
-                    color: "#FB923C",
+                    color: "#C2410C",
                     letterSpacing: ".08em",
                     boxShadow: "0 0 14px rgba(251,146,60,0.35)",
                   }}>
@@ -916,13 +1110,13 @@ function SimulatorInner() {
                   </span>
                 </div>
                 <p style={{ margin: "6px 0 0", fontSize: ".82rem", color: C.textBody, letterSpacing: ".02em" }}>
-                  Sequential thermochemical & biochemical unit operations. Click any 3D equipment stage to inspect real-time operating conditions.
+                  Each step of the process. Click a stage to see its operating conditions.
                 </p>
               </div>
 
               {/* Pathway quick switcher tags */}
               <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                <span style={{ fontSize: ".72rem", color: "#9a6050", letterSpacing: ".05em" }}>Switch:</span>
+                <span style={{ fontSize: ".72rem", color: "#7A4A38", letterSpacing: ".05em" }}>Switch:</span>
                 {ALL_PATHWAYS.map(p => {
                   const isCur = p === selectedPathwayId;
                   const meta = PATHWAY_META[p];
@@ -938,8 +1132,8 @@ function SimulatorInner() {
                         padding: "4px 10px",
                         borderRadius: 999,
                         border: isCur ? "1.5px solid #FB923C" : "1px solid rgba(226,98,58,.2)",
-                        background: isCur ? "rgba(251,146,60,0.22)" : "rgba(255,255,255,.02)",
-                        color: isCur ? "#FB923C" : "#b07060",
+                        background: isCur ? "rgba(251,146,60,0.22)" : "rgba(255,255,255,0.49)",
+                        color: isCur ? "#C2410C" : "#8A5A48",
                         cursor: "pointer",
                         fontWeight: isCur ? 700 : 500,
                         transition: "all .15s",
@@ -960,7 +1154,7 @@ function SimulatorInner() {
               overflowX: "auto",
               padding: "10px 4px 20px",
               scrollbarWidth: "thin",
-              scrollbarColor: "#FB923C #0c111d",
+              scrollbarColor: "#FB923C #F5E6DA",
             }}>
               {currentStages.map((stage, stageIdx) => {
                 const isInspected = inspectedStage?.id === stage.id;
@@ -1012,11 +1206,11 @@ function SimulatorInner() {
                       <div
                         onClick={() => setInspectedStage(stage)}
                         style={{
-                          background: isInspected ? "rgba(251,146,60,0.14)" : "rgba(15,23,42,0.7)",
+                          background: isInspected ? "rgba(251,146,60,0.14)" : "rgba(255,250,245,0.8)",
                           border: isInspected ? "2px solid #FB923C" : "1px solid rgba(251,146,60,0.25)",
                           boxShadow: isInspected
                             ? "0 0 30px rgba(251,146,60,0.45), inset 0 0 20px rgba(251,146,60,0.12)"
-                            : "0 8px 30px rgba(0,0,0,0.5), inset 0 0 20px rgba(251,146,60,0.02)",
+                            : "0 8px 30px rgba(120,53,15,0.17), inset 0 0 20px rgba(251,146,60,0.02)",
                           borderRadius: 18,
                           padding: "16px",
                           cursor: "pointer",
@@ -1038,7 +1232,7 @@ function SimulatorInner() {
                             />
                           ) : (
                             <div style={{ height: 180, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              <Spinner size={24} color="#FB923C" />
+                              <Spinner size={24} color="#C2410C" />
                             </div>
                           )}
                           <div style={{
@@ -1047,10 +1241,10 @@ function SimulatorInner() {
                             right: 8,
                             padding: "3px 8px",
                             borderRadius: 999,
-                            background: "rgba(7,10,15,0.75)",
+                            background: "rgba(255,250,245,0.81)",
                             border: "1px solid rgba(251,146,60,0.3)",
                             fontSize: ".65rem",
-                            color: "#fdba74",
+                            color: "#C2410C",
                             letterSpacing: ".06em",
                             fontWeight: 600,
                           }}>
@@ -1064,7 +1258,7 @@ function SimulatorInner() {
                             margin: 0,
                             fontWeight: 700,
                             fontSize: ".9rem",
-                            color: isInspected ? "#FB923C" : "#ffe4d6",
+                            color: isInspected ? "#C2410C" : "#27120A",
                             letterSpacing: ".02em",
                             lineHeight: 1.35,
                           }}>
@@ -1072,7 +1266,7 @@ function SimulatorInner() {
                           </p>
                           <span style={{
                             fontSize: ".68rem",
-                            color: "#9a6050",
+                            color: "#7A4A38",
                             letterSpacing: ".04em",
                             textTransform: "uppercase",
                             marginTop: 2,
@@ -1090,7 +1284,7 @@ function SimulatorInner() {
                             borderRadius: 6,
                             background: "rgba(251,146,60,0.1)",
                             border: "1px solid rgba(251,146,60,0.25)",
-                            color: "#fdba74",
+                            color: "#C2410C",
                           }}>
                             🌡️ {stage.operatingConditions?.temperature ?? "Ambient"}
                           </span>
@@ -1100,7 +1294,7 @@ function SimulatorInner() {
                             borderRadius: 6,
                             background: "rgba(56,189,248,0.1)",
                             border: "1px solid rgba(56,189,248,0.25)",
-                            color: "#7dd3fc",
+                            color: "#0369a1",
                           }}>
                             ⏱️ {stage.operatingConditions?.residenceTime ?? "Continuous"}
                           </span>
@@ -1110,11 +1304,11 @@ function SimulatorInner() {
                         <div style={{
                           padding: "6px 10px",
                           borderRadius: 8,
-                          background: isInspected ? "rgba(251,146,60,0.2)" : "rgba(255,255,255,0.03)",
+                          background: isInspected ? "rgba(251,146,60,0.2)" : "rgba(255,255,255,0.51)",
                           textAlign: "center",
                           fontSize: ".72rem",
                           fontWeight: 600,
-                          color: isInspected ? "#FB923C" : "#b07060",
+                          color: isInspected ? "#C2410C" : "#8A5A48",
                           letterSpacing: ".04em",
                         }}>
                           {isInspected ? "✦ Currently Inspecting" : "Inspect Conditions 🔍"}
@@ -1142,7 +1336,7 @@ function SimulatorInner() {
                           alignItems: "center",
                           justifyContent: "center",
                           boxShadow: "0 0 16px rgba(251,146,60,0.5)",
-                          color: "#FB923C",
+                          color: "#C2410C",
                           fontSize: "1.2rem",
                           fontWeight: "bold",
                         }}>
@@ -1150,7 +1344,7 @@ function SimulatorInner() {
                         </div>
                         <span style={{
                           fontSize: ".65rem",
-                          color: "#FB923C",
+                          color: "#C2410C",
                           letterSpacing: ".08em",
                           textTransform: "uppercase",
                           marginTop: 6,
@@ -1183,7 +1377,7 @@ function SimulatorInner() {
                             alignItems: "center",
                             justifyContent: "center",
                             boxShadow: "0 0 24px rgba(251,146,60,0.85), inset 0 0 10px rgba(251,146,60,0.4)",
-                            color: "#fff",
+                            color: "#27120A",
                             fontSize: "1.35rem",
                             fontWeight: "bold",
                           }}>
@@ -1191,7 +1385,7 @@ function SimulatorInner() {
                           </div>
                           <span style={{
                             fontSize: ".66rem",
-                            color: "#FB923C",
+                            color: "#C2410C",
                             letterSpacing: ".08em",
                             textTransform: "uppercase",
                             marginTop: 6,
@@ -1210,7 +1404,7 @@ function SimulatorInner() {
                           marginTop: 62,
                         }}>
                           <div style={{
-                            background: "linear-gradient(145deg, rgba(251,146,60,0.18) 0%, rgba(15,23,42,0.92) 100%)",
+                            background: "linear-gradient(145deg, rgba(251,146,60,0.18) 0%, rgba(255,250,245,0.87) 100%)",
                             border: "2px solid #FB923C",
                             boxShadow: "0 0 35px rgba(251,146,60,0.4), inset 0 0 25px rgba(251,146,60,0.12)",
                             borderRadius: 18,
@@ -1251,7 +1445,7 @@ function SimulatorInner() {
                                 margin: 0,
                                 fontSize: "1rem",
                                 fontWeight: 800,
-                                color: "#FFE4D6",
+                                color: "#27120A",
                                 letterSpacing: ".02em",
                                 lineHeight: 1.35,
                               }}>
@@ -1259,41 +1453,54 @@ function SimulatorInner() {
                               </h4>
                             </div>
 
-                            {/* Yield quantity badge scaled from user mass */}
+                            {/* Daily yield from the physics model */}
                             <div style={{
                               padding: "10px 14px",
                               borderRadius: 12,
-                              background: "rgba(7,10,15,0.75)",
+                              background: "rgba(255,250,245,0.81)",
                               border: "1px solid rgba(251,146,60,0.3)",
                               display: "flex",
                               flexDirection: "column",
                               gap: 3,
                             }}>
-                              <span style={{ fontSize: ".68rem", color: "#9a6050", textTransform: "uppercase", letterSpacing: ".06em" }}>
-                                Scaled Daily Yield
+                              <span style={{ fontSize: ".68rem", color: "#7A4A38", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                                Model estimate · Daily yield
                               </span>
-                              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                                <span style={{ fontSize: "1.25rem", fontWeight: 800, color: "#FB923C" }}>
-                                  {yieldInfo.qty}
+                              {modelYield.kind === "estimate" ? (
+                                <>
+                                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                                    <span style={{ fontSize: "1.25rem", fontWeight: 800, color: "#C2410C" }}>
+                                      {Math.round(modelYield.energyKwhD).toLocaleString()}
+                                    </span>
+                                    <span style={{ fontSize: ".78rem", color: "#C2410C", fontWeight: 600 }}>
+                                      kWh/day net energy
+                                    </span>
+                                  </div>
+                                  {modelYield.energyKwhD < 0 && (
+                                    <span style={{ fontSize: ".72rem", color: "#9A3412" }}>
+                                      Uses more energy than it produces
+                                    </span>
+                                  )}
+                                  {modelYield.products.length > 0 && (
+                                    <span style={{ fontSize: ".78rem", color: "#431E12", fontWeight: 600 }}>
+                                      {modelYield.products.join(" · ")}
+                                    </span>
+                                  )}
+                                  <span style={{ fontSize: ".7rem", color: "#15803d" }}>
+                                    Physics model, from {activeMass.toLocaleString()} kg/day input
+                                  </span>
+                                </>
+                              ) : (
+                                <span style={{ fontSize: ".88rem", fontWeight: 700, color: "#7A4A38" }}>
+                                  {modelYield.message}
                                 </span>
-                                <span style={{ fontSize: ".78rem", color: "#fdba74", fontWeight: 600 }}>
-                                  {yieldInfo.unit}
-                                </span>
-                              </div>
-                              <span style={{ fontSize: ".7rem", color: "#86efac" }}>
-                                Direct recovery from {mass.toLocaleString()} kg/day input
-                              </span>
+                              )}
                             </div>
 
-                            {/* Action Button: SELL PRODUCED ENERGY → */}
+                            {/* Action Button: Finalize Process & Go to Marketplace */}
                             <button
-                              onClick={() => {
-                                router.push(
-                                  '/market/energy?pincode=' + encodeURIComponent(pincode || "110001") +
-                                  '&output=' + encodeURIComponent(primaryOutput) +
-                                  '&mass=' + (mass || 10000)
-                                );
-                              }}
+                              id="finalize-process-stream-btn"
+                              onClick={handleFinalizeProcess}
                               style={{
                                 padding: "14px 18px",
                                 borderRadius: 12,
@@ -1313,7 +1520,7 @@ function SimulatorInner() {
                                 transition: "all 0.2s ease",
                               }}
                             >
-                              <span>SELL PRODUCED ENERGY</span>
+                              <span>Finalize this process</span>
                               <span style={{ fontSize: "1.1rem" }}>→</span>
                             </button>
                           </div>
@@ -1327,6 +1534,59 @@ function SimulatorInner() {
           </section>
         )}
 
+        {/* ══ STEP 2.5: FINALIZATION & ROUTING TO MARKETPLACE DOCK ══ */}
+        {hasSimulated && loadPhase === 2 && (
+          <section style={card({
+            border: "2px solid #FB923C",
+            background: "linear-gradient(135deg, rgba(251,146,60,0.18) 0%, rgba(255,250,245,0.88) 100%)",
+            boxShadow: "0 0 40px rgba(251,146,60,0.4), inset 0 0 25px rgba(251,146,60,0.1)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 18,
+            padding: "26px 32px",
+          })}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: "1.4rem" }}>🎯</span>
+                <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800, color: "#27120A", letterSpacing: ".06em", textTransform: "uppercase" }}>
+                  Selected Process: {selectedPathwayName}
+                </h3>
+              </div>
+              <p style={{ margin: "6px 0 0", fontSize: ".88rem", color: "#C2410C" }}>
+                Next: find buyers and get your carbon audit report.
+              </p>
+            </div>
+
+            <button
+              id="finalize-process-bottom-btn"
+              onClick={handleFinalizeProcess}
+              style={{
+                padding: "16px 38px",
+                borderRadius: 999,
+                background: "linear-gradient(90deg, #C2410C 0%, #EA580C 50%, #FB923C 100%)",
+                border: "none",
+                color: "#070a0f",
+                fontFamily: FONT,
+                fontWeight: 800,
+                fontSize: "1.05rem",
+                letterSpacing: ".12em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+                boxShadow: "0 0 30px rgba(251,146,60,0.7)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 12,
+                transition: "all .2s ease",
+              }}
+            >
+              <span>Finalize this process</span>
+              <span style={{ fontSize: "1.25rem" }}>→</span>
+            </button>
+          </section>
+        )}
+
         {/* ══ STEP 3: STAGE INSPECTOR DRAWER / MODAL ══ */}
         {inspectedStage && (
           <div
@@ -1334,7 +1594,7 @@ function SimulatorInner() {
             style={{
               position: "fixed",
               inset: 0,
-              background: "rgba(4,7,14,0.85)",
+              background: "rgba(255,250,245,0.85)",
               backdropFilter: "blur(12px)",
               WebkitBackdropFilter: "blur(12px)",
               zIndex: 999,
@@ -1347,10 +1607,10 @@ function SimulatorInner() {
             <div
               onClick={(e) => e.stopPropagation()}
               style={{
-                background: "#0c111d",
+                background: "rgba(255,250,245,0.9)",
                 border: "2px solid #FB923C",
                 borderRadius: 24,
-                boxShadow: "0 0 60px rgba(251,146,60,0.4), 0 25px 70px rgba(0,0,0,0.9)",
+                boxShadow: "0 0 60px rgba(251,146,60,0.4), 0 25px 70px rgba(120,53,15,0.18)",
                 maxWidth: 760,
                 width: "100%",
                 maxHeight: "90vh",
@@ -1360,7 +1620,7 @@ function SimulatorInner() {
                 flexDirection: "column",
                 gap: 22,
                 fontFamily: FONT,
-                color: "#ffe4d6",
+                color: "#27120A",
               }}
             >
               {/* Header */}
@@ -1384,7 +1644,7 @@ function SimulatorInner() {
                       borderRadius: 999,
                       background: "rgba(251,146,60,0.15)",
                       border: "1px solid rgba(251,146,60,0.35)",
-                      color: "#fdba74",
+                      color: "#C2410C",
                       letterSpacing: ".06em",
                       textTransform: "uppercase",
                     }}>
@@ -1395,7 +1655,7 @@ function SimulatorInner() {
                     margin: 0,
                     fontSize: "1.35rem",
                     fontWeight: 800,
-                    color: "#ffe4d6",
+                    color: "#27120A",
                     letterSpacing: ".03em",
                   }}>
                     {inspectedStage.name}
@@ -1408,9 +1668,9 @@ function SimulatorInner() {
                     width: 36,
                     height: 36,
                     borderRadius: "50%",
-                    background: "rgba(255,255,255,0.06)",
+                    background: "rgba(255,255,255,0.57)",
                     border: "1px solid rgba(251,146,60,0.3)",
-                    color: "#fdba74",
+                    color: "#C2410C",
                     fontSize: "1.1rem",
                     cursor: "pointer",
                     display: "flex",
@@ -1429,7 +1689,7 @@ function SimulatorInner() {
                 borderRadius: 16,
                 overflow: "hidden",
                 border: "1px solid rgba(251,146,60,0.3)",
-                background: "radial-gradient(ellipse at 50% 60%, rgba(251,146,60,0.12) 0%, #070a0f 80%)",
+                background: "radial-gradient(ellipse at 50% 60%, rgba(251,146,60,0.12) 0%, rgba(255,250,245,0.9) 80%)",
               }}>
                 {mounted && (
                   <StageCanvas3D
@@ -1449,7 +1709,7 @@ function SimulatorInner() {
                   fontSize: ".8rem",
                   letterSpacing: ".1em",
                   textTransform: "uppercase",
-                  color: "#FB923C",
+                  color: "#C2410C",
                 }}>
                   ⚙️ Real-Time Operating Conditions
                 </h4>
@@ -1464,10 +1724,10 @@ function SimulatorInner() {
                     background: "rgba(249,115,22,0.1)",
                     border: "1px solid rgba(249,115,22,0.3)",
                   }}>
-                    <span style={{ fontSize: ".68rem", color: "#fdba74", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                    <span style={{ fontSize: ".68rem", color: "#C2410C", textTransform: "uppercase", letterSpacing: ".06em" }}>
                       🌡️ Temperature
                     </span>
-                    <p style={{ margin: "4px 0 0", fontSize: "1.05rem", fontWeight: 800, color: "#fff" }}>
+                    <p style={{ margin: "4px 0 0", fontSize: "1.05rem", fontWeight: 800, color: "#27120A" }}>
                       {inspectedStage.operatingConditions?.temperature ?? "Ambient (~25°C)"}
                     </p>
                   </div>
@@ -1478,10 +1738,10 @@ function SimulatorInner() {
                     background: "rgba(14,165,233,0.1)",
                     border: "1px solid rgba(14,165,233,0.3)",
                   }}>
-                    <span style={{ fontSize: ".68rem", color: "#7dd3fc", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                    <span style={{ fontSize: ".68rem", color: "#0369a1", textTransform: "uppercase", letterSpacing: ".06em" }}>
                       📊 Operating Pressure
                     </span>
-                    <p style={{ margin: "4px 0 0", fontSize: "1.05rem", fontWeight: 800, color: "#fff" }}>
+                    <p style={{ margin: "4px 0 0", fontSize: "1.05rem", fontWeight: 800, color: "#27120A" }}>
                       {inspectedStage.operatingConditions?.pressure ?? "1.0 bar (atm)"}
                     </p>
                   </div>
@@ -1492,10 +1752,10 @@ function SimulatorInner() {
                     background: "rgba(168,85,247,0.1)",
                     border: "1px solid rgba(168,85,247,0.3)",
                   }}>
-                    <span style={{ fontSize: ".68rem", color: "#d8b4fe", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                    <span style={{ fontSize: ".68rem", color: "#7e22ce", textTransform: "uppercase", letterSpacing: ".06em" }}>
                       ⏱️ Residence Time
                     </span>
-                    <p style={{ margin: "4px 0 0", fontSize: "1.05rem", fontWeight: 800, color: "#fff" }}>
+                    <p style={{ margin: "4px 0 0", fontSize: "1.05rem", fontWeight: 800, color: "#27120A" }}>
                       {inspectedStage.operatingConditions?.residenceTime ?? "Continuous"}
                     </p>
                   </div>
@@ -1506,10 +1766,10 @@ function SimulatorInner() {
                     background: "rgba(34,197,94,0.1)",
                     border: "1px solid rgba(34,197,94,0.3)",
                   }}>
-                    <span style={{ fontSize: ".68rem", color: "#86efac", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                    <span style={{ fontSize: ".68rem", color: "#15803d", textTransform: "uppercase", letterSpacing: ".06em" }}>
                       📈 Conversion Yield
                     </span>
-                    <p style={{ margin: "4px 0 0", fontSize: "1.05rem", fontWeight: 800, color: "#fff" }}>
+                    <p style={{ margin: "4px 0 0", fontSize: "1.05rem", fontWeight: 800, color: "#27120A" }}>
                       {inspectedStage.operatingConditions?.conversionYield ?? "95% throughput"}
                     </p>
                   </div>
@@ -1521,7 +1781,7 @@ function SimulatorInner() {
                 <p style={{ margin: "0 0 8px", fontSize: ".88rem", lineHeight: 1.6, color: C.textBody }}>
                   {inspectedStage.description}
                 </p>
-                <p style={{ margin: 0, fontSize: ".8rem", color: "#fdba74", fontStyle: "italic" }}>
+                <p style={{ margin: 0, fontSize: ".8rem", color: "#C2410C", fontStyle: "italic" }}>
                   Role: {inspectedStage.role}
                 </p>
               </div>
@@ -1533,16 +1793,16 @@ function SimulatorInner() {
                 gap: 16,
                 padding: "14px 16px",
                 borderRadius: 14,
-                background: "rgba(255,255,255,0.03)",
+                background: "rgba(255,255,255,0.51)",
                 border: "1px solid rgba(251,146,60,0.2)",
               }}>
                 <div>
-                  <span style={{ fontSize: ".72rem", color: "#86efac", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>
+                  <span style={{ fontSize: ".72rem", color: "#15803d", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>
                     Subprocess Ingestion Materials:
                   </span>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
                     {(inspectedStage.subprocessInputs ?? inspectedStage.inputs).map((inp) => (
-                      <span key={inp} style={{ fontSize: ".8rem", color: "#ffe4d6" }}>
+                      <span key={inp} style={{ fontSize: ".8rem", color: "#27120A" }}>
                         • {inp}
                       </span>
                     ))}
@@ -1550,12 +1810,12 @@ function SimulatorInner() {
                 </div>
 
                 <div>
-                  <span style={{ fontSize: ".72rem", color: "#38bdf8", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>
+                  <span style={{ fontSize: ".72rem", color: "#0369a1", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>
                     Stage Stream Outputs:
                   </span>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
                     {inspectedStage.outputs.map((out) => (
-                      <span key={out} style={{ fontSize: ".8rem", color: "#ffe4d6" }}>
+                      <span key={out} style={{ fontSize: ".8rem", color: "#27120A" }}>
                         ➔ {out}
                       </span>
                     ))}
@@ -1566,7 +1826,7 @@ function SimulatorInner() {
               {/* Equipment Highlights */}
               {inspectedStage.equipmentHighlights?.length > 0 && (
                 <div>
-                  <span style={{ fontSize: ".72rem", color: "#facc15", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>
+                  <span style={{ fontSize: ".72rem", color: "#a16207", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>
                     Industrial Specifications:
                   </span>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
@@ -1579,7 +1839,7 @@ function SimulatorInner() {
                           borderRadius: 8,
                           background: "rgba(250,204,21,0.08)",
                           border: "1px solid rgba(250,204,21,0.25)",
-                          color: "#fef08a",
+                          color: "#a16207",
                         }}
                       >
                         ✓ {eq}
@@ -1606,9 +1866,9 @@ function SimulatorInner() {
                     style={{
                       padding: "8px 16px",
                       borderRadius: 10,
-                      background: currentStageIndex > 0 ? "rgba(251,146,60,0.15)" : "rgba(255,255,255,0.03)",
+                      background: currentStageIndex > 0 ? "rgba(251,146,60,0.15)" : "rgba(255,255,255,0.51)",
                       border: "1px solid rgba(251,146,60,0.3)",
-                      color: currentStageIndex > 0 ? "#FB923C" : "#64748b",
+                      color: currentStageIndex > 0 ? "#C2410C" : "#7A4A38",
                       cursor: currentStageIndex > 0 ? "pointer" : "not-allowed",
                       fontFamily: FONT,
                       fontSize: ".8rem",
@@ -1623,9 +1883,9 @@ function SimulatorInner() {
                     style={{
                       padding: "8px 16px",
                       borderRadius: 10,
-                      background: currentStageIndex < currentStages.length - 1 ? "rgba(251,146,60,0.15)" : "rgba(255,255,255,0.03)",
+                      background: currentStageIndex < currentStages.length - 1 ? "rgba(251,146,60,0.15)" : "rgba(255,255,255,0.51)",
                       border: "1px solid rgba(251,146,60,0.3)",
-                      color: currentStageIndex < currentStages.length - 1 ? "#FB923C" : "#64748b",
+                      color: currentStageIndex < currentStages.length - 1 ? "#C2410C" : "#7A4A38",
                       cursor: currentStageIndex < currentStages.length - 1 ? "pointer" : "not-allowed",
                       fontFamily: FONT,
                       fontSize: ".8rem",
@@ -1661,7 +1921,7 @@ function SimulatorInner() {
         {/* ── Hard error (no results at all) ── */}
         {simError && loadPhase !== 2 && (
           <section style={card()}>
-            <p style={{ margin: 0, color: "#f87171", fontSize: ".9rem" }}>⚠ {simError}</p>
+            <p style={{ margin: 0, color: "#b91c1c", fontSize: ".9rem" }}>⚠ {simError}</p>
             <Link href="/explore/industry" style={{
               display: "inline-block", marginTop: 14, color: C.accentSoft,
               textDecoration: "none", fontSize: ".88rem",
@@ -1672,7 +1932,6 @@ function SimulatorInner() {
         )}
 
       </div>
-      <FloatingChatbot simulationContext={{ pincode, address, mass_kg_per_day: mass, selected_pathway: selectedPathwayId, results, simulation_status: loadPhase === 1 ? "running" : loadPhase === 2 ? "complete" : "idle", error: simError }} />
     </main>
   );
 }
@@ -1681,9 +1940,9 @@ function SimulatorInner() {
 export default function SimulatorPage() {
   return (
     <Suspense fallback={
-      <main style={{ minHeight: "100vh", background: "#070a0f", display: "flex",
+      <main style={{ minHeight: "100vh", background: "rgba(255,250,245,0.9)", display: "flex",
         alignItems: "center", justifyContent: "center", fontFamily: '"Rubik",sans-serif' }}>
-        <span style={{ color: "#F0A080", fontSize: "1rem", letterSpacing: ".1em" }}>
+        <span style={{ color: "#9A3412", fontSize: "1rem", letterSpacing: ".1em" }}>
           Loading simulator…
         </span>
       </main>

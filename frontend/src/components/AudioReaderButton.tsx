@@ -15,7 +15,7 @@ function cleanTextForSpeech(raw: string): string {
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')  // extract link labels
     .replace(/\s+/g, ' ')                     // collapse whitespace
     .trim()
-    .slice(0, 2000);                          // safe limit for Sarvam TTS
+    .slice(0, 2000);                          // matches backend TTS_TOTAL_MAX_CHARS; backend splits into 500-char Sarvam calls
 }
 
 export default function AudioReaderButton({
@@ -85,8 +85,8 @@ export default function AudioReaderButton({
         padding: '5px 10px',
         borderRadius: 8,
         background: playing ? 'rgba(34,197,94,0.25)' : 'rgba(74,222,128,0.15)',
-        border: `1px solid ${playing ? '#86efac' : 'rgba(74,222,128,0.3)'}`,
-        color: playing ? '#86efac' : '#dcfce7',
+        border: `1px solid ${playing ? '#16a34a' : 'rgba(22,163,74,0.4)'}`,
+        color: playing ? '#15803d' : '#166534',
         fontSize: '0.78rem',
         fontWeight: 600,
         cursor: loading ? 'not-allowed' : 'pointer',
@@ -101,7 +101,7 @@ export default function AudioReaderButton({
       ) : (
         <span>🔊 Read</span>
       )}
-      {error && <span style={{ color: '#f87171', marginLeft: 4 }}>({error})</span>}
+      {error && <span style={{ color: '#b91c1c', marginLeft: 4 }}>({error})</span>}
     </button>
   );
 }

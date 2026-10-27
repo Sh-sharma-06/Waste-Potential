@@ -178,3 +178,98 @@ def test_validation_error_returns_422(client):
         # Missing weight and duration_pref
         resp = client.post(URL_RECOMMEND, json={"location": "Pune"})
     assert resp.status_code == 422
+
+
+def _mock_recommend(client, model_text, body, **patches):
+    mock_genai_response = MagicMock()
+    mock_genai_response.text = model_text
+    with patch("app.routers.simulator.KEY_RECOMMEND", "test-rec-key"), \
+         patch("app.routers.simulator.KEY_EXPLAIN", "test-exp-key"), \
+         patch("app.routers.simulator.genai.Client") as mock_client_cls:
+        mock_client = mock_client_cls.return_value
+        mock_client.models.generate_content.return_value = mock_genai_response
+        resp = client.post(URL_RECOMMEND, json=body)
+        sent = mock_client.models.generate_content.call_args
+    return resp, sent
+
+
+@pytest.mark.parametrize("model_says", [
+    "htc", "HTC", "Hydrothermal Carbonisation (HTC)", "Hydrothermal Carbonization",
+])
+def test_recommend_normalises_htc_variants(client, model_says):
+    resp, _ = _mock_recommend(
+        client, json.dumps({"suggested_process": model_says}),
+        {"location": "Pune", "weight": 5.0, "weather": "Humid"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["process_id"] == "htc"
+    assert resp.json()["suggested_process"] == "Hydrothermal Carbonisation (HTC)"
+
+
+def test_recommend_rejects_process_outside_pathway_list(client):
+    resp, _ = _mock_recommend(
+        client, json.dumps({"suggested_process": "Pelletization"}),
+        {"location": "Pune", "weight": 5.0, "weather": "Humid"},
+    )
+    assert resp.status_code == 502
+
+
+def test_recommend_sends_real_inputs_and_live_weather(client):
+    from app.services.geocode_client import GeocodeResult
+    from app.services.weather_client import WeatherReading
+
+    with patch("app.routers.simulator.geocode_pincode",
+               return_value=GeocodeResult(lat=18.52, lng=73.85, display_name="Pune", cached=False)) as geo, \
+         patch("app.routers.simulator.get_current_weather",
+               return_value=WeatherReading(latitude=18.52, longitude=73.85,
+                                           ambient_temp_c=31.4, relative_humidity=0.62)):
+        resp, sent = _mock_recommend(
+            client, json.dumps({"suggested_process": "composting"}),
+            {"location": "Pune", "weight": 0.5, "category": "energy",
+             "pincode": "411001", "duration_pref": "Weeks (2–8 weeks)"},
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["weather_used"].startswith("31.4°C, 62% relative humidity")
+    geo.assert_called_once_with(pincode="411001", country="India")
+    prompt = sent.kwargs["contents"]
+    assert "energy-recoverable stream" in prompt
+    assert "0.5 tonnes per day" in prompt
+    assert "31.4°C" in prompt
+    assert "Weeks (2–8 weeks)" in prompt
+    system = sent.kwargs["config"].system_instruction
+    assert "Pelletization" not in system and "torrefaction" in system
+
+
+def test_recommend_defaults_to_no_duration_preference(client):
+    resp, sent = _mock_recommend(
+        client, json.dumps({"suggested_process": "pyrolysis"}),
+        {"location": "Pune", "weight": 5.0, "weather": "Humid"},
+    )
+    assert resp.status_code == 200
+    assert "Preferred processing duration: No preference" in sent.kwargs["contents"]
+
+
+def test_recommend_falls_back_to_backup_key_when_out_of_credit(client):
+    """A 402 on the recommend key moves on to the next configured key."""
+    ok = MagicMock()
+    ok.text = json.dumps({"suggested_process": "composting"})
+
+    def make_client(api_key):
+        c = MagicMock()
+        if api_key == "dead-key":
+            c.models.generate_content.side_effect = RuntimeError("402 RESOURCE_EXHAUSTED prepayment credits are depleted")
+        else:
+            c.models.generate_content.return_value = ok
+        return c
+
+    with patch("app.routers.simulator.KEY_RECOMMEND", "dead-key"), \
+         patch("app.routers.simulator.KEY_EXPLAIN", "test-exp-key"), \
+         patch.dict("os.environ", {"GEMINI_API_KEY_EXPLAIN": "backup-key"}), \
+         patch("app.routers.simulator.genai.Client", side_effect=make_client) as mock_cls:
+        resp = client.post(URL_RECOMMEND, json={"location": "Pune", "weight": 5.0, "weather": "Humid"})
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["process_id"] == "composting"
+    keys_tried = [c.kwargs["api_key"] for c in mock_cls.call_args_list]
+    assert keys_tried == ["dead-key", "backup-key"]  # skipped the dead key's other models

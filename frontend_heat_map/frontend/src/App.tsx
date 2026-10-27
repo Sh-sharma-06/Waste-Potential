@@ -246,10 +246,6 @@ export const App: React.FC = () => {
     handleSelectRegion('state:maharashtra');
   };
 
-  const statesList = filtersData?.states || [];
-  const districtsList = selectedState && filtersData?.districts_by_state
-    ? filtersData.districts_by_state[selectedState] || []
-    : [];
   const plasticYears = filtersData?.plastic_waste_years || ['2018-19', '2019-20', '2020-21', '2021-22', '2022-23'];
 
   return (
@@ -291,18 +287,11 @@ export const App: React.FC = () => {
             onModeChange={setMode}
             view={view}
             onViewChange={setView}
-            selectedState={selectedState}
-            onStateChange={setSelectedState}
-            selectedDistrict={selectedDistrict}
-            onDistrictChange={setSelectedDistrict}
-            statesList={statesList}
-            districtsList={districtsList}
             metricType={metricType}
             onMetricTypeChange={setMetricType}
             plasticYear={plasticYear}
             onPlasticYearChange={setPlasticYear}
             plasticYears={plasticYears}
-            onResetFilters={handleResetFilters}
           />
         </div>
 

@@ -359,3 +359,24 @@ def test_build_template_infeasible_names_reasons():
     text = build_template("pyrolysis", facts)
     assert "Too wet for pyrolysis" in text
     assert "not validated" in text
+
+
+def test_explain_falls_back_to_next_model():
+    """If the configured model fails (quota/overload), the next model answers instead of the template."""
+    from app.config import gemini_models
+    from app.pathways.explain_router import _call_gemini
+
+    calls = []
+
+    def generate(model, contents, config):
+        calls.append(model)
+        if len(calls) == 1:
+            raise RuntimeError("429 RESOURCE_EXHAUSTED")
+        return _gemini_mock("Fallback model answer.")
+
+    with patch("app.pathways.explain_router.genai.Client") as mock_cls:
+        mock_cls.return_value.models.generate_content.side_effect = generate
+        text = _call_gemini("fake-key", {"pathway": "pyrolysis"})
+
+    assert text == "Fallback model answer."
+    assert calls == gemini_models()[:2]

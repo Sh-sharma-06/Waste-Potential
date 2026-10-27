@@ -213,3 +213,31 @@ def test_optimality_note_present_on_all_merged_results():
     for r in merged:
         assert r.optimality_note is not None
         assert expected_fragment in r.optimality_note
+
+
+# ---------------------------------------------------------------------------
+# Screening-based MC: product revenue (not just electricity) decides the winner
+# ---------------------------------------------------------------------------
+
+def _screened(pathway: str, revenue: float, cost: float, e_net: float) -> PathwayResult:
+    return PathwayResult(pathway=pathway, feasible=True, status="feasible",
+                         revenue_inr_y=revenue, cost_inr_y=cost, e_net_kwh_d=e_net)
+
+
+def test_product_revenue_without_electricity_can_win():
+    """Composting sells compost, not power; with screening results it must still be able to win."""
+    req = _request(net_kwh_per_tonne={})  # no electricity override for either pathway
+    screening = {
+        AD: _screened(AD, revenue=1_000_000, cost=900_000, e_net=500),     # net +0.1 M
+        COMP: _screened(COMP, revenue=3_000_000, cost=1_000_000, e_net=-30),  # net +2.0 M, no electricity
+    }
+    results = {r.pathway: r for r in run_mc_compare(req, feasible_pathways={AD, COMP}, screening_results=screening)}
+    assert results[COMP].optimality_share > 0.9
+    assert results[COMP].annual_net_value_mc.mean == pytest.approx(2_000_000, rel=0.1)
+    assert results[AD].e_net_kwh_d_mc.mean == pytest.approx(500, rel=0.1)
+
+
+def test_without_screening_results_behaviour_is_unchanged():
+    req = _request()
+    assert [r.optimality_share for r in run_mc_compare(req)] == \
+           [r.optimality_share for r in run_mc_compare(req, screening_results=None)]

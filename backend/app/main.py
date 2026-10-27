@@ -1,4 +1,3 @@
-
 """Waste-Potential FastAPI application."""
 
 from __future__ import annotations
@@ -16,6 +15,7 @@ from app.decision.router import router as decision_router
 from app.errors import register_error_handlers
 from app.ml.router import router as ml_router
 from app.ml.vision_router import router as vision_router
+from app.audit_report.router import router as audit_router
 from app.pathways.explain_router import router as explain_router
 from app.recyclables.recyclables_router import router as recyclables_router
 from app.pathways.router import router as pathways_router
@@ -64,6 +64,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(platform_router)
     app.include_router(core_engine_router)
 
+    # GHG feasibility audit report: POST /api/audit-report
+    app.include_router(audit_router)
+
     # Keep the Gemini assistant under its existing API prefix.
     app.include_router(assistant_router, prefix="/api/v1")
 
@@ -94,33 +97,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Sarvam AI STT, Translation, and TTS: /sarvam/stt, /sarvam/translate, /sarvam/tts
     app.include_router(sarvam_router)
     app.include_router(voice_router)
-    
+
     return app
 
 
 app = create_app()
-
-from dataclasses import replace
-from pydantic import BaseModel
-
-from app.core_engine.engine import Params
-from app.audit_report.audit_data import build_audit_payload
-from app.audit_report.report_writer import make_report
-
-
-
-class AuditRequest(BaseModel):
-    location: str
-    transport_km: float
-    total_mass_kg_d: float = 1000
-    organic_fraction: float = 0.45
-    suitable_fraction: float = 0.80
-    ambient_temp_c: float = 25.0
-
-@app.post("/api/audit-report")
-def audit_report(req: AuditRequest):
-    p = replace(Params(), total_mass_kg_d=req.total_mass_kg_d,
-                organic_fraction=req.organic_fraction,
-                suitable_fraction=req.suitable_fraction,
-                ambient_temp_c=req.ambient_temp_c)
-    return make_report(build_audit_payload(p, req.location, req.transport_km))  

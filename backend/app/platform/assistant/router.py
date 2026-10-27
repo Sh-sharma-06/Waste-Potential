@@ -14,7 +14,7 @@ from app.config import (
     GEMINI_API_KEY_ADVISOR,
     GEMINI_API_KEY_AUDIT,
     GEMINI_API_KEY_PARSER,
-    GEMINI_MODEL,
+    gemini_models,
 )
 from app.platform.assistant.prompts import (
     ADVISOR_PROMPT,
@@ -65,11 +65,19 @@ def generate_text(
             response_mime_type="application/json" if json_output else "text/plain",
         )
 
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=user_content,
-            config=config,
-        )
+        models = gemini_models()
+        for model_name in models:
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=user_content,
+                    config=config,
+                )
+                break
+            except Exception as exc:
+                if model_name == models[-1]:
+                    raise
+                logger.warning("Gemini model %s failed, trying next: %s", model_name, type(exc).__name__)
 
         answer = response.text
         if not answer or not answer.strip():

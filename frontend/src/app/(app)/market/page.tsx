@@ -3,8 +3,8 @@
 import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { INDUSTRY_PAGE_BG } from "@/lib/industryTheme";
 
-const BG = "#070a0f";
 const FONT = '"Rubik",sans-serif';
 
 function MarketRouterInner() {
@@ -29,11 +29,9 @@ function MarketRouterInner() {
   return (
     <main style={{
       minHeight: "100vh",
-      background: BG,
+      ...INDUSTRY_PAGE_BG,
       fontFamily: FONT,
-      color: "#ffe4d6",
-      backgroundImage: `radial-gradient(ellipse 70% 45% at 20% 10%, rgba(226,98,58,.08) 0%, transparent 70%),
-                        radial-gradient(ellipse 50% 40% at 85% 85%, rgba(194,65,12,.06) 0%, transparent 70%)`,
+      color: "#27120A",
       padding: "60px 5vw",
       display: "flex",
       flexDirection: "column",
@@ -44,7 +42,7 @@ function MarketRouterInner() {
         <span style={{
           fontSize: ".75rem",
           letterSpacing: ".1em",
-          color: "#FB923C",
+          color: "#C2410C",
           border: "1px solid rgba(251,146,60,0.4)",
           borderRadius: 999,
           padding: "6px 16px",
@@ -68,8 +66,8 @@ function MarketRouterInner() {
         }}>
           SELECT MARKETPLACE
         </h1>
-        <p style={{ color: "#F5D2C2", fontSize: "1rem", margin: "0 auto 40px", maxWidth: 580, lineHeight: 1.6 }}>
-          Choose your commercial offtake terminal based on whether you are selling produced bio-energy or non-energy recyclable materials.
+        <p style={{ color: "#431E12", fontSize: "1rem", margin: "0 auto 40px", maxWidth: 580, lineHeight: 1.6 }}>
+          Choose what you want to sell.
         </p>
 
         <div style={{
@@ -86,9 +84,9 @@ function MarketRouterInner() {
               color: "inherit",
               padding: "32px 28px",
               borderRadius: 20,
-              background: "rgba(255,255,255,0.05)",
+              background: "rgba(255,255,255,0.55)",
               border: "1.5px solid rgba(251,146,60,0.4)",
-              boxShadow: "0 10px 40px rgba(40,15,5,.45), 0 0 30px rgba(226,98,58,.08)",
+              boxShadow: "0 10px 40px rgba(120,53,15,0.16), 0 0 30px rgba(226,98,58,.08)",
               backdropFilter: "blur(14px)",
               display: "flex",
               flexDirection: "column",
@@ -111,11 +109,11 @@ function MarketRouterInner() {
               }}>
                 ⚡
               </div>
-              <h3 style={{ margin: "0 0 8px", fontSize: "1.3rem", fontWeight: 800, color: "#FFE4D6" }}>
+              <h3 style={{ margin: "0 0 8px", fontSize: "1.3rem", fontWeight: 800, color: "#27120A" }}>
                 Industrial Energy Marketplace
               </h3>
-              <p style={{ margin: 0, fontSize: ".86rem", color: "#fdba74", lineHeight: 1.5 }}>
-                Direct commercial matching for Bio-CNG, Syngas, Bio-oil, and Green Electricity with cement kilns, steel smelters, and city gas grids.
+              <p style={{ margin: 0, fontSize: ".86rem", color: "#C2410C", lineHeight: 1.5 }}>
+                Sell Bio-CNG, syngas, bio-oil or electricity to nearby industries.
               </p>
             </div>
 
@@ -124,7 +122,7 @@ function MarketRouterInner() {
               display: "inline-flex",
               alignItems: "center",
               gap: 8,
-              color: "#FB923C",
+              color: "#C2410C",
               fontWeight: 800,
               fontSize: ".9rem",
             }}>
@@ -141,9 +139,9 @@ function MarketRouterInner() {
               color: "inherit",
               padding: "32px 28px",
               borderRadius: 20,
-              background: "rgba(255,255,255,0.05)",
+              background: "rgba(255,255,255,0.55)",
               border: "1.5px solid rgba(226,98,58,0.4)",
-              boxShadow: "0 10px 40px rgba(40,15,5,.45), 0 0 30px rgba(226,98,58,.08)",
+              boxShadow: "0 10px 40px rgba(120,53,15,0.16), 0 0 30px rgba(226,98,58,.08)",
               backdropFilter: "blur(14px)",
               display: "flex",
               flexDirection: "column",
@@ -166,11 +164,11 @@ function MarketRouterInner() {
               }}>
                 📦
               </div>
-              <h3 style={{ margin: "0 0 8px", fontSize: "1.3rem", fontWeight: 800, color: "#FFE4D6" }}>
+              <h3 style={{ margin: "0 0 8px", fontSize: "1.3rem", fontWeight: 800, color: "#27120A" }}>
                 Non-Energy Recoverable Marketplace
               </h3>
-              <p style={{ margin: 0, fontSize: ".86rem", color: "#fdba74", lineHeight: 1.5 }}>
-                Itemized scrap & secondary resource offtake tables for plastics, scrap metals, cullet glass, e-waste, and pulp cardboard.
+              <p style={{ margin: 0, fontSize: ".86rem", color: "#C2410C", lineHeight: 1.5 }}>
+                Sell plastic, metal, glass, e-waste and cardboard to recyclers.
               </p>
             </div>
 
@@ -179,7 +177,7 @@ function MarketRouterInner() {
               display: "inline-flex",
               alignItems: "center",
               gap: 8,
-              color: "#86efac",
+              color: "#15803d",
               fontWeight: 800,
               fontSize: ".9rem",
             }}>
@@ -193,7 +191,7 @@ function MarketRouterInner() {
           <Link
             href="/explore/industry"
             style={{
-              color: "#F0A080",
+              color: "#9A3412",
               textDecoration: "none",
               fontSize: ".88rem",
               letterSpacing: ".06em",
@@ -210,8 +208,8 @@ function MarketRouterInner() {
 export default function MarketDispatcherPage() {
   return (
     <Suspense fallback={
-      <main style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ color: "#F0A080", fontFamily: FONT }}>Loading Marketplace…</span>
+      <main style={{ minHeight: "100vh", ...INDUSTRY_PAGE_BG, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ color: "#9A3412", fontFamily: FONT }}>Loading Marketplace…</span>
       </main>
     }>
       <MarketRouterInner />

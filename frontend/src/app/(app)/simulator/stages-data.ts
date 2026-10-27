@@ -9,7 +9,7 @@ export function getInputBadgeStyle(input: string) {
     return {
       bg: "rgba(34, 197, 94, 0.15)",
       border: "rgba(34, 197, 94, 0.4)",
-      text: "#86efac",
+      text: "#15803d",
       glow: "rgba(34, 197, 94, 0.3)",
     };
   }
@@ -17,7 +17,7 @@ export function getInputBadgeStyle(input: string) {
     return {
       bg: "rgba(249, 115, 22, 0.18)",
       border: "rgba(249, 115, 22, 0.5)",
-      text: "#fdba74",
+      text: "#C2410C",
       glow: "rgba(249, 115, 22, 0.35)",
     };
   }
@@ -25,7 +25,7 @@ export function getInputBadgeStyle(input: string) {
     return {
       bg: "rgba(14, 165, 233, 0.15)",
       border: "rgba(14, 165, 233, 0.45)",
-      text: "#7dd3fc",
+      text: "#0369a1",
       glow: "rgba(14, 165, 233, 0.3)",
     };
   }
@@ -33,7 +33,7 @@ export function getInputBadgeStyle(input: string) {
     return {
       bg: "rgba(168, 85, 247, 0.15)",
       border: "rgba(168, 85, 247, 0.45)",
-      text: "#d8b4fe",
+      text: "#7e22ce",
       glow: "rgba(168, 85, 247, 0.3)",
     };
   }
@@ -41,14 +41,14 @@ export function getInputBadgeStyle(input: string) {
     return {
       bg: "rgba(236, 72, 153, 0.15)",
       border: "rgba(236, 72, 153, 0.45)",
-      text: "#f472b6",
+      text: "#be185d",
       glow: "rgba(236, 72, 153, 0.3)",
     };
   }
   return {
     bg: "rgba(251, 146, 60, 0.15)",
     border: "rgba(251, 146, 60, 0.4)",
-    text: "#fdba74",
+    text: "#C2410C",
     glow: "rgba(251, 146, 60, 0.25)",
   };
 }

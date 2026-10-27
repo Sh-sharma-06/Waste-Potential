@@ -58,7 +58,7 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 from app.data.demand import match_demand_greedy
 from app.data.service import get_location_context
@@ -275,6 +275,8 @@ def mc_pathway(
     shared_rh_samples: Optional[list[float]] = None,
     # Per-pathway RNG for independent cost/yield perturbations
     pathway_rng: Optional[random.Random] = None,
+    # Deterministic screening result for this pathway (revenue_inr_y, cost_inr_y, e_net_kwh_d)
+    screening: Optional[Any] = None,
 ) -> PathwayMCResult:
     """Run Monte Carlo uncertainty analysis for a single *pathway*.
 
@@ -311,6 +313,10 @@ def mc_pathway(
     pathway_rng:
         Seeded ``random.Random`` instance for pathway-specific cost/yield
         perturbations (independent per pathway, deterministic with seed).
+    screening:
+        When given, samples are drawn around this deterministic result instead of
+        the raw request values, so product revenue (compost, heat/fuel, sinks) and
+        physics-resolved yields count exactly as in the screening pass.
 
     Returns
     -------
@@ -385,26 +391,43 @@ def mc_pathway(
 
     gate_rev_yr = gate_fee * waste_tpy
 
-    for c, kwh_t, e_price in zip(cost_samples, net_kwh_t_samples, e_price_samples):
-        e_kwh_d = kwh_t * request.waste_tpd
-        kwh_yr = kwh_t * waste_tpy
+    if screening is not None:
+        # Perturb the screening pass's own economics: product sales (everything except
+        # the gate fee) scale with a pathway-specific yield draw and the shared tariff
+        # draw (used as a common market-price factor); total cost scales with a cost draw.
+        product_rev_yr = max(float(screening.revenue_inr_y) - gate_rev_yr, 0.0)
+        base_cost_yr = float(screening.cost_inr_y)
+        cost_samples = (
+            _truncated_normal_samples(base_cost_yr, cost_cv, n, lower_bound=0.0, rng=pathway_rng)
+            if base_cost_yr > 0 else [0.0] * n
+        )
+        yield_factors = _truncated_normal_samples(1.0, yield_cv, n, lower_bound=0.0, rng=pathway_rng)
+        for c, y, e_price in zip(cost_samples, yield_factors, e_price_samples):
+            price_factor = e_price / e_price_base if e_price_base > 0 else 1.0
+            net_value_samples.append(product_rev_yr * y * price_factor + gate_rev_yr - c)
+            e_kwh_d_samples.append(float(screening.e_net_kwh_d) * y)
 
-        if sinks and e_kwh_d > 0:
-            # Revenue from greedy sink matching at this sample's effective supply
-            match = match_demand_greedy(e_kwh_d, sinks)
-            elec_rev = match["total_revenue_inr_d"] * _DAYS_PER_YEAR
-            import_cost = 0.0
-        elif kwh_yr > 0:
-            elec_rev = kwh_yr * e_price
-            import_cost = 0.0
-        else:
-            elec_rev = 0.0
-            import_cost = abs(kwh_yr) * e_price
+    else:
+        for c, kwh_t, e_price in zip(cost_samples, net_kwh_t_samples, e_price_samples):
+            e_kwh_d = kwh_t * request.waste_tpd
+            kwh_yr = kwh_t * waste_tpy
 
-        total_cost = c + import_cost
-        revenue = elec_rev + gate_rev_yr
-        net_value_samples.append(revenue - total_cost)
-        e_kwh_d_samples.append(e_kwh_d)
+            if sinks and e_kwh_d > 0:
+                # Revenue from greedy sink matching at this sample's effective supply
+                match = match_demand_greedy(e_kwh_d, sinks)
+                elec_rev = match["total_revenue_inr_d"] * _DAYS_PER_YEAR
+                import_cost = 0.0
+            elif kwh_yr > 0:
+                elec_rev = kwh_yr * e_price
+                import_cost = 0.0
+            else:
+                elec_rev = 0.0
+                import_cost = abs(kwh_yr) * e_price
+
+            total_cost = c + import_cost
+            revenue = elec_rev + gate_rev_yr
+            net_value_samples.append(revenue - total_cost)
+            e_kwh_d_samples.append(e_kwh_d)
 
     prob_positive = sum(1 for v in net_value_samples if v > 0) / n
 
@@ -437,6 +460,7 @@ def run_mc_compare(
     region: Optional[str] = None,
     operator_overrides: Optional[dict[str, float]] = None,
     feasible_pathways: Optional[set[str]] = None,
+    screening_results: Optional[dict[str, Any]] = None,
 ) -> list[PathwayMCResult]:
     """Run MC uncertainty analysis for all pathways in *request*.
 
@@ -473,6 +497,9 @@ def run_mc_compare(
         Set of pathway ids that passed deterministic feasibility checks.
         Only these pathways are eligible to win a run.  When None all
         pathways in ``request.pathways`` are treated as feasible.
+    screening_results:
+        Optional pathway -> deterministic PathwayResult. When given, each pathway's
+        samples are drawn around its screening revenue/cost (see ``mc_pathway``).
 
     Returns
     -------
@@ -560,6 +587,7 @@ def run_mc_compare(
             shared_temp_samples=shared_temp_samples,
             shared_rh_samples=shared_rh_samples,
             pathway_rng=pathway_rng,
+            screening=(screening_results or {}).get(pw),
         )
         mc_results.append(result)
 

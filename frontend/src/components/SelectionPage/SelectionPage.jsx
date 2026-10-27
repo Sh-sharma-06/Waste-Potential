@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import "./SelectionPage.css";
 
@@ -19,25 +19,18 @@ const MODES = [
     },
 ];
 
-export default function SelectionPage({ onSelect }) {
+export default function SelectionPage({ onSelect = undefined } = {}) {
   const router = useRouter();
-  const [place, setPlace] = useState(() => {
-    try { return localStorage.getItem("wp_location") || ""; } catch { return ""; }
-  });
-  const [saved, setSaved] = useState(false);
 
-  const save = (e) => {
-    e.preventDefault();
-    try { localStorage.setItem("wp_location", place.trim()); } catch {}
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1800);
-  };
+  // The PIN code is asked for on the next page; clear any value saved by older versions.
+  useEffect(() => {
+    try { localStorage.removeItem("wp_location"); } catch {}
+  }, []);
 
   const choose = (mode) => {
-    if (onSelect) { onSelect(mode, place.trim()); return; }
+    if (onSelect) { onSelect(mode); return; }
     const routeMap = { agriculture: "/explore/agriculture", home: "/explore/home", industry: "/explore/industry" };
-    const path = routeMap[mode] ?? `/${mode}`;
-    router.push(`${path}?loc=${encodeURIComponent(place.trim())}`);
+    router.push(routeMap[mode] ?? `/${mode}`);
   };
 
   return (
@@ -47,13 +40,6 @@ export default function SelectionPage({ onSelect }) {
       <div className="select__shade" />
 
       <div className="select__content">
-        <form className="search" onSubmit={save}>
-          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
-          <input value={place} onChange={(e) => setPlace(e.target.value)}
-            placeholder="Enter pincode or city name" aria-label="Pincode or city name" />
-          <button type="submit" className={saved ? "is-saved" : ""}>{saved ? "SAVED ✓" : "SAVE"}</button>
-        </form>
-
         <section className="cards">
           {MODES.map((m, i) => (
             <article className={`card card--${m.id}`} key={m.id} style={{ "--i": i }}>

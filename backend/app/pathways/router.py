@@ -60,13 +60,17 @@ def compare_pathways(request: PathwayCompareRequest) -> list[PathwayResult]:
             operator_overrides=request.operator_overrides,
         )
 
-        # 2 — Monte Carlo uncertainty pass (feasible set passed for optimality share)
+        # 2 — Monte Carlo uncertainty pass (feasible set passed for optimality share).
+        # Sampling around the screening results keeps the MC on the same economics:
+        # physics-resolved yields and product revenue (compost, heat/fuel), not just
+        # electricity from request.net_kwh_per_tonne.
         feasible_pathways = {r.pathway for r in results if r.feasible}
         mc_results = run_mc_compare(
             request,
             region=request.region,
             operator_overrides=request.operator_overrides,
             feasible_pathways=feasible_pathways,
+            screening_results={r.pathway: r for r in results},
         )
 
         # 3 — Merge MC stats into PathwayResult objects (warnings + status)

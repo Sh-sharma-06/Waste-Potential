@@ -32,9 +32,10 @@ describe("ProcessSelector Component", () => {
       />
     );
 
-    PROCESSES.forEach((proc) => {
-      expect(screen.getByRole("heading", { name: proc, level: 3 })).toBeInTheDocument();
+    PROCESSES.forEach(({ name }) => {
+      expect(screen.getByRole("heading", { name, level: 3 })).toBeInTheDocument();
     });
+    expect(screen.queryByText("Pelletization")).not.toBeInTheDocument();
   });
 
   it("calls /simulator/recommend on mount and renders ✨ Suggested badge", async () => {
@@ -72,6 +73,10 @@ describe("ProcessSelector Component", () => {
         body: JSON.stringify({
           location: "Bengaluru",
           weight: 20,
+          category: null,
+          pincode: null,
+          lat: null,
+          lng: null,
           weather: "Tropical",
           duration_pref: "< 24h",
         }),
@@ -110,6 +115,9 @@ describe("ProcessSelector Component", () => {
         duration="Fast"
       />
     );
+
+    // Briefings are cached per suggestion, so let the recommendation settle first
+    await waitFor(() => expect(screen.getByText("✨ Suggested")).toBeInTheDocument());
 
     // Find the Show Details buttons
     const showDetailsButtons = screen.getAllByRole("button", { name: /Show Details/i });
@@ -184,6 +192,66 @@ describe("ProcessSelector Component", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Select This Process/i }));
-    expect(handleSelect).toHaveBeenCalledWith("Gasification");
+    expect(handleSelect).toHaveBeenCalledWith("gasification");
+  });
+
+  it.each([
+    "htc",
+    "HTC",
+    "Hydrothermal Carbonisation (HTC)",
+    "Hydrothermal Carbonization",
+  ])("highlights the HTC card when the recommendation is %s", async (suggestion) => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ suggested_process: suggestion }),
+    });
+
+    const { container } = render(
+      <ProcessSelector location="Pune" weight={5} weather="Humid" />
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-process-id="htc"][data-suggested]')).not.toBeNull();
+    });
+    expect(container.querySelectorAll("[data-suggested]").length).toBe(1);
+  });
+
+  it("highlights whichever card is selected, including the parent's controlled selection", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ suggested_process: "pyrolysis", details: "Briefing" }),
+    });
+
+    const { container, rerender } = render(
+      <ProcessSelector location="Pune" weight={5} weather="Humid" selectedProcessId="torrefaction" />
+    );
+    expect(container.querySelector('[data-process-id="torrefaction"][data-selected]')).not.toBeNull();
+
+    rerender(<ProcessSelector location="Pune" weight={5} weather="Humid" selectedProcessId="htc" />);
+    expect(container.querySelector('[data-process-id="htc"][data-selected]')).not.toBeNull();
+    expect(container.querySelectorAll("[data-selected]").length).toBe(1);
+  });
+
+  it("sends the chosen duration preference with the recommendation request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ suggested_process: "composting" }),
+    });
+    global.fetch = fetchMock;
+
+    render(<ProcessSelector location="Pune" weight={5} category="energy" pincode="411001" />);
+    await waitFor(() => expect(screen.getByText("✨ Suggested")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Weeks (2–8 weeks)" } });
+
+    await waitFor(() => {
+      const bodies = fetchMock.mock.calls.map((c) => JSON.parse(c[1].body));
+      expect(bodies.at(-1)).toMatchObject({
+        category: "energy",
+        pincode: "411001",
+        weather: null,
+        duration_pref: "Weeks (2–8 weeks)",
+      });
+    });
   });
 });

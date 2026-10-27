@@ -45,21 +45,13 @@ interface Detection {
 }
 
 interface ChatMessage {
-  role: "user" | "assistant";
+  role: "user" | "model";
   content: string;
 }
 
 type PipelineStage = "idle" | "detecting" | "advising" | "complete" | "error";
 
 export default function HomeWasteClassifierPage() {
-  const [pin] = useState<string>(() => {
-    try {
-      return localStorage.getItem("wp_location") || "110001";
-    } catch {
-      return "110001";
-    }
-  });
-
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -229,8 +221,7 @@ export default function HomeWasteClassifierPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: userMsg,
-          history: newHistory,
+          messages: newHistory,
           context: adviceText || "",
           waste_type: topDetection?.class || "",
           sector: "urban",
@@ -240,10 +231,10 @@ export default function HomeWasteClassifierPage() {
       if (!res.ok) throw new Error(`Chat API returned ${res.status}`);
       const data = await res.json();
       const reply = data.text || data.reply || "I could not generate a response. Please try again.";
-      setChatHistory([...newHistory, { role: "assistant", content: reply }]);
+      setChatHistory([...newHistory, { role: "model", content: reply }]);
     } catch {
       setChatHistory([...newHistory, {
-        role: "assistant",
+        role: "model",
         content: "Sorry, I could not connect to the AI service. Please check that the backend is running and try again.",
       }]);
     } finally {
@@ -386,21 +377,6 @@ export default function HomeWasteClassifierPage() {
             </span>
           </div>
 
-          <span suppressHydrationWarning
-            style={{
-              fontSize: ".82rem",
-              letterSpacing: ".08em",
-              color: "#2A1B4E",
-              border: "1px solid rgba(42,27,78,0.3)",
-              borderRadius: 999,
-              padding: "6px 16px",
-              background: "rgba(255,255,255,0.55)",
-              backdropFilter: "blur(8px)",
-              fontWeight: 700,
-            }}
-          >
-            PIN {pin}
-          </span>
         </div>
 
         <div>
@@ -417,7 +393,7 @@ export default function HomeWasteClassifierPage() {
             Household Waste AI Classifier
           </h1>
           <p style={{ margin: 0, color: "#3d0b6cff", fontSize: ".92rem", letterSpacing: ".02em", fontWeight: 500 }}>
-            Real-time on-device classification via local Hugging Face model paired with generative Gemini guidance for domestic upcycling and disposal.
+            Upload a photo and AI tells you what the waste is and what to do with it.
           </p>
         </div>
       </header>

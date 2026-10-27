@@ -1,12 +1,15 @@
 "use client";
 
 import React, { FormEvent, useState, useRef, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import {
   SUPPORTED_LANGUAGES,
   transcribeAudio,
   translateText,
   synthesizeSpeech,
 } from "@/lib/sarvam";
+import { useChatbotStore } from "@/stores/chatbot";
+import { chatConfigForPath } from "./chatbotTheme";
 
 type ChatMessage = {
   role: "user" | "model";
@@ -15,11 +18,12 @@ type ChatMessage = {
   audioUrl?: string;
 };
 
-type FloatingChatbotProps = {
-  simulationContext: unknown;
-};
+/** Mounted once in the root layout; renders only on Industry-tab routes (see chatbotTheme). */
+export default function FloatingChatbot() {
+  const pathname = usePathname();
+  const config = chatConfigForPath(pathname);
+  const pageContext = useChatbotStore((s) => s.context);
 
-export default function FloatingChatbot({ simulationContext }: FloatingChatbotProps) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -94,9 +98,9 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            sector: "industry",
+            sector: config?.sector ?? "industry",
             messages: formattedMessages,
-            context_data: simulationContext,
+            context_data: { page: pathname, ...(pageContext ?? {}) },
           }),
         });
         if (response.ok) {
@@ -323,31 +327,35 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
     }
   };
 
+  // Hooks above run on every route so the conversation survives navigation within the Industry tab.
+  if (!config) return null;
+  const { theme: t, placeholder, bottomOffset } = config;
+
   return (
-    <div style={{ position: "fixed", right: 24, bottom: 24, zIndex: 1100, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+    <div style={{ position: "fixed", right: 24, bottom: bottomOffset, zIndex: 1100, fontFamily: "system-ui, -apple-system, sans-serif" }}>
       {open && (
         <section
           aria-label="Multilingual AI Assistant"
           style={{
             width: "min(400px, calc(100vw - 32px))",
-            height: 540,
+            height: `min(540px, calc(100vh - ${bottomOffset + 80}px))`,
             marginBottom: 12,
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
             borderRadius: 20,
-            border: "1.5px solid rgba(226,98,58,0.45)",
-            background: "#0c111a",
-            color: "#ffe4d6",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.85), 0 0 30px rgba(194,65,12,0.25)",
+            border: `1.5px solid ${t.panelBorder}`,
+            background: t.panelBg,
+            color: t.text,
+            boxShadow: t.panelShadow,
             backdropFilter: "blur(12px)",
           }}
         >
           {/* ══ Header ══ */}
           <header style={{
             padding: "12px 16px",
-            background: "linear-gradient(90deg, #9a3412 0%, #c2410c 50%, #ea580c 100%)",
-            color: "white",
+            background: t.headerBg,
+            color: t.headerText,
             display: "flex",
             flexDirection: "column",
             gap: 8,
@@ -363,12 +371,12 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
                 onClick={() => setOpen(false)}
                 aria-label="Close chat"
                 style={{
-                  background: "rgba(0,0,0,0.25)",
+                  background: t.controlBg,
                   border: 0,
                   borderRadius: "50%",
                   width: 26,
                   height: 26,
-                  color: "white",
+                  color: t.headerText,
                   fontSize: 16,
                   cursor: "pointer",
                   display: "flex",
@@ -383,7 +391,7 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
             {/* Language Selector Dropdown (Step 2) */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
-                <label htmlFor="sarvam-lang-select" style={{ fontSize: ".72rem", color: "#fed7aa", fontWeight: 700, textTransform: "uppercase" }}>
+                <label htmlFor="sarvam-lang-select" style={{ fontSize: ".72rem", color: t.headerLabel, fontWeight: 700, textTransform: "uppercase" }}>
                   Language:
                 </label>
                 <select
@@ -392,9 +400,9 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
                   onChange={(e) => setSelectedLanguage(e.target.value)}
                   style={{
                     flex: 1,
-                    background: "rgba(0,0,0,0.45)",
-                    border: "1px solid rgba(255,255,255,0.25)",
-                    color: "#ffffff",
+                    background: t.controlBg,
+                    border: `1px solid ${t.controlBorder}`,
+                    color: t.headerText,
                     borderRadius: 8,
                     padding: "4px 8px",
                     fontSize: ".78rem",
@@ -404,7 +412,7 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
                   }}
                 >
                   {SUPPORTED_LANGUAGES.map((lang) => (
-                    <option key={lang.code} value={lang.code} style={{ background: "#111827", color: "#fff" }}>
+                    <option key={lang.code} value={lang.code} style={{ background: t.optionBg, color: t.optionText }}>
                       {lang.nativeName} ({lang.name})
                     </option>
                   ))}
@@ -417,9 +425,9 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
                 onClick={() => setAutoPlayAudio((prev) => !prev)}
                 title={autoPlayAudio ? "Auto-read responses enabled" : "Auto-read responses disabled"}
                 style={{
-                  background: autoPlayAudio ? "rgba(34,197,94,0.3)" : "rgba(255,255,255,0.1)",
-                  border: `1px solid ${autoPlayAudio ? "#86efac" : "rgba(255,255,255,0.2)"}`,
-                  color: autoPlayAudio ? "#86efac" : "#d1d5db",
+                  background: autoPlayAudio ? "rgba(255,255,255,0.28)" : t.controlBg,
+                  border: `1px solid ${t.controlBorder}`,
+                  color: t.headerText,
                   borderRadius: 6,
                   padding: "3px 8px",
                   fontSize: ".7rem",
@@ -435,9 +443,9 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
           {/* ══ Chat Messages ══ */}
           <div aria-live="polite" style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
             {messages.length === 0 && (
-              <div style={{ color: "#a88575", fontSize: ".85rem", lineHeight: 1.5, textAlign: "center", margin: "auto 0" }}>
+              <div style={{ color: t.muted, fontSize: ".85rem", lineHeight: 1.5, textAlign: "center", margin: "auto 0" }}>
                 <p style={{ margin: "0 0 6px", fontSize: "1.8rem" }}>💬</p>
-                <p style={{ margin: "0 0 4px", fontWeight: 700, color: "#ffe4d6" }}>
+                <p style={{ margin: "0 0 4px", fontWeight: 700, color: t.text }}>
                   Ask questions in any Indian Language
                 </p>
                 <p style={{ margin: 0, fontSize: ".78rem" }}>
@@ -458,16 +466,16 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
                     maxWidth: "85%",
                     borderRadius: 14,
                     padding: "10px 14px",
-                    background: isUser ? "#3a1c12" : "#141c2c",
-                    border: `1px solid ${isUser ? "rgba(234,88,12,0.4)" : "rgba(59,130,246,0.3)"}`,
-                    color: "#ffe4d6",
+                    background: isUser ? t.userBubbleBg : t.botBubbleBg,
+                    border: `1px solid ${isUser ? t.userBubbleBorder : t.botBubbleBorder}`,
+                    color: t.text,
                     fontSize: ".88rem",
                     lineHeight: 1.45,
-                    boxShadow: "0 4px 14px rgba(0,0,0,0.3)",
+                    boxShadow: t.bubbleShadow,
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: ".7rem", fontWeight: 800, color: isUser ? "#fb923c" : "#60a5fa", textTransform: "uppercase" }}>
+                    <span style={{ fontSize: ".7rem", fontWeight: 800, color: isUser ? t.userLabel : t.botLabel, textTransform: "uppercase" }}>
                       {isUser ? "You" : "Gemini Advisor"}
                     </span>
 
@@ -476,9 +484,9 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
                         onClick={() => handleListenClick(message, index)}
                         title="Listen to this response"
                         style={{
-                          background: isPlaying ? "rgba(34,197,94,0.25)" : "rgba(255,255,255,0.08)",
-                          border: `1px solid ${isPlaying ? "#86efac" : "rgba(255,255,255,0.15)"}`,
-                          color: isPlaying ? "#86efac" : "#fdba74",
+                          background: isPlaying ? t.activeBg : t.chipBg,
+                          border: `1px solid ${isPlaying ? t.activeBorder : t.chipBorder}`,
+                          color: isPlaying ? t.activeText : t.chipText,
                           borderRadius: 6,
                           padding: "2px 7px",
                           fontSize: ".7rem",
@@ -498,8 +506,8 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
 
                   {/* If native language was used, optionally show small translated query indicator */}
                   {message.originalEnglish && message.originalEnglish !== message.content && (
-                    <div style={{ marginTop: 6, paddingTop: 4, borderTop: "1px solid rgba(255,255,255,0.08)", fontSize: ".72rem", color: "#9ca3af" }}>
-                      <span style={{ color: "#d1d5db" }}>EN: </span>
+                    <div style={{ marginTop: 6, paddingTop: 4, borderTop: `1px solid ${t.divider}`, fontSize: ".72rem", color: t.muted }}>
+                      <span style={{ fontWeight: 700 }}>EN: </span>
                       {message.originalEnglish.slice(0, 120)}
                       {message.originalEnglish.length > 120 ? "..." : ""}
                     </div>
@@ -513,15 +521,15 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
                 alignSelf: "flex-start",
                 padding: "8px 12px",
                 borderRadius: 12,
-                background: "rgba(234,88,12,0.15)",
-                border: "1px dashed rgba(234,88,12,0.4)",
-                color: "#fdba74",
+                background: t.statusBg,
+                border: `1px dashed ${t.statusBorder}`,
+                color: t.statusText,
                 fontSize: ".78rem",
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
               }}>
-                <span className="sarvam-pulse" style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#ea580c" }} />
+                <span className="sarvam-pulse" style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: t.accentSolid }} />
                 <span>{statusMessage}</span>
               </div>
             )}
@@ -530,9 +538,9 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
               <div role="alert" style={{
                 padding: "8px 12px",
                 borderRadius: 10,
-                background: "rgba(239,68,68,0.15)",
-                border: "1px solid rgba(239,68,68,0.35)",
-                color: "#fca5a5",
+                background: t.errorBg,
+                border: `1px solid ${t.errorBorder}`,
+                color: t.errorText,
                 fontSize: ".78rem",
               }}>
                 ⚠ {error}
@@ -550,8 +558,8 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
               alignItems: "center",
               gap: 8,
               padding: "10px 12px",
-              borderTop: "1px solid rgba(255,255,255,0.1)",
-              background: "rgba(10,14,22,0.95)",
+              borderTop: `1px solid ${t.divider}`,
+              background: t.inputBarBg,
             }}
           >
             {/* Microphone Button (Step 3) */}
@@ -564,9 +572,9 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
                 width: 38,
                 height: 38,
                 borderRadius: 10,
-                border: `1.5px solid ${recording ? "#ef4444" : "rgba(234,88,12,0.4)"}`,
-                background: recording ? "#ef4444" : "rgba(234,88,12,0.12)",
-                color: recording ? "#ffffff" : "#fb923c",
+                border: `1.5px solid ${recording ? "#ef4444" : t.chipBorder}`,
+                background: recording ? "#ef4444" : t.chipBg,
+                color: recording ? "#ffffff" : t.chipText,
                 fontSize: "1.1rem",
                 cursor: loading ? "not-allowed" : "pointer",
                 display: "flex",
@@ -587,7 +595,7 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
                 recording
                   ? "Listening to speech... click ⏹ when done"
                   : isEnglish
-                  ? "Ask Gemini about results, pathways..."
+                  ? placeholder
                   : `Type in ${SUPPORTED_LANGUAGES.find((l) => l.code === selectedLanguage)?.name || "native language"}...`
               }
               aria-label="Message"
@@ -596,9 +604,9 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
                 flex: 1,
                 padding: "10px 14px",
                 borderRadius: 10,
-                border: "1px solid rgba(255,255,255,0.15)",
-                background: "#070a0f",
-                color: "#ffe4d6",
+                border: `1px solid ${t.inputBorder}`,
+                background: t.inputBg,
+                color: t.inputText,
                 fontSize: ".88rem",
                 outline: "none",
               }}
@@ -611,8 +619,8 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
                 border: 0,
                 borderRadius: 10,
                 padding: "10px 16px",
-                background: "linear-gradient(90deg, #c2410c, #ea580c)",
-                color: "#ffffff",
+                background: t.accentGradient,
+                color: t.accentText,
                 fontWeight: 700,
                 fontSize: ".84rem",
                 cursor: loading || !input.trim() || recording ? "not-allowed" : "pointer",
@@ -635,13 +643,13 @@ export default function FloatingChatbot({ simulationContext }: FloatingChatbotPr
           border: 0,
           borderRadius: 999,
           padding: "13px 20px",
-          background: "linear-gradient(90deg, #c2410c 0%, #ea580c 100%)",
-          color: "white",
+          background: t.accentGradient,
+          color: t.accentText,
           fontWeight: 700,
           fontSize: ".95rem",
           letterSpacing: ".02em",
           cursor: "pointer",
-          boxShadow: "0 6px 24px rgba(194,65,12,0.45)",
+          boxShadow: t.launcherShadow,
           display: "flex",
           alignItems: "center",
           gap: 8,

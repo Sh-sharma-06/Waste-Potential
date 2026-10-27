@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from app.config import GOOGLE_PLACES_API_KEY
 from app.data.buyers import _haversine_km
-from app.services.places_client import PlacesClientError, PlaceResult
+from app.services.places_client import MAX_BIAS_RADIUS_M, PlacesClientError, PlaceResult
 from app.services.routing_client import RoutingClientError, get_distance_matrix
 from app.recyclables.recyclables_service import load_prices
 
@@ -30,13 +30,14 @@ router = APIRouter(prefix="/recyclables", tags=["Recyclables"])
 # Valid materials and their Places queries
 # ---------------------------------------------------------------------------
 
-VALID_MATERIALS = frozenset({"plastic", "glass", "metal", "e_waste"})
+VALID_MATERIALS = frozenset({"plastic", "glass", "metal", "e_waste", "paper"})
 
 _MATERIAL_QUERIES: dict[str, list[str]] = {
     "plastic": ["plastic recycler", "plastic scrap dealer"],
     "glass":   ["glass recycling", "glass scrap dealer"],
     "metal":   ["scrap dealer", "metal recycler"],
     "e_waste": ["e-waste recycler", "electronic waste recycler"],
+    "paper":   ["paper recycler", "waste paper and cardboard dealer"],
 }
 
 # ---------------------------------------------------------------------------
@@ -81,7 +82,8 @@ def _search_recycler_places(
             "locationBias": {
                 "circle": {
                     "center": {"latitude": lat, "longitude": lng},
-                    "radius": float(radius_m),
+                    # Bias only; callers still filter results by the full radius.
+                    "radius": float(min(radius_m, MAX_BIAS_RADIUS_M)),
                 }
             },
             "maxResultCount": 10,
@@ -194,7 +196,7 @@ def get_recycler_buyers(
     lng: float = Query(..., description="Decimal longitude of the waste source."),
     material: str = Query(
         ...,
-        description="Material type: plastic, glass, metal, or e_waste.",
+        description="Material type: plastic, glass, metal, e_waste, or paper.",
     ),
     radius_km: float = Query(
         50.0,
@@ -281,7 +283,7 @@ def get_recycler_buyers(
 def get_prices(
     material: str = Query(
         ...,
-        description="Material type: plastic, glass, metal, or e_waste.",
+        description="Material type: plastic, glass, metal, e_waste, or paper.",
     ),
 ) -> PricesResponse:
     """Return indicative price ranges for the given material from the local CSV."""

@@ -207,3 +207,24 @@ class UncertaintyResult(_Base):
     fixed_inputs: List[str] = Field(default_factory=list)
     recentred: bool = False
     clipped_samples: int = 0
+
+
+# ===========================================================================
+# AuditRequest
+# ===========================================================================
+
+class AuditRequest(_Base):
+    """Incoming GHG audit-report request (POST /api/audit-report)."""
+
+    location: Optional[str] = None
+    pincode: Optional[str] = None
+    transport_km: Optional[float] = Field(default=None, ge=0)
+    total_mass_kg_d: Optional[float] = Field(default=None, gt=0, le=1e6)
+    weight_kg: Optional[float] = Field(default=None, gt=0, le=1e6)
+    # Normalised server-side; see audit_report.ghg.normalize_process.
+    process: Optional[str] = None
+    selected_factories: List[Any] = Field(default_factory=list)
+    organic_fraction: float = Field(default=0.45, ge=0.0, le=1.0)
+    suitable_fraction: float = Field(default=0.80, ge=0.0, le=1.0)
+    ambient_temp_c: float = 25.0
+    parameter_status: str = "illustrative, unverified"

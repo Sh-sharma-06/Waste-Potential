@@ -8,22 +8,21 @@ import AudioReaderButton from "@/components/AudioReaderButton";
 /* ── Agriculture Green Accent Palette ── */
 const AGRI = {
   bg: "#070a0f",
-  accent: "#4ADE80",
-  accentHover: "#22C55E",
-  accentSoft: "#86EFAC",
-  accentDim: "rgba(74,222,128,.45)",
-  accentGlow: "rgba(74,222,128,.35)",
-  accentInner: "rgba(74,222,128,.06)",
-  accentDrop: "rgba(74,222,128,.45)",
-  textHeading: "#DCFCE7",
-  textBody: "#C8F5D8",
-  textMuted: "#689b7b",
-  gradTitle: "linear-gradient(90deg,#DCFCE7,#4ADE80)",
-  gradBtn: "linear-gradient(90deg,#16A34A 0%,#22C55E 50%,#4ADE80 100%)",
-  btnText: "#02150a",
-
-  cardBg: "rgba(12, 26, 18, 0.5)",
-  badgeBg: "rgba(74,222,128,.15)",
+  accent: "#15803D",
+  accentHover: "#166534",
+  accentSoft: "#15803D",
+  accentDim: "rgba(22,163,74,.45)",
+  accentGlow: "rgba(22,163,74,.3)",
+  accentInner: "rgba(22,163,74,.06)",
+  accentDrop: "rgba(22,163,74,.45)",
+  textHeading: "#052E16",
+  textBody: "#14532D",
+  textMuted: "#166534",
+  gradTitle: "linear-gradient(90deg,#052E16,#15803D)",
+  gradBtn: "linear-gradient(90deg,#14532D 0%,#15803D 50%,#16A34A 100%)",
+  btnText: "#FFFFFF",
+  cardBg: "rgba(255, 255, 255, 0.35)",
+  badgeBg: "rgba(255,255,255,.4)",
 };
 
 const FONT = '"Rubik", sans-serif';
@@ -31,9 +30,9 @@ const glassBorder = (color: string) => `1.5px solid ${color}`;
 const glassCard = (extra?: React.CSSProperties): React.CSSProperties => ({
   border: glassBorder(AGRI.accentDim),
   background: AGRI.cardBg,
-  backdropFilter: "blur(10px)",
-  WebkitBackdropFilter: "blur(10px)",
-  boxShadow: `0 10px 40px rgba(83, 162, 136, 0.45), inset 0 0 30px ${AGRI.accentInner}, 0 0 36px ${AGRI.accentGlow}`,
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)",
+  boxShadow: `0 8px 32px rgba(20, 83, 45, 0.18), inset 0 0 20px ${AGRI.accentInner}`,
   borderRadius: 20,
   padding: "26px 30px",
   boxSizing: "border-box",
@@ -47,7 +46,7 @@ interface Detection {
 }
 
 interface ChatMessage {
-  role: "user" | "assistant";
+  role: "user" | "model";
   content: string;
 }
 
@@ -55,14 +54,6 @@ type PipelineStage = "idle" | "detecting" | "advising" | "complete" | "error";
 
 export default function AgricultureWasteClassifierPage() {
   const router = useRouter();
-  const [pin] = useState<string>(() => {
-    try {
-      return localStorage.getItem("wp_location") || "110001";
-    } catch {
-      return "110001";
-    }
-  });
-
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -231,8 +222,7 @@ export default function AgricultureWasteClassifierPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: userMsg,
-          history: newHistory,
+          messages: newHistory, // <--- Pass the array here
           context: adviceText || "",
           waste_type: topDetection?.class || "",
           sector: "rural",
@@ -242,10 +232,10 @@ export default function AgricultureWasteClassifierPage() {
       if (!res.ok) throw new Error(`Chat API returned ${res.status}`);
       const data = await res.json();
       const reply = data.text || data.reply || "I could not generate a response. Please try again.";
-      setChatHistory([...newHistory, { role: "assistant", content: reply }]);
+      setChatHistory([...newHistory, { role: "model", content: reply }]);
     } catch {
       setChatHistory([...newHistory, {
-        role: "assistant",
+        role: "model",
         content: "Sorry, I could not connect to the AI service. Please check that the backend is running and try again.",
       }]);
     } finally {
@@ -300,7 +290,7 @@ export default function AgricultureWasteClassifierPage() {
             key={idx}
             style={{ margin: "6px 0", color: AGRI.textBody, lineHeight: 1.55, fontSize: ".92rem" }}
             dangerouslySetInnerHTML={{
-              __html: trimmed.slice(2).replace(/\*\*(.+?)\*\*/g, `<strong style="color:#DCFCE7">$1</strong>`),
+              __html: trimmed.slice(2).replace(/\*\*(.+?)\*\*/g, `<strong style="color:#14532D">$1</strong>`),
             }}
           />
         );
@@ -313,7 +303,7 @@ export default function AgricultureWasteClassifierPage() {
           key={idx}
           style={{ margin: "6px 0", color: AGRI.textBody, lineHeight: 1.6, fontSize: ".92rem" }}
           dangerouslySetInnerHTML={{
-            __html: trimmed.replace(/\*\*(.+?)\*\*/g, `<strong style="color:#DCFCE7">$1</strong>`),
+            __html: trimmed.replace(/\*\*(.+?)\*\*/g, `<strong style="color:#14532D">$1</strong>`),
           }}
         />
       );
@@ -329,8 +319,8 @@ export default function AgricultureWasteClassifierPage() {
         backgroundImage: `
             linear-gradient(
               135deg,
-              rgba(230, 242, 220, 0.08),
-              rgba(190, 220, 175, 0.12)
+              rgba(255, 255, 255, 0.35),
+              rgba(225, 245, 230, 0.45)
             ),
             url('/agri-bg(new).jpg')
           `,
@@ -388,21 +378,6 @@ export default function AgricultureWasteClassifierPage() {
             </span>
           </div>
 
-          <span suppressHydrationWarning
-            style={{
-              fontSize: ".82rem",
-              letterSpacing: ".08em",
-              color: "#064E3B",
-              border: "1px solid rgba(6,78,59,0.3)",
-              borderRadius: 999,
-              padding: "6px 16px",
-              background: "rgba(255,255,255,0.4)",
-              backdropFilter: "blur(8px)",
-              fontWeight: 700,
-            }}
-          >
-            PIN {pin}
-          </span>
         </div>
 
         <div>
@@ -419,7 +394,7 @@ export default function AgricultureWasteClassifierPage() {
             Agricultural Waste AI Classifier
           </h1>
           <p style={{ margin: 0, color: "#064E3B", fontSize: ".92rem", letterSpacing: ".02em", fontWeight: 500 }}>
-            Real-time on-device classification via local Hugging Face model paired with generative Gemini guidance for crop residue valorization and clean bio-energy pathways.
+            Upload a photo and AI identifies your farm waste and suggests how to use it.
           </p>
         </div>
       </header>
@@ -466,7 +441,7 @@ export default function AgricultureWasteClassifierPage() {
                 borderRadius: 16,
                 minHeight: 180,
                 border: `2px dashed ${dragging ? AGRI.accent : AGRI.accentDim}`,
-                background: dragging ? "rgba(74,222,128,.12)" : "rgba(7,10,15,.6)",
+                background: dragging ? "rgba(22,163,74,.12)" : "rgba(255,255,255,0.3)",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
@@ -487,7 +462,7 @@ export default function AgricultureWasteClassifierPage() {
                       maxWidth: "100%",
                       borderRadius: 12,
                       objectFit: "contain",
-                      border: "1px solid rgba(74,222,128,0.3)",
+                      border: "1px solid rgba(22,163,74,0.3)",
                     }}
                   />
                 </div>
@@ -498,7 +473,7 @@ export default function AgricultureWasteClassifierPage() {
                       width: 52,
                       height: 52,
                       borderRadius: "50%",
-                      background: "rgba(74,222,128,0.15)",
+                      background: "rgba(22,163,74,0.15)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -541,7 +516,7 @@ export default function AgricultureWasteClassifierPage() {
                 borderRadius: 12,
                 border: "none",
                 background: !file || stage === "detecting" || stage === "advising" ? "rgba(255,255,255,.08)" : AGRI.gradBtn,
-                color: !file || stage === "detecting" || stage === "advising" ? "rgba(134,239,172,.4)" : AGRI.btnText,
+                color: !file || stage === "detecting" || stage === "advising" ? "rgba(20,83,45,.4)" : AGRI.btnText,
                 fontFamily: FONT,
                 fontWeight: 800,
                 fontSize: "1rem",
@@ -585,8 +560,8 @@ export default function AgricultureWasteClassifierPage() {
           {topDetection && (
             <section
               style={glassCard({
-                border: "1.5px solid #4ADE80",
-                background: "linear-gradient(135deg, rgba(74,222,128,0.12) 0%, rgba(0,30,20,0.85) 100%)",
+                border: "1.5px solid #16A34A",
+                background: "rgba(235,250,240,0.55)",
               })}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -602,9 +577,9 @@ export default function AgricultureWasteClassifierPage() {
                     fontWeight: 800,
                     padding: "3px 10px",
                     borderRadius: 999,
-                    background: modelSource === "local" ? "rgba(34,197,94,0.2)" : "rgba(74,222,128,0.2)",
-                    border: `1px solid ${modelSource === "local" ? "rgba(34,197,94,0.5)" : "rgba(74,222,128,0.5)"}`,
-                    color: modelSource === "local" ? "#86efac" : "#bbf7d0",
+                    background: modelSource === "local" ? "rgba(34,197,94,0.2)" : "rgba(22,163,74,0.2)",
+                    border: `1px solid ${modelSource === "local" ? "rgba(34,197,94,0.5)" : "rgba(22,163,74,0.5)"}`,
+                    color: modelSource === "local" ? "#166534" : "#14532D",
                     letterSpacing: ".06em",
                   }}
                 >
@@ -616,8 +591,8 @@ export default function AgricultureWasteClassifierPage() {
                 style={{
                   padding: "18px 20px",
                   borderRadius: 14,
-                  background: "rgba(7,10,15,0.75)",
-                  border: "1px solid rgba(74,222,128,0.3)",
+                  background: "rgba(255,255,255,0.55)",
+                  border: "1px solid rgba(22,163,74,0.3)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
@@ -629,7 +604,7 @@ export default function AgricultureWasteClassifierPage() {
                   <span style={{ fontSize: ".72rem", color: AGRI.textMuted, textTransform: "uppercase", letterSpacing: ".06em" }}>
                     Identified Biomass Feedstock
                   </span>
-                  <p style={{ margin: "4px 0 0", fontSize: "1.35rem", fontWeight: 800, color: "#DCFCE7" }}>
+                  <p style={{ margin: "4px 0 0", fontSize: "1.35rem", fontWeight: 800, color: "#052E16" }}>
                     Detected: {topDetection.class} ({topDetection.confidence}%)
                   </p>
                 </div>
@@ -657,8 +632,8 @@ export default function AgricultureWasteClassifierPage() {
                           fontSize: ".74rem",
                           padding: "3px 10px",
                           borderRadius: 8,
-                          background: "rgba(255,255,255,0.05)",
-                          border: "1px solid rgba(74,222,128,0.25)",
+                          background: "rgba(255,255,255,0.5)",
+                          border: "1px solid rgba(22,163,74,0.25)",
                           color: AGRI.textBody,
                         }}
                       >
@@ -675,7 +650,7 @@ export default function AgricultureWasteClassifierPage() {
         {/* ══ RIGHT PANEL: Gemini AI Guidance & Chat ══ */}
         <div style={{ position: "sticky", top: 28, alignSelf: "start" }}>
           {adviceText ? (
-            <section style={glassCard({ border: "1.5px solid rgba(74,222,128,0.4)" })}>
+            <section style={glassCard({ border: "1.5px solid rgba(22,163,74,0.4)" })}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
                 <span style={{ fontSize: "1.3rem", color: AGRI.accent }}>✦</span>
                 <h2
@@ -696,8 +671,8 @@ export default function AgricultureWasteClassifierPage() {
                 style={{
                   padding: "16px 20px",
                   borderRadius: 14,
-                  background: "rgba(7,10,15,0.65)",
-                  border: "1px solid rgba(74,222,128,0.2)",
+                  background: "rgba(255,255,255,0.45)",
+                  border: "1px solid rgba(22,163,74,0.2)",
                   maxHeight: "40vh",
                   overflowY: "auto",
                 }}
@@ -729,8 +704,8 @@ export default function AgricultureWasteClassifierPage() {
                       marginBottom: 14,
                       padding: "12px 14px",
                       borderRadius: 12,
-                      background: "rgba(7,10,15,0.55)",
-                      border: "1px solid rgba(74,222,128,0.15)",
+                      background: "rgba(255,255,255,0.35)",
+                      border: "1px solid rgba(22,163,74,0.15)",
                     }}
                   >
                     {chatHistory.map((msg, i) => (
@@ -747,12 +722,12 @@ export default function AgricultureWasteClassifierPage() {
                             padding: "9px 14px",
                             borderRadius: msg.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
                             background: msg.role === "user"
-                              ? "rgba(74,222,128,0.18)"
-                              : "rgba(255,255,255,0.06)",
+                              ? "rgba(22,163,74,0.18)"
+                              : "rgba(255,255,255,0.5)",
                             border: msg.role === "user"
-                              ? "1px solid rgba(74,222,128,0.35)"
-                              : "1px solid rgba(255,255,255,0.1)",
-                            color: msg.role === "user" ? "#DCFCE7" : AGRI.textBody,
+                              ? "1px solid rgba(22,163,74,0.35)"
+                              : "1px solid rgba(22,163,74,0.2)",
+                            color: msg.role === "user" ? "#052E16" : AGRI.textBody,
                             fontSize: ".87rem",
                             lineHeight: 1.5,
                           }}
@@ -767,8 +742,8 @@ export default function AgricultureWasteClassifierPage() {
                           style={{
                             padding: "9px 14px",
                             borderRadius: "14px 14px 14px 4px",
-                            background: "rgba(255,255,255,0.06)",
-                            border: "1px solid rgba(255,255,255,0.1)",
+                            background: "rgba(255,255,255,0.5)",
+                            border: "1px solid rgba(22,163,74,0.2)",
                             color: AGRI.textMuted,
                             fontSize: ".84rem",
                           }}
@@ -794,9 +769,9 @@ export default function AgricultureWasteClassifierPage() {
                       flex: 1,
                       padding: "11px 16px",
                       borderRadius: 12,
-                      border: "1px solid rgba(74,222,128,0.3)",
-                      background: "rgba(7,10,15,0.75)",
-                      color: "#DCFCE7",
+                      border: "1px solid rgba(22,163,74,0.3)",
+                      background: "rgba(255,255,255,0.55)",
+                      color: "#052E16",
                       fontFamily: FONT,
                       fontSize: ".9rem",
                       outline: "none",
@@ -810,8 +785,8 @@ export default function AgricultureWasteClassifierPage() {
                       padding: "11px 20px",
                       borderRadius: 12,
                       border: "none",
-                      background: chatInput.trim() && !chatLoading ? AGRI.gradBtn : "rgba(255,255,255,.06)",
-                      color: chatInput.trim() && !chatLoading ? AGRI.btnText : "rgba(134,239,172,.3)",
+                      background: chatInput.trim() && !chatLoading ? AGRI.gradBtn : "rgba(255,255,255,.3)",
+                      color: chatInput.trim() && !chatLoading ? AGRI.btnText : "rgba(20,83,45,.35)",
                       fontFamily: FONT,
                       fontWeight: 700,
                       fontSize: ".88rem",
@@ -837,7 +812,7 @@ export default function AgricultureWasteClassifierPage() {
                 minHeight: 340,
                 textAlign: "center",
                 gap: 16,
-                border: "1.5px dashed rgba(74,222,128,0.3)",
+                border: "1.5px dashed rgba(22,163,74,0.3)",
               })}
             >
               <div
@@ -845,8 +820,8 @@ export default function AgricultureWasteClassifierPage() {
                   width: 58,
                   height: 58,
                   borderRadius: "50%",
-                  background: "rgba(74,222,128,0.1)",
-                  border: "1px solid rgba(74,222,128,0.3)",
+                  background: "rgba(22,163,74,0.1)",
+                  border: "1px solid rgba(22,163,74,0.3)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -877,7 +852,7 @@ export default function AgricultureWasteClassifierPage() {
                       width: 20,
                       height: 20,
                       borderRadius: "50%",
-                      border: "2px solid rgba(74,222,128,0.3)",
+                      border: "2px solid rgba(22,163,74,0.3)",
                       borderTopColor: AGRI.accent,
                       animation: "spin 0.8s linear infinite",
                     }}

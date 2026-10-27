@@ -14,7 +14,7 @@ Flow
 
 Mirrors the pattern in app/platform/assistant/router.py:
   - genai.Client(api_key=...) per request, key from env, never in source.
-  - Model name from GEMINI_MODEL env var via app.config.
+  - Model order from app.config.gemini_models() (GEMINI_MODEL, then fallbacks).
   - Only sizes and status are logged; no content logged.
 """
 
@@ -29,7 +29,7 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 
-from app.config import GEMINI_MODEL, get_setting
+from app.config import gemini_models, get_setting
 from app.pathways.explain_service import build_template, check_grounding
 
 logger = logging.getLogger(__name__)
@@ -153,11 +153,19 @@ def _call_gemini(api_key: str, facts: dict[str, Any]) -> str:
         + json.dumps(facts, ensure_ascii=False, default=str)
         + "\n\nExplain why this pathway ranks where it does."
     )
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=user_content,
-        config=config,
-    )
+    models = gemini_models()
+    for model_name in models:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=user_content,
+                config=config,
+            )
+            break
+        except Exception as exc:
+            if model_name == models[-1]:
+                raise
+            logger.warning("Gemini model %s failed, trying next: %s", model_name, type(exc).__name__)
     text = response.text
     if not text or not text.strip():
         raise ValueError("Gemini returned an empty response.")

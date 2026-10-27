@@ -5,8 +5,6 @@ import {
   Zap,
   PieChart,
   Map,
-  Filter,
-  RotateCcw,
   Info,
   Calendar,
 } from 'lucide-react';
@@ -17,18 +15,11 @@ interface ControlPanelProps {
   onModeChange: (mode: HeatmapMode) => void;
   view: GranularityView;
   onViewChange: (view: GranularityView) => void;
-  selectedState: string;
-  onStateChange: (state: string) => void;
-  selectedDistrict: string;
-  onDistrictChange: (district: string) => void;
-  statesList: string[];
-  districtsList: string[];
   metricType: 'solid' | 'plastic';
   onMetricTypeChange: (type: 'solid' | 'plastic') => void;
   plasticYear: string;
   onPlasticYearChange: (year: string) => void;
   plasticYears: string[];
-  onResetFilters: () => void;
 }
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -36,18 +27,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onModeChange,
   view,
   onViewChange,
-  selectedState,
-  onStateChange,
-  selectedDistrict,
-  onDistrictChange,
-  statesList,
-  districtsList,
   metricType,
   onMetricTypeChange,
   plasticYear,
   onPlasticYearChange,
   plasticYears,
-  onResetFilters,
 }) => {
   const modesList = [
     {
@@ -209,68 +193,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         </div>
       </div>
 
-      {/* 3. Geographic Filters */}
-      <div className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-slate-400" /> Geographic Filters
-          </label>
-          {(selectedState || selectedDistrict) && (
-            <button
-              onClick={onResetFilters}
-              className="text-[11px] text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1"
-            >
-              <RotateCcw className="w-3 h-3" /> Reset
-            </button>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {/* State Select */}
-          <div>
-            <label className="text-[11px] font-medium text-slate-600 block mb-1">
-              State / UT
-            </label>
-            <select
-              value={selectedState}
-              onChange={(e) => {
-                onStateChange(e.target.value);
-                onDistrictChange('');
-              }}
-              className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 truncate"
-            >
-              <option value="">All States / UTs</option>
-              {statesList.map((st) => (
-                <option key={st} value={st}>
-                  {st}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* District Select */}
-          <div>
-            <label className="text-[11px] font-medium text-slate-600 block mb-1">
-              District
-            </label>
-            <select
-              value={selectedDistrict}
-              onChange={(e) => onDistrictChange(e.target.value)}
-              disabled={!selectedState || districtsList.length === 0}
-              className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed truncate"
-            >
-              <option value="">All Districts</option>
-              {districtsList.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Dynamic Color Legend */}
+      {/* 3. Dynamic Color Legend */}
       <div className="pt-2 border-t border-slate-100">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">

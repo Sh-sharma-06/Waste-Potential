@@ -23,7 +23,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.config import GOOGLE_PLACES_API_KEY
-from app.services.places_client import PlacesClientError, PlaceResult
+from app.services.places_client import MAX_BIAS_RADIUS_M, PlacesClientError, PlaceResult
 from app.services.routing_client import RoutingClientError, get_distance_matrix
 
 logger = logging.getLogger(__name__)
@@ -153,7 +153,8 @@ def _search_product_places(
             "locationBias": {
                 "circle": {
                     "center": {"latitude": lat, "longitude": lng},
-                    "radius": float(radius_m),
+                    # Bias only; callers still filter results by the full radius.
+                    "radius": float(min(radius_m, MAX_BIAS_RADIUS_M)),
                 }
             },
             "maxResultCount": 10,

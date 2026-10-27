@@ -6,7 +6,7 @@ receive classification and contextual advice via Gemini.
 Design follows app/platform/assistant/router.py:
   - genai.Client(api_key=...) constructed per request (no module-level state).
   - API key from environment via app.config (never in source).
-  - Model name from GEMINI_MODEL env var (default "gemini-2.5-flash").
+  - Model name from GEMINI_MODEL env var (default "gemini-3.8-flash").
   - Image bytes are NEVER stored or logged; only size and MIME type are logged.
 
 Error mapping
@@ -28,7 +28,7 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
-from app.config import get_setting
+from app.config import gemini_models, get_setting
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ router = APIRouter(prefix="/vision", tags=["Vision"])
 # Configuration (env-driven, following the existing assistant pattern)
 # ---------------------------------------------------------------------------
 
-_GEMINI_MODEL = get_setting("GEMINI_MODEL", "gemini-2.5-flash")
+_GEMINI_MODEL = get_setting("GEMINI_MODEL", "gemini-3.8-flash")
 _GEMINI_API_KEY_VISION = get_setting("GEMINI_API_KEY_VISION")
 
 # ---------------------------------------------------------------------------
@@ -184,8 +184,7 @@ def _gemini_generate(
             detail="Vision AI feature is not configured (GEMINI_API_KEY_VISION missing).",
         )
 
-    # Primary from env (gemini-2.5-flash), lite variant as fallback
-    models_to_try = [_GEMINI_MODEL, "gemini-2.5-flash-lite"]
+    models_to_try = gemini_models()
 
     client = genai.Client(api_key=api_key)
     config = types.GenerateContentConfig(

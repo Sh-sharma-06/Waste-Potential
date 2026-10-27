@@ -3,31 +3,31 @@
 import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { INDUSTRY_PAGE_BG } from "@/lib/industryTheme";
 
 /* ── Industry / Amber Accent Palette ── */
 const C = {
-  accent:      "#E2623A",
-  accentSoft:  "#F0A080",
+  accent:      "#C2410C",
+  accentSoft:  "#9A3412",
   accentDim:   "rgba(226,98,58,.45)",
-  accentGlow:  "rgba(226,98,58,.4)",
+  accentGlow:  "rgba(226,98,58,.25)",
   accentInner: "rgba(226,98,58,.06)",
-  textBody:    "#F5D2C2",
-  gradTitle:   "linear-gradient(90deg,#FFE4D6,#FB923C)",
+  textBody:    "#431E12",
+  gradTitle:   "linear-gradient(90deg,#431E12,#C2410C)",
   gradBtn:     "linear-gradient(90deg,#C2410C 0%,#EA580C 50%,#FB923C 100%)",
   barA:        "#FB923C",
   barB:        "#F97316",
 };
 
-const BG   = "#070a0f";
 const FONT = '"Rubik",sans-serif';
 const gb   = (c: string) => `1.5px solid ${c}`;
 
 const cardStyle = (extra?: React.CSSProperties): React.CSSProperties => ({
   border: gb(C.accentDim),
-  background: "rgba(255,255,255,.05)",
+  background: "rgba(255,255,255,0.55)",
   backdropFilter: "blur(14px)",
   WebkitBackdropFilter: "blur(14px)",
-  boxShadow: "0 10px 40px rgba(40,15,5,.45),inset 0 0 30px rgba(226,98,58,.06),0 0 36px rgba(251,146,60,.2)",
+  boxShadow: "0 10px 40px rgba(120,53,15,0.16),inset 0 0 30px rgba(226,98,58,.06),0 0 36px rgba(251,146,60,.2)",
   borderRadius: 20,
   padding: "26px 30px",
   boxSizing: "border-box",
@@ -322,11 +322,9 @@ function NonEnergyMarketInner() {
   return (
     <main style={{
       minHeight: "100vh",
-      background: BG,
+      ...INDUSTRY_PAGE_BG,
       fontFamily: FONT,
-      color: "#ffe4d6",
-      backgroundImage: `radial-gradient(ellipse 70% 45% at 20% 10%, rgba(226,98,58,.08) 0%, transparent 70%),
-                        radial-gradient(ellipse 50% 40% at 85% 85%, rgba(194,65,12,.06) 0%, transparent 70%)`,
+      color: "#27120A",
       padding: "0 0 90px",
     }}>
 
@@ -358,7 +356,7 @@ function NonEnergyMarketInner() {
             <Link
               href={`/market/energy?pincode=${encodeURIComponent(pincode)}`}
               style={{
-                color: "#fdba74",
+                color: "#C2410C",
                 textDecoration: "none",
                 fontSize: ".82rem",
                 letterSpacing: ".06em",
@@ -378,7 +376,7 @@ function NonEnergyMarketInner() {
           <span style={{
             fontSize: ".75rem",
             letterSpacing: ".08em",
-            color: "#86efac",
+            color: "#15803d",
             border: "1px solid rgba(34,197,94,0.4)",
             borderRadius: 999,
             padding: "5px 14px",
@@ -409,7 +407,7 @@ function NonEnergyMarketInner() {
             Non-Energy Recoverable Marketplace
           </h1>
           <p style={{ margin: 0, color: C.textBody, fontSize: ".92rem", letterSpacing: ".02em" }}>
-            Live factory, industrial unit, and bulk buyer demand within radius of PIN {pincode}. Itemized offtake tables for recyclable and circular secondary resources.
+            Recyclers and scrap buyers near PIN {pincode} for each material you have.
           </p>
         </div>
       </header>
@@ -419,7 +417,7 @@ function NonEnergyMarketInner() {
         {/* ══ STEP 2: SUMMARY BANNER ══ */}
         <section style={cardStyle({
           border: "1.5px solid #FB923C",
-          background: "linear-gradient(135deg, rgba(251,146,60,0.12) 0%, rgba(15,23,42,0.85) 100%)",
+          background: "linear-gradient(135deg, rgba(251,146,60,0.12) 0%, rgba(255,250,245,0.85) 100%)",
           padding: "20px 28px",
         })}>
           <div style={{
@@ -444,13 +442,13 @@ function NonEnergyMarketInner() {
                 📍
               </div>
               <div>
-                <span style={{ fontSize: ".7rem", color: "#9a6050", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                <span style={{ fontSize: ".7rem", color: "#7A4A38", textTransform: "uppercase", letterSpacing: ".06em" }}>
                   Active Location
                 </span>
-                <p style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#FFE4D6" }}>
+                <p style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#27120A" }}>
                   PIN {pincode}
                 </p>
-                <span style={{ fontSize: ".72rem", color: "#fdba74" }}>
+                <span style={{ fontSize: ".72rem", color: "#C2410C" }}>
                   {geoCoords.displayName.split(",").slice(0, 2).join(",")}
                 </span>
               </div>
@@ -472,13 +470,13 @@ function NonEnergyMarketInner() {
                 ⚖️
               </div>
               <div>
-                <span style={{ fontSize: ".7rem", color: "#9a6050", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                <span style={{ fontSize: ".7rem", color: "#7A4A38", textTransform: "uppercase", letterSpacing: ".06em" }}>
                   Total Non-Energy Volume
                 </span>
-                <p style={{ margin: 0, fontSize: "1.08rem", fontWeight: 800, color: "#86efac" }}>
+                <p style={{ margin: 0, fontSize: "1.08rem", fontWeight: 800, color: "#15803d" }}>
                   {totalItemizedVolume.toLocaleString()} kg / day
                 </p>
-                <span style={{ fontSize: ".72rem", color: "#4ade80" }}>
+                <span style={{ fontSize: ".72rem", color: "#15803d" }}>
                   Across {hasItemizedBreakdown ? Object.keys(breakdown).length : 5} Streams
                 </span>
               </div>
@@ -500,13 +498,13 @@ function NonEnergyMarketInner() {
                 💰
               </div>
               <div>
-                <span style={{ fontSize: ".7rem", color: "#9a6050", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                <span style={{ fontSize: ".7rem", color: "#7A4A38", textTransform: "uppercase", letterSpacing: ".06em" }}>
                   Daily Material Value
                 </span>
-                <p style={{ margin: 0, fontSize: "1.08rem", fontWeight: 800, color: "#facc15" }}>
+                <p style={{ margin: 0, fontSize: "1.08rem", fontWeight: 800, color: "#a16207" }}>
                   ₹{totalProjectedDailyValue > 0 ? totalProjectedDailyValue.toLocaleString() : "42,500"} / day
                 </p>
-                <span style={{ fontSize: ".72rem", color: "#fef08a" }}>
+                <span style={{ fontSize: ".72rem", color: "#a16207" }}>
                   ~₹{((totalProjectedDailyValue * 320) / 100000).toFixed(1)}L Annual Realization
                 </span>
               </div>
@@ -535,7 +533,7 @@ function NonEnergyMarketInner() {
                       borderRadius: 999,
                       background: "rgba(251,146,60,0.15)",
                       border: "1px solid rgba(251,146,60,0.4)",
-                      color: "#FFE4D6",
+                      color: "#27120A",
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 6,
@@ -543,7 +541,7 @@ function NonEnergyMarketInner() {
                   >
                     <span>{meta.icon}</span>
                     <span>{meta.label}:</span>
-                    <span style={{ color: "#FB923C" }}>{qty.toLocaleString()} kg/day</span>
+                    <span style={{ color: "#C2410C" }}>{qty.toLocaleString()} kg/day</span>
                   </span>
                 );
               })}
@@ -563,7 +561,7 @@ function NonEnergyMarketInner() {
               borderTopColor: "#FB923C",
               animation: "spin 0.8s linear infinite",
             }} />
-            <p style={{ marginTop: 14, color: "#fdba74", fontSize: ".92rem" }}>
+            <p style={{ marginTop: 14, color: "#C2410C", fontSize: ".92rem" }}>
               Querying dynamic location distances & live scrap market rates near PIN {pincode}…
             </p>
           </div>
@@ -608,13 +606,13 @@ function NonEnergyMarketInner() {
                           margin: 0,
                           fontSize: "1.18rem",
                           fontWeight: 800,
-                          color: "#FFE4D6",
+                          color: "#27120A",
                           letterSpacing: ".03em",
                           textTransform: "uppercase",
                         }}>
                           {meta.label} Offtake Comparison
                         </h3>
-                        <p style={{ margin: "2px 0 0", fontSize: ".76rem", color: "#fdba74" }}>
+                        <p style={{ margin: "2px 0 0", fontSize: ".76rem", color: "#C2410C" }}>
                           Your Available Supply: <strong>{userWeight.toLocaleString()} kg/day</strong> · Benchmark Index: <strong>₹{benchmarkPrice.toFixed(2)}/kg</strong>
                         </p>
                       </div>
@@ -628,7 +626,7 @@ function NonEnergyMarketInner() {
                         borderRadius: 999,
                         background: "rgba(34,197,94,0.15)",
                         border: "1px solid rgba(34,197,94,0.4)",
-                        color: "#86efac",
+                        color: "#15803d",
                       }}>
                         {buyersList.length} VERIFIED FACTORIES
                       </span>
@@ -645,7 +643,7 @@ function NonEnergyMarketInner() {
                       fontSize: ".86rem",
                     }}>
                       <thead>
-                        <tr style={{ color: "#9a6050", fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".08em" }}>
+                        <tr style={{ color: "#7A4A38", fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".08em" }}>
                           <th style={{ padding: "8px 14px" }}>Factory / Buyer Name</th>
                           <th style={{ padding: "8px 14px" }}>Distance (km)</th>
                           <th style={{ padding: "8px 14px" }}>Buying Price (₹/kg)</th>
@@ -662,8 +660,8 @@ function NonEnergyMarketInner() {
                             <tr
                               key={buyer.id}
                               style={{
-                                background: "rgba(15,23,42,0.75)",
-                                boxShadow: "0 2px 12px rgba(0,0,0,0.3)",
+                                background: "rgba(255,250,245,0.81)",
+                                boxShadow: "0 2px 12px rgba(120,53,15,0.1)",
                                 transition: "all .15s ease",
                               }}
                             >
@@ -675,37 +673,37 @@ function NonEnergyMarketInner() {
                                 borderLeft: "3px solid #FB923C",
                               }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                  <span style={{ fontWeight: 700, color: "#FFE4D6", fontSize: ".92rem" }}>
+                                  <span style={{ fontWeight: 700, color: "#27120A", fontSize: ".92rem" }}>
                                     {buyer.name}
                                   </span>
                                   {buyer.verified && (
-                                    <span style={{ fontSize: ".62rem", color: "#86efac", fontWeight: 800 }}>
+                                    <span style={{ fontSize: ".62rem", color: "#15803d", fontWeight: 800 }}>
                                       ✓
                                     </span>
                                   )}
                                 </div>
-                                <span style={{ fontSize: ".72rem", color: "#9a6050" }}>
+                                <span style={{ fontSize: ".72rem", color: "#7A4A38" }}>
                                   {buyer.address}
                                 </span>
                               </td>
 
                               {/* Distance (km) */}
-                              <td style={{ padding: "14px 14px", color: "#fdba74", fontWeight: 600 }}>
+                              <td style={{ padding: "14px 14px", color: "#C2410C", fontWeight: 600 }}>
                                 📍 {buyer.distance_km} km away
                               </td>
 
                               {/* Buying Price (₹/kg) */}
-                              <td style={{ padding: "14px 14px", fontWeight: 800, color: "#FB923C", fontSize: ".98rem" }}>
+                              <td style={{ padding: "14px 14px", fontWeight: 800, color: "#C2410C", fontSize: ".98rem" }}>
                                 {buyer.price_display}
                               </td>
 
                               {/* Daily Demand Capacity */}
-                              <td style={{ padding: "14px 14px", color: "#38bdf8", fontWeight: 600 }}>
+                              <td style={{ padding: "14px 14px", color: "#0369a1", fontWeight: 600 }}>
                                 {buyer.daily_demand_capacity}
                               </td>
 
                               {/* Estimated Daily Payout */}
-                              <td style={{ padding: "14px 14px", color: "#facc15", fontWeight: 800 }}>
+                              <td style={{ padding: "14px 14px", color: "#a16207", fontWeight: 800 }}>
                                 ₹{estPayout.toLocaleString()} / day
                               </td>
 
@@ -761,7 +759,7 @@ function NonEnergyMarketInner() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(4,7,14,0.85)",
+            background: "rgba(255,250,245,0.85)",
             backdropFilter: "blur(14px)",
             WebkitBackdropFilter: "blur(14px)",
             zIndex: 999,
@@ -774,10 +772,10 @@ function NonEnergyMarketInner() {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "#0c111d",
+              background: "rgba(255,250,245,0.9)",
               border: "2px solid #FB923C",
               borderRadius: 24,
-              boxShadow: "0 0 60px rgba(251,146,60,0.45), 0 25px 70px rgba(0,0,0,0.9)",
+              boxShadow: "0 0 60px rgba(251,146,60,0.45), 0 25px 70px rgba(120,53,15,0.18)",
               maxWidth: 620,
               width: "100%",
               maxHeight: "92vh",
@@ -787,7 +785,7 @@ function NonEnergyMarketInner() {
               flexDirection: "column",
               gap: 20,
               fontFamily: FONT,
-              color: "#ffe4d6",
+              color: "#27120A",
             }}
           >
             {/* Modal Header */}
@@ -805,10 +803,10 @@ function NonEnergyMarketInner() {
                 }}>
                   NON-ENERGY RECOVERABLE OFFTAKE
                 </span>
-                <h3 style={{ margin: "6px 0 2px", fontSize: "1.35rem", fontWeight: 800, color: "#ffe4d6" }}>
+                <h3 style={{ margin: "6px 0 2px", fontSize: "1.35rem", fontWeight: 800, color: "#27120A" }}>
                   {activeDealBuyer.name}
                 </h3>
-                <p style={{ margin: 0, fontSize: ".82rem", color: "#fdba74" }}>
+                <p style={{ margin: 0, fontSize: ".82rem", color: "#C2410C" }}>
                   {activeDealBuyer.categoryLabel} Offtake · 📍 {activeDealBuyer.distance_km} km from PIN {pincode}
                 </p>
               </div>
@@ -819,9 +817,9 @@ function NonEnergyMarketInner() {
                   width: 36,
                   height: 36,
                   borderRadius: "50%",
-                  background: "rgba(255,255,255,0.06)",
+                  background: "rgba(255,255,255,0.57)",
                   border: "1px solid rgba(251,146,60,0.3)",
-                  color: "#fdba74",
+                  color: "#C2410C",
                   fontSize: "1.1rem",
                   cursor: "pointer",
                   display: "flex",
@@ -855,19 +853,19 @@ function NonEnergyMarketInner() {
                   alignItems: "center",
                   justifyContent: "center",
                   fontSize: "1.8rem",
-                  color: "#4ade80",
+                  color: "#15803d",
                 }}>
                   ✓
                 </div>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800, color: "#86efac" }}>
+                  <h4 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800, color: "#15803d" }}>
                     Letter of Intent (LOI) Dispatched!
                   </h4>
-                  <p style={{ margin: "6px 0 0", fontSize: ".85rem", color: "#dcfce7" }}>
+                  <p style={{ margin: "6px 0 0", fontSize: ".85rem", color: "#15803d" }}>
                     Trade contract reference: <strong>{dealSuccessCode}</strong>
                   </p>
                 </div>
-                <p style={{ margin: 0, fontSize: ".8rem", color: "#bbf7d0", lineHeight: 1.5 }}>
+                <p style={{ margin: 0, fontSize: ".8rem", color: "#15803d", lineHeight: 1.5 }}>
                   The raw material procurement department at <strong>{activeDealBuyer.name}</strong> has received your non-energy recoverable supply dispatch. An automated weighbridge clearance voucher has been forwarded to your provided contact channel.
                 </p>
                 <button
@@ -892,34 +890,34 @@ function NonEnergyMarketInner() {
                 <div style={{
                   padding: "14px 16px",
                   borderRadius: 14,
-                  background: "rgba(7,10,15,0.75)",
+                  background: "rgba(255,250,245,0.81)",
                   border: "1px solid rgba(251,146,60,0.25)",
                   display: "grid",
                   gridTemplateColumns: "1fr 1fr",
                   gap: 12,
                 }}>
                   <div>
-                    <span style={{ fontSize: ".68rem", color: "#9a6050", textTransform: "uppercase" }}>Buying Rate</span>
-                    <p style={{ margin: "2px 0 0", fontSize: "1.15rem", fontWeight: 800, color: "#FB923C" }}>
+                    <span style={{ fontSize: ".68rem", color: "#7A4A38", textTransform: "uppercase" }}>Buying Rate</span>
+                    <p style={{ margin: "2px 0 0", fontSize: "1.15rem", fontWeight: 800, color: "#C2410C" }}>
                       {activeDealBuyer.price_display}
                     </p>
                   </div>
                   <div>
-                    <span style={{ fontSize: ".68rem", color: "#9a6050", textTransform: "uppercase" }}>Plant Daily Demand</span>
-                    <p style={{ margin: "2px 0 0", fontSize: "1.15rem", fontWeight: 800, color: "#38bdf8" }}>
+                    <span style={{ fontSize: ".68rem", color: "#7A4A38", textTransform: "uppercase" }}>Plant Daily Demand</span>
+                    <p style={{ margin: "2px 0 0", fontSize: "1.15rem", fontWeight: 800, color: "#0369a1" }}>
                       {activeDealBuyer.daily_demand_capacity}
                     </p>
                   </div>
-                  <div style={{ gridColumn: "span 2", paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                    <span style={{ fontSize: ".68rem", color: "#9a6050", textTransform: "uppercase" }}>Offtake Logistics & Terms</span>
-                    <p style={{ margin: "2px 0 0", fontSize: ".82rem", color: "#fdba74" }}>
+                  <div style={{ gridColumn: "span 2", paddingTop: 8, borderTop: "1px solid rgba(194,65,12,0.2)" }}>
+                    <span style={{ fontSize: ".68rem", color: "#7A4A38", textTransform: "uppercase" }}>Offtake Logistics & Terms</span>
+                    <p style={{ margin: "2px 0 0", fontSize: ".82rem", color: "#C2410C" }}>
                       {activeDealBuyer.payment_terms} · Weighbridge verification at receiver yard
                     </p>
                   </div>
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <label style={{ fontSize: ".76rem", fontWeight: 700, color: "#fdba74", textTransform: "uppercase" }}>
+                  <label style={{ fontSize: ".76rem", fontWeight: 700, color: "#C2410C", textTransform: "uppercase" }}>
                     Your Facility Contact Information:
                   </label>
                   <input
@@ -931,9 +929,9 @@ function NonEnergyMarketInner() {
                     style={{
                       padding: "10px 14px",
                       borderRadius: 10,
-                      background: "rgba(7,10,15,0.85)",
+                      background: "rgba(255,250,245,0.85)",
                       border: "1px solid rgba(251,146,60,0.3)",
-                      color: "#ffe4d6",
+                      color: "#27120A",
                       fontSize: ".84rem",
                       fontFamily: FONT,
                       outline: "none",
@@ -949,9 +947,9 @@ function NonEnergyMarketInner() {
                       style={{
                         padding: "10px 14px",
                         borderRadius: 10,
-                        background: "rgba(7,10,15,0.85)",
+                        background: "rgba(255,250,245,0.85)",
                         border: "1px solid rgba(251,146,60,0.3)",
-                        color: "#ffe4d6",
+                        color: "#27120A",
                         fontSize: ".84rem",
                         fontFamily: FONT,
                         outline: "none",
@@ -966,9 +964,9 @@ function NonEnergyMarketInner() {
                       style={{
                         padding: "10px 14px",
                         borderRadius: 10,
-                        background: "rgba(7,10,15,0.85)",
+                        background: "rgba(255,250,245,0.85)",
                         border: "1px solid rgba(251,146,60,0.3)",
-                        color: "#ffe4d6",
+                        color: "#27120A",
                         fontSize: ".84rem",
                         fontFamily: FONT,
                         outline: "none",
@@ -1009,9 +1007,9 @@ function NonEnergyMarketInner() {
 export default function NonEnergyMarketPage() {
   return (
     <Suspense fallback={
-      <main style={{ minHeight: "100vh", background: "#070a0f", display: "flex",
+      <main style={{ minHeight: "100vh", background: "rgba(255,250,245,0.9)", display: "flex",
         alignItems: "center", justifyContent: "center", fontFamily: '"Rubik",sans-serif' }}>
-        <span style={{ color: "#F0A080", fontSize: "1rem", letterSpacing: ".1em" }}>
+        <span style={{ color: "#9A3412", fontSize: "1rem", letterSpacing: ".1em" }}>
           Loading Non-Energy Recoverable Marketplace…
         </span>
       </main>
